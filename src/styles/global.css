@@ -134,6 +134,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 }
 .scene-card-visual {
   background: color-mix(in oklch, var(--scene-backdrop), var(--ink) 25%);
+  color: oklch(95% 0.018 75);
   transition: border-color 180ms ease, transform 180ms ease, background-color 180ms ease;
 }
 .scene-card-visual::before {
@@ -145,12 +146,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
   height: 8rem;
   border: 2rem solid color-mix(in oklch, var(--scene-accent), transparent 84%);
   border-radius: 50%;
+  pointer-events: none;
 }
 .scene-card-visual:hover { border-color: color-mix(in oklch, var(--scene-accent), var(--paper) 20%); transform: translateY(-2px); }
 .scene-card-visual[data-selected='true'] { border-color: var(--scene-accent); background: color-mix(in oklch, var(--scene-backdrop), var(--scene-accent) 12%); box-shadow: inset 0 0 0 2px var(--scene-accent); }
-.scene-check[data-selected='true'] { opacity: 1; transform: scale(1); }
+.scene-card-visual[data-selected='true'] .scene-check { opacity: 1; transform: scale(1); }
 .scene-number { color: color-mix(in oklch, var(--scene-accent), var(--paper) 15%); }
-.scene-copy small { color: oklch(95% 0.015 75 / 0.58); }
+.scene-card-visual small { color: oklch(95% 0.015 75 / 0.72); }
 .postcard-visual { background: var(--scene-backdrop); color: var(--paper); box-shadow: 0 2.5rem 5rem oklch(5% 0.01 55 / 0.5); }
 .postcard-hatch { background: repeating-linear-gradient(14deg, transparent 0 5px, var(--scene-accent) 6px 7px); mix-blend-mode: multiply; }
 .postcard-photo img { filter: saturate(0.78) contrast(1.08); }

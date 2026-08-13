@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, ArrowRight, RotateCcw } from 'lucide-react';
-import type { Scene } from '../../data/scenes';
+import { AlertCircle, ArrowRight, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 
 type CameraStatus = 'starting' | 'live' | 'countdown' | 'preview' | 'error';
 
 type Props = {
-  scene: Scene;
-  onBack: () => void;
   onUsePhoto: (photoDataUrl: string) => void;
 };
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-export function CameraStep({ scene, onBack, onUsePhoto }: Props) {
+export function CameraStep({ onUsePhoto }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const captureRunRef = useRef(0);
@@ -167,20 +164,10 @@ export function CameraStep({ scene, onBack, onUsePhoto }: Props) {
 
   return (
     <div className="step-enter w-full max-w-[64rem]">
-      <div className="mb-5 flex items-end justify-between gap-8 max-[800px]:flex-col max-[800px]:items-start max-[800px]:gap-2">
-        <Button variant="ghost" type="button" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" /> Change scene
-        </Button>
-        <div>
-          <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-primary">{scene.emoji} {scene.name}</p>
-          <h1 className="m-0 max-w-[13ch] font-display text-[clamp(2rem,5vw,4.4rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Step into the frame.</h1>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[minmax(17rem,35rem)_minmax(12rem,1fr)] items-center gap-[clamp(1.5rem,5vw,5rem)] max-[800px]:grid-cols-1 max-[800px]:gap-4">
+      <div className="flex flex-col items-center gap-4">
         <div className="relative aspect-[4/5] w-full max-w-[34rem] justify-self-center overflow-hidden rounded-[clamp(1.2rem,3vw,2rem)] border border-border bg-card">
-          <video ref={videoRef} playsInline muted autoPlay hidden={status === 'preview'} />
-          {photoDataUrl && <img src={photoDataUrl} alt="Your captured photo" />}
+          <video className="size-full object-cover scale-x-[-1]" ref={videoRef} playsInline muted autoPlay hidden={status === 'preview'} />
+          {photoDataUrl && <img className="size-full object-cover" src={photoDataUrl} alt="Your captured photo" />}
           <div className="pointer-events-none absolute inset-[16%_18%] rounded-[48%_48%_44%_44%] border border-dashed border-foreground/55" aria-hidden="true" />
           <span className="absolute left-4 top-4 size-9 border-l-[3px] border-t-[3px] border-solid border-primary" aria-hidden="true" />
           <span className="absolute bottom-4 right-4 size-9 border-b-[3px] border-r-[3px] border-solid border-primary" aria-hidden="true" />
@@ -205,7 +192,7 @@ export function CameraStep({ scene, onBack, onUsePhoto }: Props) {
           {status === 'countdown' && <div className="absolute inset-0 flex items-center justify-center bg-[oklch(13%_.015_55_/.38)] font-display text-[clamp(7rem,20vw,13rem)] font-semibold leading-none text-center text-shadow-[0_0_2rem_oklch(95%_.015_75_/.4)]" aria-label={`Photo in ${countdown}`}>{countdown}</div>}
         </div>
 
-        <div className="flex min-h-48 flex-col items-center justify-center text-center max-[800px]:min-h-28">
+        <div className="flex flex-col items-center justify-center text-center">
           {status !== 'preview' ? (
             <>
               <button
@@ -216,7 +203,6 @@ export function CameraStep({ scene, onBack, onUsePhoto }: Props) {
               >
                 <span className="sr-only">Take photo</span>
               </button>
-              <p className="m-0 text-xs text-muted-foreground">Center your face, then tap the shutter.</p>
             </>
           ) : (
             <div className="flex w-full max-w-xs flex-col gap-3">

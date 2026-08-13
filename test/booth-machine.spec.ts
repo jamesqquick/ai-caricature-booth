@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { boothReducer, initialBoothState } from '../src/lib/booth-machine';
 
 describe('boothReducer', () => {
-  it('does not open the camera before a scene is selected', () => {
-    expect(boothReducer(initialBoothState, { type: 'open-camera' })).toEqual(initialBoothState);
+  it('starts with the first scene selected', () => {
+    expect(initialBoothState.sceneId).toBe('hot-dog-stand');
+    expect(boothReducer(initialBoothState, { type: 'open-camera' })).toEqual({
+      step: 'camera',
+      sceneId: 'hot-dog-stand',
+      photoDataUrl: null,
+    });
   });
 
   it('moves from scene selection to generation after accepting a photo', () => {

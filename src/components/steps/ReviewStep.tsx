@@ -43,7 +43,6 @@ export function ReviewStep({ scene, photoDataUrl, onRetake, onChangeScene, onSta
         <div className="mt-8 flex w-full max-w-xs flex-col gap-3">
           <Button type="button" onClick={onStartOver}><Check aria-hidden="true" /> Finish and start over</Button>
           <Button variant="secondary" type="button" onClick={onRetake}><RotateCcw aria-hidden="true" /> Retake photo</Button>
-          <Button variant="ghost" type="button" onClick={onChangeScene}><ImagePlus aria-hidden="true" /> Choose another scene</Button>
         </div>
       </div>
     </div>

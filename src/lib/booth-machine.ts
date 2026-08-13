@@ -17,7 +17,7 @@ export type BoothAction =
 
 export const initialBoothState: BoothState = {
   step: 'scene',
-  sceneId: null,
+  sceneId: 'hot-dog-stand',
   photoDataUrl: null,
 };
 

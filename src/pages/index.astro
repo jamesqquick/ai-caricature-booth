@@ -1,6 +1,5 @@
 ---
 import BoothLayout from "../layouts/BoothLayout.astro";
-import LandingNav from "../components/LandingNav.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { scenes } from "../data/scenes";
 
@@ -14,8 +13,6 @@ const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
   description="Turn a selfie into a custom ink caricature postcard in one remarkable minute."
 >
   <div class="landing-shell min-h-dvh">
-    <LandingNav />
-
     <main>
       <section
         class="mx-auto grid min-h-[44rem] w-[min(100%_-_3rem,74rem)] grid-cols-[minmax(0,1fr)_minmax(22rem,1fr)] items-center gap-[clamp(2rem,7vw,7rem)] py-[clamp(4rem,10vw,8rem)] max-[800px]:w-[min(100%_-_2rem,40rem)] max-[800px]:grid-cols-1 max-[800px]:min-h-0 max-[800px]:py-16"
@@ -219,32 +216,3 @@ const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
     </footer>
   </div>
 </BoothLayout>
-
-<script is:inline>
-  (() => {
-    const toggle = document.querySelector("[data-theme-toggle]");
-    const label = document.querySelector("[data-theme-label]");
-    const icon = document.querySelector("[data-theme-icon]");
-    if (!toggle || !label || !icon) return;
-    const updateToggle = () => {
-      const isLight = document.documentElement.dataset.theme === "light";
-      toggle.setAttribute("aria-pressed", String(isLight));
-      toggle.setAttribute(
-        "aria-label",
-        isLight ? "Switch to dark theme" : "Switch to light theme",
-      );
-      label.textContent = isLight
-        ? "Switch to dark theme"
-        : "Switch to light theme";
-      icon.textContent = isLight ? "☼" : "☾";
-    };
-    toggle.addEventListener("click", () => {
-      const nextTheme =
-        document.documentElement.dataset.theme === "light" ? "dark" : "light";
-      document.documentElement.dataset.theme = nextTheme;
-      localStorage.setItem("booth-theme", nextTheme);
-      updateToggle();
-    });
-    updateToggle();
-  })();
-</script>
