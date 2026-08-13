@@ -1,17 +1,250 @@
 ---
+import BoothLayout from "../layouts/BoothLayout.astro";
+import LandingNav from "../components/LandingNav.astro";
+import SectionHeader from "../components/SectionHeader.astro";
+import { scenes } from "../data/scenes";
 
+const eventHref = "/e/nyc-tech-week-2026";
+const featuredScenes = [scenes[5], scenes[4], scenes[3]];
+const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<BoothLayout
+  title="Caricature Booth · Cloud-native creative technology"
+  description="Turn a selfie into a custom ink caricature postcard in one remarkable minute."
+>
+  <div class="landing-shell min-h-dvh">
+    <LandingNav />
+
+    <main>
+      <section
+        class="mx-auto grid min-h-[44rem] w-[min(100%_-_3rem,74rem)] grid-cols-[minmax(0,1fr)_minmax(22rem,1fr)] items-center gap-[clamp(2rem,7vw,7rem)] py-[clamp(4rem,10vw,8rem)] max-[800px]:w-[min(100%_-_2rem,40rem)] max-[800px]:grid-cols-1 max-[800px]:min-h-0 max-[800px]:py-16"
+      >
+        <div>
+          <p
+            class="mb-4 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary"
+          >
+            AI creativity at the edge
+          </p>
+          <h1
+            class="m-0 max-w-[10ch] font-display text-[clamp(3.5rem,7vw,6.8rem)] font-semibold leading-[.9] tracking-[-.07em] max-[800px]:text-[clamp(3.3rem,14vw,5.5rem)]"
+          >
+            From selfie to print.
+          </h1>
+          <p
+            class="mt-7 max-w-xl text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.65] text-muted-foreground"
+          >
+            A real-time AI studio that captures your photo, creates a custom ink
+            caricature, and prints a postcard on the spot.
+          </p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a
+              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-extrabold text-primary-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:bg-primary-hover"
+              href="#booths">Create yours <span aria-hidden="true">→</span></a
+            >
+          </div>
+          <p
+            class="mt-4 font-label text-[.65rem] uppercase tracking-[.08em] text-muted-foreground"
+          >
+            Generated live · Printed locally · Delivered digitally
+          </p>
+        </div>
+
+        <div
+          class="relative min-h-[31rem] max-[800px]:min-h-[27rem]"
+          aria-label="Example caricature postcards"
+        >
+          {
+            featuredScenes.map((scene, index) => (
+              <article
+                class={`landing-postcard landing-postcard-${index + 1} absolute w-[min(18rem,70%)] rounded-[.45rem] bg-[var(--scene-backdrop)] p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)]`}
+                style={`--scene-accent: ${scene.accent}; --scene-backdrop: ${scene.backdrop};`}
+              >
+                <div class="landing-postcard-image relative grid aspect-[4/5] place-items-center overflow-hidden bg-[linear-gradient(140deg,color-mix(in_oklch,var(--scene-accent)_35%,var(--scene-backdrop)),var(--scene-backdrop))]">
+                  <span class="text-[7rem] saturate-[.75]" aria-hidden="true">
+                    {scene.emoji}
+                  </span>
+                  <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
+                    AI INK STUDY
+                  </small>
+                </div>
+                <div class="flex min-h-[3.8rem] items-center justify-between font-display text-base">
+                  <span>{scene.name}</span>
+                  <b class="text-[.7rem] tracking-[.12em] text-[var(--scene-accent)]">
+                    NYC
+                  </b>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+
+      <section
+        class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
+        id="how"
+      >
+        <SectionHeader
+          title="A complete creative pipeline."
+          subtitle="The interaction stays simple while Cloudflare coordinates every step behind the scenes."
+        />
+        <div class="grid grid-cols-3 gap-px bg-border max-[800px]:grid-cols-1">
+          {
+            [
+              [
+                "01 · CAPTURE",
+                "Step into frame",
+                "Take a photo directly in the browser. No app or account required.",
+              ],
+              [
+                "02 · GENERATE",
+                "Choose your world",
+                "Select a scene and follow the transformation in real time.",
+              ],
+              [
+                "03 · DELIVER",
+                "Walk away with both",
+                "Collect a physical print and receive the digital original.",
+              ],
+            ].map(([label, title, copy]) => (
+              <article class="min-h-52 bg-background p-6">
+                <span class="font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">
+                  {label}
+                </span>
+                <h3 class="mt-9 mb-3 font-display text-[1.45rem]">{title}</h3>
+                <p class="m-0 max-w-[28ch] leading-[1.55] text-muted-foreground">
+                  {copy}
+                </p>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+
+      <section
+        class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
+        id="gallery"
+      >
+        <SectionHeader title="Generated at the edge. Made to keep." />
+        <div class="grid grid-cols-4 gap-4 max-[800px]:grid-cols-2">
+          {
+            galleryScenes.map((scene, index) => (
+              <article
+                class="overflow-hidden rounded-2xl border border-border bg-card"
+                style={`--scene-accent: ${scene.accent}; --scene-backdrop: ${scene.backdrop};`}
+              >
+                <div class="landing-gallery-image relative grid aspect-[1/1.15] place-items-center overflow-hidden bg-[linear-gradient(140deg,color-mix(in_oklch,var(--scene-accent)_35%,var(--scene-backdrop)),var(--scene-backdrop))]">
+                  <span class="text-[5rem]" aria-hidden="true">
+                    {scene.emoji}
+                  </span>
+                  <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
+                    POSTCARD 0{index + 1}
+                  </small>
+                </div>
+                <div class="flex items-center justify-between gap-2 p-4">
+                  <>
+                    <b class="text-sm">{scene.name}</b>
+                    <span class="font-label text-[.58rem] text-muted-foreground">
+                      {48 + index * 4} sec
+                    </span>
+                  </>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+
+      <section
+        class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
+        id="booths"
+      >
+        <SectionHeader
+          title="Active booths."
+          subtitle="Choose a booth to get started."
+        />
+        <a
+          class="grid grid-cols-[1fr_auto_auto] items-center gap-6 rounded-2xl border border-border p-5 text-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary max-[800px]:grid-cols-[1fr_auto]"
+          href={eventHref}
+        >
+          <div>
+            <h3 class="mb-1.5 font-display text-[1.4rem]">
+              NYC Tech Week 2026
+            </h3><p class="m-0 text-muted-foreground">
+              Six-scene New York caricature experience
+            </p>
+          </div><span class="max-[800px]:col-start-2 max-[800px]:row-start-1"
+            >Launch →</span
+          >
+        </a>
+      </section>
+
+      <section
+        class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
+        id="pipeline"
+      >
+        <SectionHeader
+          title="Ten products. One continuous experience."
+          subtitle="The application runs end-to-end on Cloudflare, with durable execution and real-time status from capture through delivery."
+        />
+        <div class="grid grid-cols-6 gap-px bg-border max-[800px]:grid-cols-1">
+          {
+            [
+              ["↥", "Upload", "Workers + R2"],
+              ["◇", "Moderate", "Workers AI"],
+              ["✦", "Generate", "Workflows"],
+              ["▣", "Composite", "Cloudflare Images"],
+              ["◎", "Synchronize", "Durable Objects"],
+              ["✉", "Deliver", "Email + print"],
+            ].map(([icon, title, copy]) => (
+              <div class="flex min-h-40 flex-col gap-2 bg-background p-5">
+                <>
+                  <span class="text-2xl text-primary">{icon}</span>
+                  <b class="font-display">{title}</b>
+                  <small class="font-label text-[.58rem] uppercase tracking-[.08em] text-muted-foreground">
+                    {copy}
+                  </small>
+                </>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+    </main>
+
+    <footer
+      class="mx-auto flex w-[min(100%_-_3rem,74rem)] justify-between gap-4 border-t border-border py-5 text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[800px]:w-[min(100%_-_2rem,40rem)] max-[800px]:flex-col"
+    >
+      <span>Built end-to-end on Cloudflare</span>
+    </footer>
+  </div>
+</BoothLayout>
+
+<script is:inline>
+  (() => {
+    const toggle = document.querySelector("[data-theme-toggle]");
+    const label = document.querySelector("[data-theme-label]");
+    const icon = document.querySelector("[data-theme-icon]");
+    if (!toggle || !label || !icon) return;
+    const updateToggle = () => {
+      const isLight = document.documentElement.dataset.theme === "light";
+      toggle.setAttribute("aria-pressed", String(isLight));
+      toggle.setAttribute(
+        "aria-label",
+        isLight ? "Switch to dark theme" : "Switch to light theme",
+      );
+      label.textContent = isLight
+        ? "Switch to dark theme"
+        : "Switch to light theme";
+      icon.textContent = isLight ? "☼" : "☾";
+    };
+    toggle.addEventListener("click", () => {
+      const nextTheme =
+        document.documentElement.dataset.theme === "light" ? "dark" : "light";
+      document.documentElement.dataset.theme = nextTheme;
+      localStorage.setItem("booth-theme", nextTheme);
+      updateToggle();
+    });
+    updateToggle();
+  })();
+</script>

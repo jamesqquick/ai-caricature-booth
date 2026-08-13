@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-13T15:26:35Z",
+  "title": "Design System: Kinetic Cloud Studio",
+  "extensions": {
+    "colorMeta": {
+      "cloud-orange": {
+        "role": "primary",
+        "displayName": "Cloud Orange",
+        "canonical": "oklch(72% 0.19 52)",
+        "tonalRamp": ["oklch(18% 0.05 52)", "oklch(28% 0.09 52)", "oklch(40% 0.13 52)", "oklch(52% 0.17 52)", "oklch(64% 0.19 52)", "oklch(72% 0.19 52)", "oklch(84% 0.13 52)", "oklch(95% 0.04 52)"]
+      },
+      "studio-black": {
+        "role": "neutral",
+        "displayName": "Studio Black",
+        "canonical": "oklch(15% 0.018 55)",
+        "tonalRamp": ["oklch(12% 0.018 55)", "oklch(18% 0.018 55)", "oklch(25% 0.018 55)", "oklch(35% 0.018 55)", "oklch(48% 0.016 55)", "oklch(62% 0.014 55)", "oklch(78% 0.012 55)", "oklch(95% 0.008 55)"]
+      },
+      "warm-paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "oklch(95% 0.018 75)",
+        "tonalRamp": ["oklch(15% 0.018 75)", "oklch(27% 0.018 75)", "oklch(39% 0.018 75)", "oklch(51% 0.018 75)", "oklch(63% 0.018 75)", "oklch(75% 0.018 75)", "oklch(87% 0.018 75)", "oklch(95% 0.018 75)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Kinetic Display", "purpose": "Short, oversized step headlines." },
+      "body": { "displayName": "Studio Body", "purpose": "Instructions and supporting copy." },
+      "label": { "displayName": "Operational Label", "purpose": "Progress, privacy, and system status." }
+    },
+    "shadows": [
+      { "name": "ambient-glow", "value": "0 0 5rem rgb(246 130 31 / 0.18)", "purpose": "Energy behind the current creative object." },
+      { "name": "postcard-lift", "value": "0 2.5rem 6rem rgb(0 0 0 / 0.55)", "purpose": "Physical lift for the final artifact." }
+    ],
+    "motion": [
+      { "name": "step-enter", "value": "420ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Fast, responsive step transitions." },
+      { "name": "control-feedback", "value": "200ms ease", "purpose": "Hover, press, and focus feedback." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "520px" },
+      { "name": "tablet", "value": "800px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single dominant action in a booth step.",
+      "html": "<button class=\"ds-btn-primary\">Open camera <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-primary{min-height:48px;padding:14px 24px;border:0;border-radius:999px;background:var(--primary,#f6821f);color:var(--primary-foreground,#17191b);font:700 14px/1 'Inter Variable',sans-serif;transition:transform 200ms ease,filter 200ms ease,box-shadow 200ms ease;box-shadow:0 12px 35px rgb(246 130 31 / 20%)}.ds-btn-primary:hover{transform:translateY(-2px);filter:brightness(1.06)}.ds-btn-primary:focus-visible{outline:3px solid var(--ring,#f6821f);outline-offset:4px}.ds-btn-primary:active{transform:translateY(0)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet alternative for retakes and recovery actions.",
+      "html": "<button class=\"ds-btn-secondary\">Retake photo</button>",
+      "css": ".ds-btn-secondary{min-height:48px;padding:14px 24px;border:1px solid var(--border,#ffffff1f);border-radius:999px;background:var(--secondary,#25282b);color:var(--secondary-foreground,#f4f2ed);font:700 14px/1 'Inter Variable',sans-serif;transition:background 200ms ease,color 200ms ease}.ds-btn-secondary:hover{background:var(--accent,#303337)}.ds-btn-secondary:focus-visible{outline:3px solid var(--ring,#f6821f);outline-offset:4px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Compact operational metadata without dashboard density.",
+      "html": "<span class=\"ds-status\">Private · On device</span>",
+      "css": ".ds-status{display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--border,#ffffff1f);border-radius:999px;background:transparent;color:var(--muted-foreground,#aaa9a5);font:600 10px/1.2 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase}"
+    },
+    {
+      "name": "Scene Card",
+      "kind": "card",
+      "description": "A tactile, scene-aware selection surface.",
+      "html": "<button class=\"ds-scene\"><span class=\"ds-scene-number\">01</span><strong>Brooklyn Bridge</strong><small>Stone arches and Manhattan behind you.</small></button>",
+      "css": ".ds-scene{display:grid;gap:8px;min-height:150px;width:280px;padding:16px;border:1px solid var(--border,#ffffff1f);border-radius:18px;background:#27302c;color:#f4f2ed;text-align:left;transition:transform 180ms ease,border-color 180ms ease}.ds-scene:hover{transform:translateY(-2px);border-color:#72c98d}.ds-scene:focus-visible{outline:3px solid var(--ring,#f6821f);outline-offset:4px}.ds-scene-number{font:600 10px/1 'IBM Plex Mono',monospace;color:#72c98d}.ds-scene strong{align-self:end;font:600 17px/1.2 'Inter Variable',sans-serif}.ds-scene small{color:rgb(244 242 237 / 62%);font:400 12px/1.4 'Inter Variable',sans-serif}"
+    },
+    {
+      "name": "Generation Progress",
+      "kind": "custom",
+      "description": "Visible creative progress that turns waiting into momentum.",
+      "html": "<div class=\"ds-progress\" role=\"progressbar\" aria-valuenow=\"66\" aria-valuemin=\"0\" aria-valuemax=\"100\"><span></span></div>",
+      "css": ".ds-progress{height:6px;width:320px;overflow:hidden;border-radius:999px;background:var(--secondary,#25282b)}.ds-progress span{display:block;width:66%;height:100%;border-radius:inherit;background:var(--primary,#f6821f);transition:width 500ms ease-out}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Kinetic Cloud Studio",
+    "overview": "The interface is a compact creative studio in motion: dark, focused, and precise at rest, then bright and expressive in response to an attendee. It is a kiosk product, not a dashboard; the system hides infrastructure behind a single obvious path.",
+    "keyCharacteristics": ["Dark-first with deliberate light support", "One dominant action per state", "Large geometric headlines", "Ambient depth and controlled glow", "Responsive motion that confirms progress"],
+    "rules": [
+      { "name": "The Signal Rule", "body": "Cloud Orange occupies less than 12 percent of a screen.", "section": "colors" },
+      { "name": "The Short Headline Rule", "body": "Display copy is a visual action cue, not a paragraph.", "section": "typography" },
+      { "name": "The Flat-at-Rest Rule", "body": "Ordinary surfaces stay flat; elevation appears only for hierarchy, manipulation, or the final artifact.", "section": "elevation" }
+    ],
+    "dos": ["Do keep one dominant action per step.", "Do keep touch targets at least 44 by 44 pixels.", "Do use shadcn/ui primitives before introducing a custom equivalent."],
+    "donts": ["Don't make this resemble a generic SaaS dashboard.", "Don't use gradients as decoration.", "Don't rely on orange alone to communicate state."]
+  }
+}

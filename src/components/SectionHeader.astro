@@ -1,0 +1,15 @@
+---
+type Props = {
+  title: string;
+  subtitle?: string;
+};
+
+const { title, subtitle } = Astro.props;
+---
+
+<div class="mb-10 grid grid-cols-[minmax(0,1fr)_minmax(16rem,25rem)] items-end gap-8 max-[800px]:grid-cols-1 max-[800px]:gap-4">
+  <h2 class="m-0 max-w-[18ch] font-display text-[clamp(2.1rem,4.5vw,4.5rem)] font-semibold leading-[.95] tracking-[-.06em]">
+    {title}
+  </h2>
+  {subtitle && <p class="m-0 leading-[1.6] text-muted-foreground">{subtitle}</p>}
+</div>
