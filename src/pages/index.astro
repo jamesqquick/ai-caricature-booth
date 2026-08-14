@@ -2,8 +2,12 @@
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { scenes } from "../data/scenes";
+import { env } from "cloudflare:workers";
+import { loadActiveEvents } from "../db/events";
 
-const eventHref = "/e/nyc-tech-week-2026";
+export const prerender = false;
+
+const events = await loadActiveEvents(env.DB);
 const featuredScenes = [scenes[5], scenes[4], scenes[3]];
 const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
 ---
@@ -160,20 +164,26 @@ const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
           title="Active booths."
           subtitle="Choose a booth to get started."
         />
-        <a
-          class="grid grid-cols-[1fr_auto_auto] items-center gap-6 rounded-2xl border border-border p-5 text-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary max-[800px]:grid-cols-[1fr_auto]"
-          href={eventHref}
-        >
-          <div>
-            <h3 class="mb-1.5 font-display text-[1.4rem]">
-              NYC Tech Week 2026
-            </h3><p class="m-0 text-muted-foreground">
-              Six-scene New York caricature experience
-            </p>
-          </div><span class="max-[800px]:col-start-2 max-[800px]:row-start-1"
-            >Launch →</span
-          >
-        </a>
+        {
+          events.length > 0 ? (
+            <div class="grid gap-3">
+              {events.map((event) => (
+                <a
+                  class="grid grid-cols-[1fr_auto] items-center gap-6 rounded-2xl border border-border p-5 text-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary max-[800px]:grid-cols-[1fr_auto]"
+                  href={`/e/${event.slug}`}
+                >
+                  <div>
+                    <h3 class="mb-1.5 font-display text-[1.4rem]">{event.name}</h3>
+                    <p class="m-0 text-muted-foreground">{event.tagline}</p>
+                  </div>
+                  <span>Launch →</span>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p class="m-0 text-muted-foreground">No active booths are available right now.</p>
+          )
+        }
       </section>
 
       <section
@@ -184,28 +194,97 @@ const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
           title="Ten products. One continuous experience."
           subtitle="The application runs end-to-end on Cloudflare, with durable execution and real-time status from capture through delivery."
         />
-        <div class="grid grid-cols-6 gap-px bg-border max-[800px]:grid-cols-1">
-          {
-            [
-              ["↥", "Upload", "Workers + R2"],
-              ["◇", "Moderate", "Workers AI"],
-              ["✦", "Generate", "Workflows"],
-              ["▣", "Composite", "Cloudflare Images"],
-              ["◎", "Synchronize", "Durable Objects"],
-              ["✉", "Deliver", "Email + print"],
-            ].map(([icon, title, copy]) => (
-              <div class="flex min-h-40 flex-col gap-2 bg-background p-5">
-                <>
-                  <span class="text-2xl text-primary">{icon}</span>
-                  <b class="font-display">{title}</b>
-                  <small class="font-label text-[.58rem] uppercase tracking-[.08em] text-muted-foreground">
-                    {copy}
-                  </small>
-                </>
-              </div>
-            ))
-          }
+        <div class="pipeline-visual" data-pipeline aria-label="Animated image processing pipeline">
+          <div class="pipeline-story">
+            <div class="pipeline-frame pipeline-frame-result">
+              <span class="pipeline-frame-label">ONE IMAGE · MULTIPLE PASSES</span>
+              <span class="pipeline-result-canvas" aria-hidden="true">
+                <span class="pipeline-result-placeholder">AWAITING IMAGE</span>
+                <img class="pipeline-result-image" src="/demo-selfie.jpeg" alt="" />
+                <img class="pipeline-result-caricature" src="/demo-caricature.jpeg" alt="" />
+                <span class="pipeline-result-ink"></span>
+                <span class="pipeline-result-details">
+                  <span>INK STUDY</span>
+                  <span>NYC · 2026</span>
+                </span>
+              </span>
+              <span class="pipeline-result-meta">
+                <span class="pipeline-file-name">selfie.jpg</span>
+                <span class="pipeline-result-meta-arrow" aria-hidden="true">→</span>
+                <span class="pipeline-file-name">postcard.png</span>
+              </span>
+            </div>
+            <div class="pipeline-story-copy">
+              <span class="font-label text-[.62rem] font-extrabold uppercase tracking-[.14em] text-primary">
+                THE VISIBLE TRANSFORMATION
+              </span>
+              <h3 class="mt-3 font-display text-[clamp(1.8rem,4vw,3.6rem)] leading-[.95] tracking-[-.06em]">
+                One image.<br />Several passes.
+              </h3>
+              <p class="mt-4 max-w-[28ch] leading-[1.55] text-muted-foreground">
+                Watch the same image arrive, transform into a caricature, and pick up the details that make it collectible.
+              </p>
+            </div>
+          </div>
+
+          <div class="pipeline-divider" aria-hidden="true">
+            <span>BEHIND THE SCENES</span>
+          </div>
+
+          <div class="pipeline-rail" role="list" aria-label="Technology pipeline">
+            {
+              [
+                ["◎", "Take Selfie", "Camera", "Capture your starting point in the booth."],
+                ["↥", "Upload Image", "Workers + R2", "Your photo moves securely into the cloud."],
+                ["◇", "Check Image", "Workers AI · Image Moderation", "The image is checked before the creative work begins."],
+                ["✦", "Create Caricature", "Workflows · AI Generation", "The portrait transforms into a New York ink study."],
+                ["▣", "Make It a Postcard", "Cloudflare Images · Overlay", "The caricature gets its scene and postcard details."],
+                ["✉", "Print & Share", "Email + Print", "Take home the physical keepsake and digital original."],
+              ].map(([icon, title, copy, detail], index) => (
+                <div class="pipeline-node" data-pipeline-node={index} role="listitem">
+                  <span class="pipeline-node-icon" aria-hidden="true">{icon}</span>
+                  {index === 0 && <span class="pipeline-node-storage" aria-hidden="true">R2 BUCKET</span>}
+                  <span class="pipeline-node-number">0{index + 1}</span>
+                  <b>{title}</b>
+                  <small>{copy}</small>
+                  <span class="pipeline-node-detail">{detail}</span>
+                </div>
+              ))
+            }
+          </div>
+          <p class="pipeline-status" aria-live="polite">
+            <span class="pipeline-status-dot" aria-hidden="true"></span>
+            <span>LIVE RELAY · STEP-BY-STEP PROGRESS</span>
+          </p>
         </div>
+        <script>
+          const pipeline = document.querySelector('[data-pipeline]');
+          const pipelineNodes = pipeline
+            ? [...pipeline.querySelectorAll('[data-pipeline-node]')]
+            : [];
+          let pipelineStage = 0;
+
+          const updatePipelineStage = () => {
+            pipelineNodes.forEach((node, index) => {
+              node.setAttribute(
+                'data-state',
+                index < pipelineStage
+                  ? 'complete'
+                  : index === pipelineStage
+                    ? 'active'
+                    : 'pending',
+              );
+            });
+          };
+
+          if (pipelineNodes.length) {
+            updatePipelineStage();
+            window.setInterval(() => {
+              pipelineStage = (pipelineStage + 1) % pipelineNodes.length;
+              updatePipelineStage();
+            }, 1800);
+          }
+        </script>
       </section>
     </main>
 

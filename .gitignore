@@ -2,9 +2,16 @@
 dist/
 # generated types
 .astro/
+worker-configuration.d.ts
+
+# Wrangler local state
+.wrangler/
+.worktrees/
 
 # dependencies
 node_modules/
+pnpm-lock.yaml
+pnpm-workspace.yaml
 
 # logs
 npm-debug.log*

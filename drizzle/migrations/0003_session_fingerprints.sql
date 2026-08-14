@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN selfie_sha256 TEXT NOT NULL DEFAULT '';

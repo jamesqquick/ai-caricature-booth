@@ -1,12 +1,18 @@
 ---
 import { Photobooth } from "../../components/Photobooth";
+import EventNotFound from "../../components/EventNotFound.astro";
 import BoothLayout from "../../layouts/BoothLayout.astro";
+import { env } from "cloudflare:workers";
+import { loadActiveEventBySlug } from "../../db/events";
 
-export function getStaticPaths() {
-  return [{ params: { slug: "nyc-tech-week-2026" } }];
-}
+export const prerender = false;
+
+const event = await loadActiveEventBySlug(env.DB, Astro.params.slug ?? "");
+const title = event ? `${event.name} · Caricature Booth` : "Page not found · Caricature Booth";
+
+if (!event) Astro.response.status = 404;
 ---
 
-<BoothLayout title="NYC Caricature Booth">
-  <Photobooth client:load />
+<BoothLayout title={title} description={event?.tagline}>
+  {event ? <Photobooth client:load eventName={event.name} eventSlug={event.slug} /> : <EventNotFound />}
 </BoothLayout>

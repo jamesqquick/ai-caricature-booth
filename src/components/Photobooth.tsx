@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { scenes } from '../data/scenes';
 import { boothReducer, initialBoothState, type BoothStep } from '../lib/booth-machine';
 import { Stepper } from './Stepper';
@@ -11,15 +11,15 @@ const stepLabels: Array<{ id: BoothStep; label: string }> = [
   { id: 'scene', label: 'Scene' },
   { id: 'camera', label: 'Photo' },
   { id: 'generating', label: 'Create' },
-  { id: 'review', label: 'Review' },
 ];
 
-export function Photobooth() {
+export function Photobooth({ eventName, eventSlug }: { eventName: string; eventSlug: string }) {
   const [state, dispatch] = useReducer(boothReducer, initialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
-  const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
+  const activeIndex = state.step === 'review' ? stepLabels.length : stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
+  const finishGeneration = useCallback((postcardUrl: string) => dispatch({ type: 'finish-generation', postcardUrl }), []);
 
   useEffect(() => {
     if (previousStepRef.current === state.step) return;
@@ -52,24 +52,25 @@ export function Photobooth() {
         )}
         {state.step === 'generating' && selectedScene && state.photoDataUrl && (
           <GeneratingStep
-            scene={selectedScene}
-            photoDataUrl={state.photoDataUrl}
-            onComplete={() => dispatch({ type: 'finish-generation' })}
+              scene={selectedScene}
+              photoDataUrl={state.photoDataUrl}
+              eventSlug={eventSlug}
+              onComplete={finishGeneration}
           />
         )}
         {state.step === 'review' && selectedScene && state.photoDataUrl && (
-          <ReviewStep
-            scene={selectedScene}
-            photoDataUrl={state.photoDataUrl}
-            onRetake={() => dispatch({ type: 'retake' })}
-            onChangeScene={() => dispatch({ type: 'change-scene' })}
-            onStartOver={() => dispatch({ type: 'start-over' })}
+            <ReviewStep
+              scene={selectedScene}
+              photoDataUrl={state.photoDataUrl}
+              postcardUrl={state.postcardUrl}
+              onRetake={() => dispatch({ type: 'retake' })}
+              onStartOver={() => dispatch({ type: 'start-over' })}
           />
         )}
       </section>
 
       <footer className="flex justify-between gap-4 border-t border-border px-[clamp(1.25rem,4vw,4rem)] py-3.5 pb-[max(.85rem,env(safe-area-inset-bottom))] text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[520px]:flex-col max-[520px]:items-start">
-        <span>NYC Tech Week 2026</span>
+        <span>{eventName}</span>
       </footer>
     </main>
   );

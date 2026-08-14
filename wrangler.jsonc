@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ai-caricature-booth-v2",
+  "account_id": "e9bc21da719562a3e45d77de7dd042de",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-13",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-caricature-booth-db",
+      "migrations_dir": "./drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SELFIES",
+      "bucket_name": "ai-caricature-booth-selfies"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES",
+    "remote": true
+  },
+  "workflows": [
+    {
+      "name": "caricature-generation",
+      "binding": "CARICATURE_WORKFLOW",
+      "class_name": "CaricatureWorkflow"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    }
+  }
+}
