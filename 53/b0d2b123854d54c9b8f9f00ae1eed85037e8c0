@@ -1,0 +1,19 @@
+pnpm-lock.yaml
+  s_9f36d2a560143a::t_d31f63f532ceae 1-5468
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "53b0d2b123854d54c9b8f9f00ae1eed85037e8c0",
+  "prompts": {},
+  "sessions": {
+    "s_9f36d2a560143a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_003d0507dffeZvpyv5jl6YRFIE",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
