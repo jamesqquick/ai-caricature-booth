@@ -12,8 +12,8 @@ Refreshing the page resets the flow, and the captured photo never leaves the bro
 ## Development
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not expose `navigator.mediaDevices` in most browsers.
@@ -21,7 +21,7 @@ Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not e
 Apply the local D1 migration and seed data with:
 
 ```sh
-npm run db:migrate:local
+pnpm db:migrate:local
 ```
 
 The seed includes `/e/nyc-tech-week-2026` and `/e/cloudflare-connect-2026`.
@@ -29,7 +29,7 @@ The seed includes `/e/nyc-tech-week-2026` and `/e/cloudflare-connect-2026`.
 ## Verification
 
 ```sh
-npm test
-npm run check
-npm run build
+pnpm test
+pnpm check
+pnpm build
 ```
