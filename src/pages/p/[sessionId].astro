@@ -46,55 +46,55 @@ const title = isAvailable
 >
   {
     isAvailable && postcardUrl ? (
-      <main class="result-page">
-        <div class="result-copy">
-          <div class="result-top">
-            <div class="result-heading">
-              <p class="result-eyebrow">You've been caricaturized</p>
-              <h1>Postcard ready</h1>
-            </div>
-            {qrCode && (
-              <div class="result-qr">
-                <img
-                  src={qrCode}
-                  alt={`QR code for postcard ${sessionId}`}
-                  width="160"
-                  height="160"
-                />
-                <p class="result-qr-copy">Digital copy</p>
-              </div>
-            )}
-          </div>
-        </div>
-        <div class="result-media">
-          <figure class="result-postcard">
-            <img
-              src={postcardUrl}
-              alt={`Finished ${event!.name} caricature postcard`}
-              width="1800"
-              height="1200"
-            />
-          </figure>
-          <div class="result-actions">
-            <a
-              class="result-button result-button-secondary"
-              href={`${postcardUrl}?download=1`}
+       <main class="mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-5xl content-start gap-8 px-[clamp(1.25rem,5vw,4rem)] py-[clamp(2rem,7vh,5rem)] max-[1000px]:min-h-0 max-[1000px]:pt-6">
+         <div class="flex items-center justify-between gap-8 max-[600px]:gap-4">
+           <div>
+             <p class="mb-4 font-label text-[.72rem] font-semibold uppercase tracking-[.2em] text-primary">You've been caricaturized</p>
+             <h1 class="m-0 max-w-[10ch] whitespace-nowrap font-display text-[clamp(2.7rem,5vw,5.2rem)] font-semibold leading-[.92] tracking-[-.06em] max-[1000px]:max-w-[12ch] max-[600px]:text-[clamp(1.75rem,8vw,2.7rem)]">Postcard ready</h1>
+             </div>
+             {qrCode && (
+               <div class="flex w-28 shrink-0 flex-col items-center gap-2.5 max-[600px]:w-20">
+                 <img
+                   src={qrCode}
+                   alt={`QR code for postcard ${sessionId}`}
+                   width="160"
+                   height="160"
+                   class="size-28 rounded-[.35rem] border-[.5rem] border-solid border-white max-[600px]:size-20 max-[600px]:border-[.35rem]"
+                 />
+                 <p class="m-0 w-40 text-center font-label text-[.68rem] font-semibold uppercase leading-[1.35] tracking-[.08em] text-muted-foreground max-[600px]:w-28 max-[600px]:text-[.55rem]">Digital copy</p>
+               </div>
+             )}
+           </div>
+         <div class="w-full">
+           <figure class="m-0 w-full rotate-[1deg] overflow-hidden shadow-[0_2.5rem_6rem_oklch(5%_.01_55_/.55)] max-[1000px]:rotate-[-.8deg]">
+             <img
+               src={postcardUrl}
+               alt={`Finished ${event!.name} caricature postcard`}
+               width="1800"
+               height="1200"
+               class="block aspect-[3/2] h-auto w-full object-contain"
+             />
+           </figure>
+           <div class="mt-5 flex justify-center gap-3 max-[600px]:flex-col max-[600px]:gap-2">
+             <a
+               class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-transparent bg-[oklch(78%_.14_210)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] no-underline transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[1deg] hover:border-[oklch(84%_.12_210)] hover:bg-[oklch(84%_.12_210)] hover:shadow-[0_.75rem_2rem_oklch(62%_.14_210_/.25)] active:translate-y-0 max-[600px]:w-full"
+               href={`${postcardUrl}?download=1`}
               aria-label="Download postcard"
               title="Download postcard"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+                 <svg class="size-[1.15rem] fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
               </svg>
               <span>Download</span>
             </a>
-            <button
-              class="result-button result-button-primary"
+             <button
+               class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full border border-[oklch(71%_.2_330)] bg-[oklch(71%_.2_330)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-1deg] hover:border-[oklch(77%_.18_330)] hover:bg-[oklch(77%_.18_330)] hover:shadow-[0_.75rem_2rem_oklch(60%_.2_330_/.28)] active:translate-y-0 max-[600px]:w-full"
               type="button"
               data-share
               aria-label="Share postcard"
               title="Share postcard"
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+                 <svg class="size-[1.15rem] fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" viewBox="0 0 24 24" aria-hidden="true">
                 <>
                   <circle cx="18" cy="5" r="3" />
                   <circle cx="6" cy="12" r="3" />
@@ -104,18 +104,18 @@ const title = isAvailable
               </svg>
               <span>Share</span>
             </button>
-            <a
-              class="result-button result-button-tertiary"
+             <a
+               class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[oklch(82%_.17_85)] bg-[oklch(82%_.17_85)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] no-underline transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-.5deg] hover:border-[oklch(88%_.15_85)] hover:bg-[oklch(88%_.15_85)] hover:shadow-[0_.75rem_2rem_oklch(65%_.17_85_/.25)] active:translate-y-0 max-[600px]:w-full"
               href={`/e/${event!.slug}`}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
+                 <svg class="size-[1.15rem] fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.6L20 9M4 15l2.4 2.6A7 7 0 0 0 17.9 15" />
               </svg>
               <span>Start Over</span>
             </a>
           </div>
-          <p
-            class="result-status"
+           <p
+             class="m-0 min-h-[1.4rem] pt-3 text-center text-[.82rem] text-muted-foreground"
             data-share-status
             role="status"
             aria-live="polite"
@@ -155,205 +155,3 @@ const title = isAvailable
     });
   }
 </script>
-
-<style>
-  .result-page {
-    display: grid;
-    min-height: calc(100dvh - 8rem);
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: 2rem;
-    max-width: 60rem;
-    margin: 0 auto;
-    padding: clamp(2rem, 7vh, 5rem) clamp(1.25rem, 5vw, 4rem);
-  }
-  .result-copy {
-    display: contents;
-  }
-  .result-top {
-    display: flex;
-    order: 1;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-  }
-  .result-eyebrow,
-  .result-qr-label {
-    margin: 0 0 1rem;
-    color: var(--primary);
-    font: 600 0.72rem/1.2 var(--font-label);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-  }
-  .result-copy h1 {
-    max-width: 10ch;
-    margin: 0;
-    font: 600 clamp(2.7rem, 5vw, 5.2rem)/0.92 var(--font-display);
-    letter-spacing: -0.06em;
-    white-space: nowrap;
-  }
-  .result-description {
-    max-width: 28rem;
-    margin: 0;
-    color: var(--muted-foreground);
-    font-size: 1rem;
-    line-height: 1.6;
-  }
-  .result-media {
-    order: 2;
-    width: 100%;
-  }
-  .result-actions {
-    display: flex;
-    justify-content: center;
-    gap: 0.75rem;
-    margin-top: 1.25rem;
-  }
-  .result-button {
-    display: inline-flex;
-    min-height: 3rem;
-    align-items: center;
-    justify-content: center;
-    gap: 0.55rem;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    padding: 0 1.15rem;
-    color: oklch(16% 0.025 55);
-    font-weight: 750;
-    text-decoration: none;
-    transition:
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 180ms ease,
-      border-color 180ms ease,
-      box-shadow 180ms ease;
-  }
-  .result-button svg {
-    width: 1.15rem;
-    height: 1.15rem;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .result-button-primary {
-    border-color: oklch(71% 0.2 330);
-    background: oklch(71% 0.2 330);
-    cursor: pointer;
-  }
-  .result-button-secondary {
-    border-color: oklch(78% 0.14 210);
-    background: oklch(78% 0.14 210);
-  }
-  .result-button-tertiary {
-    border-color: oklch(82% 0.17 85);
-    background: oklch(82% 0.17 85);
-  }
-  .result-button-primary:hover {
-    background: oklch(77% 0.18 330);
-    border-color: oklch(77% 0.18 330);
-    box-shadow: 0 0.75rem 2rem oklch(60% 0.2 330 / 0.28);
-    transform: translateY(-2px) rotate(-1deg);
-  }
-  .result-button-secondary:hover {
-    background: oklch(84% 0.12 210);
-    border-color: oklch(84% 0.12 210);
-    box-shadow: 0 0.75rem 2rem oklch(62% 0.14 210 / 0.25);
-    transform: translateY(-2px) rotate(1deg);
-  }
-  .result-button-tertiary:hover {
-    background: oklch(88% 0.15 85);
-    border-color: oklch(88% 0.15 85);
-    box-shadow: 0 0.75rem 2rem oklch(65% 0.17 85 / 0.25);
-    transform: translateY(-2px) rotate(-0.5deg);
-  }
-  .result-button:active {
-    transform: translateY(0);
-  }
-  .result-status {
-    min-height: 1.4rem;
-    margin: 0.75rem 0 0;
-    color: var(--muted-foreground);
-    font-size: 0.82rem;
-    text-align: center;
-  }
-  .result-qr {
-    display: flex;
-    flex: 0 0 auto;
-    width: 7rem;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.65rem;
-    margin-top: 0;
-  }
-  .result-qr img {
-    width: 7rem;
-    height: 7rem;
-    border: 0.5rem solid white;
-    border-radius: 0.35rem;
-  }
-  .result-qr-label {
-    margin-bottom: 0.4rem;
-    color: var(--foreground);
-    letter-spacing: 0.12em;
-  }
-  .result-qr-copy {
-    width: 10rem;
-    margin: 0;
-    color: var(--muted-foreground);
-    font: 600 0.68rem/1.35 var(--font-label);
-    letter-spacing: 0.08em;
-    text-align: center;
-    text-transform: uppercase;
-  }
-  .result-postcard {
-    width: 100%;
-    margin: 0;
-    overflow: hidden;
-    box-shadow: 0 2.5rem 6rem oklch(5% 0.01 55 / 0.55);
-    transform: rotate(1deg);
-  }
-  .result-postcard img {
-    display: block;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 3 / 2;
-    object-fit: contain;
-  }
-  @media (max-width: 1000px) {
-    .result-page {
-      min-height: auto;
-      padding-top: 1.5rem;
-    }
-    .result-postcard {
-      transform: rotate(-0.8deg);
-    }
-    .result-copy h1 {
-      max-width: 12ch;
-    }
-  }
-  @media (max-width: 600px) {
-    .result-actions {
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .result-top {
-      gap: 1rem;
-    }
-    .result-copy h1 {
-      font-size: clamp(1.75rem, 8vw, 2.7rem);
-    }
-    .result-qr {
-      width: 5rem;
-    }
-    .result-qr img {
-      width: 5rem;
-      height: 5rem;
-      border-width: 0.35rem;
-    }
-    .result-qr-copy {
-      width: 7rem;
-      font-size: 0.55rem;
-    }
-  }
-</style>

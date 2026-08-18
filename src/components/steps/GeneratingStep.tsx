@@ -5,6 +5,8 @@ import type { Scene } from '../../data/scenes';
 import { GENERATION_PROGRESS_DURATION_MS, generationPhases, generationProgressRanges, phaseForGenerationStatus, progressForPhase, type GenerationPhase } from '../../lib/generation-progress';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 
 type Props = {
@@ -91,25 +93,25 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
 
   return (
     <div className="step-enter grid w-full max-w-[64rem] grid-cols-[minmax(17rem,28rem)_minmax(18rem,1fr)] items-center gap-[clamp(2rem,7vw,7rem)] max-[800px]:grid-cols-1 max-[800px]:mx-auto max-[800px]:max-w-md max-[800px]:gap-8">
-      <div className="generation-preview relative aspect-[4/5] w-full rotate-[-2deg] overflow-hidden rounded-[1.2rem] border border-border bg-card" data-phase={activePhase} style={{ '--scene-accent': scene.accent } as CSSProperties}>
+      <Card className="generation-preview relative aspect-[4/5] w-full rotate-[-2deg] overflow-hidden rounded-[1.2rem] border-border bg-card" data-phase={activePhase} style={{ '--scene-accent': scene.accent } as CSSProperties}>
         <img className="size-full object-cover grayscale-[.65] contrast-[1.15]" src={photoDataUrl} alt="Your photo being prepared" />
         <div className="ink-scan" aria-hidden="true" />
         <Badge className="absolute bottom-4 right-4 rotate-[-3deg] border-current bg-[oklch(15%_.018_55)] font-label text-[.58rem] font-extrabold uppercase tracking-[.15em] text-foreground">{generationPhases[activeIndex].label}</Badge>
-      </div>
+      </Card>
 
       <div>
         <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-primary">Creating {scene.name}</p>
         <h1 className="mb-6 max-w-[13ch] font-display text-[clamp(2.6rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Drawing outside the lines.</h1>
         <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">Your approved photo is uploaded privately, then transformed into a print-ready postcard.</p>
         {errorMessage && (
-          <div className="mt-6 flex max-w-[38rem] items-start gap-3 rounded-2xl border border-danger/40 bg-danger/10 p-4 text-danger" role="alert">
+          <Alert className="mt-6 flex max-w-[38rem] items-start gap-3 border-danger/40 bg-danger/10 text-danger">
             <AlertCircle className="mt-0.5 shrink-0" aria-hidden="true" />
             <div>
-              <strong>We could not finish that postcard.</strong>
-              <p className="mt-1 text-sm text-foreground/80">{errorMessage}</p>
+              <AlertTitle>We could not finish that postcard.</AlertTitle>
+              <AlertDescription className="text-foreground/80"><p>{errorMessage}</p></AlertDescription>
               <Button className="mt-3" variant="secondary" type="button" onClick={() => window.location.reload()}>Try again</Button>
             </div>
-          </div>
+          </Alert>
         )}
         <Progress className="mt-8" indicatorClassName="generation-progress-indicator" value={isComplete ? 100 : progress} aria-label="Generation progress" />
         <ol className="mt-8 flex list-none flex-col gap-2 m-0 p-0">

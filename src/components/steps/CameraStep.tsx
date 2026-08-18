@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 type CameraStatus = 'starting' | 'live' | 'countdown' | 'preview' | 'error';
 
@@ -182,8 +183,10 @@ export function CameraStep({ onUsePhoto }: Props) {
           {status === 'error' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[oklch(13%_.015_55_/.88)] p-8 text-center">
               <span className="grid size-12 place-items-center rounded-full border-2 border-danger text-danger" aria-hidden="true"><AlertCircle /></span>
-              <strong>Camera unavailable</strong>
-              <small className="max-w-[31ch] leading-6 text-foreground/80">{errorMessage}</small>
+              <Alert className="max-w-[31ch] border-0 p-0 text-foreground">
+                <AlertTitle>Camera unavailable</AlertTitle>
+                <AlertDescription><p>{errorMessage}</p></AlertDescription>
+              </Alert>
               <Button variant="secondary" type="button" onClick={() => setCameraRun((run) => run + 1)}>
                 Try again
               </Button>
