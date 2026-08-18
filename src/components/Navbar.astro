@@ -10,17 +10,30 @@
     Caricature Booth
   </a>
   <div
-    class="flex items-center gap-6 text-xs font-bold text-muted-foreground max-[800px]:w-full max-[800px]:justify-between max-[800px]:gap-3"
+    class="flex items-center gap-3 text-xs font-bold text-muted-foreground max-[800px]:w-full max-[800px]:justify-between"
   >
     <button
-      class="grid size-11 place-items-center rounded-full border border-border bg-transparent text-2xl leading-none text-muted-foreground hover:border-primary hover:text-foreground max-[800px]:ml-auto"
+      class="grid size-11 place-items-center rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary hover:text-foreground max-[800px]:ml-auto"
+      type="button"
+      data-sound-toggle
+      aria-label="Mute sound"
+      aria-pressed="true"
+      title="Mute sound"
+    >
+      <svg class="size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-sound-on-icon aria-hidden="true" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+      <svg class="hidden size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-sound-off-icon aria-hidden="true" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+      <span class="sr-only" data-sound-label>Sound is on</span>
+    </button>
+    <button
+      class="grid size-11 place-items-center rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary hover:text-foreground"
       type="button"
       data-theme-toggle
       aria-label="Switch to light theme"
       aria-pressed="false"
       title="Switch theme"
     >
-      <span data-theme-icon aria-hidden="true">☾</span>
+      <svg class="hidden size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-light-icon aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+      <svg class="size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-dark-icon aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
       <span class="sr-only" data-theme-label>Switch to light theme</span>
     </button>
   </div>

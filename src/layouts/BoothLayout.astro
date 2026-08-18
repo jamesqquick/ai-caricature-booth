@@ -37,19 +37,48 @@ const {
   <body>
     <Navbar />
     <slot />
+    <script>
+      import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
+
+      const toggle = document.querySelector('[data-sound-toggle]');
+      const label = document.querySelector('[data-sound-label]');
+      const onIcon = document.querySelector('[data-sound-on-icon]');
+      const offIcon = document.querySelector('[data-sound-off-icon]');
+
+      if (toggle && label && onIcon && offIcon) {
+        const updateSoundToggle = () => {
+          const enabled = isSoundEnabled();
+          toggle.setAttribute('aria-pressed', String(enabled));
+          toggle.setAttribute('aria-label', enabled ? 'Mute sound' : 'Turn sound on');
+          toggle.setAttribute('title', enabled ? 'Mute sound' : 'Turn sound on');
+          label.textContent = enabled ? 'Sound is on' : 'Sound is off';
+          onIcon.classList.toggle('hidden', !enabled);
+          offIcon.classList.toggle('hidden', enabled);
+        };
+
+        toggle.addEventListener('click', () => {
+          setSoundEnabled(!isSoundEnabled());
+          updateSoundToggle();
+        });
+
+        updateSoundToggle();
+      }
+    </script>
     <script is:inline>
       (() => {
         const toggle = document.querySelector('[data-theme-toggle]');
         const label = document.querySelector('[data-theme-label]');
-        const icon = document.querySelector('[data-theme-icon]');
-        if (!toggle || !label || !icon) return;
+        const lightIcon = document.querySelector('[data-theme-light-icon]');
+        const darkIcon = document.querySelector('[data-theme-dark-icon]');
+        if (!toggle || !label || !lightIcon || !darkIcon) return;
 
         const updateToggle = () => {
           const isLight = document.documentElement.dataset.theme === 'light';
           toggle.setAttribute('aria-pressed', String(isLight));
           toggle.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme');
           label.textContent = isLight ? 'Switch to dark theme' : 'Switch to light theme';
-          icon.textContent = isLight ? '☼' : '☾';
+          lightIcon.classList.toggle('hidden', !isLight);
+          darkIcon.classList.toggle('hidden', isLight);
         };
 
         toggle.addEventListener('click', () => {

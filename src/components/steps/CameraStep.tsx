@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { playCountdownTick } from '../../lib/sound';
 
 type CameraStatus = 'starting' | 'live' | 'countdown' | 'preview' | 'error';
 
@@ -10,6 +11,7 @@ type Props = {
 };
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+const countdownInterval = 800;
 
 export function CameraStep({ onUsePhoto }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -150,7 +152,8 @@ export function CameraStep({ onUsePhoto }: Props) {
     for (const value of [3, 2, 1]) {
       if (captureRunRef.current !== run) return;
       setCountdown(value);
-      await wait(700);
+      playCountdownTick();
+      await wait(countdownInterval);
     }
 
     if (captureRunRef.current === run) captureFrame();
