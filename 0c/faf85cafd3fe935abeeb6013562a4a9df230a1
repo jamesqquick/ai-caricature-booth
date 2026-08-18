@@ -1,0 +1,19 @@
+README.md
+  s_0728f922d802db::t_ad3dd067cfae77 7,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0cfaf85cafd3fe935abeeb6013562a4a9df230a1",
+  "prompts": {},
+  "sessions": {
+    "s_0728f922d802db": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_feab8767fffeIn1aKkorhh8ISj",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
