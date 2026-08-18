@@ -8,7 +8,6 @@ describe('boothReducer', () => {
       step: 'camera',
       sceneId: 'hot-dog-stand',
       photoDataUrl: null,
-      postcardUrl: null,
     });
   });
 
@@ -27,63 +26,28 @@ describe('boothReducer', () => {
       step: 'generating',
       sceneId: 'central-park',
       photoDataUrl: 'data:image/jpeg;base64,test',
-      postcardUrl: null,
-    });
-  });
-
-  it('preserves the scene when retaking a photo', () => {
-    const reviewState = {
-      step: 'review' as const,
-      sceneId: 'broadway',
-      photoDataUrl: 'data:image/jpeg;base64,test',
-      postcardUrl: null,
-    };
-
-    expect(boothReducer(reviewState, { type: 'retake' })).toEqual({
-      step: 'camera',
-      sceneId: 'broadway',
-      photoDataUrl: null,
-      postcardUrl: null,
-    });
-  });
-
-  it('moves a generated photo to review', () => {
-    const generatingState = {
-      step: 'generating' as const,
-      sceneId: 'times-square',
-      photoDataUrl: 'data:image/jpeg;base64,test',
-      postcardUrl: null,
-    };
-
-    expect(boothReducer(generatingState, { type: 'finish-generation', postcardUrl: '/postcard.jpg' })).toEqual({
-      ...generatingState,
-      step: 'review',
-      postcardUrl: '/postcard.jpg',
     });
   });
 
   it('returns to scene selection without discarding the current scene', () => {
     const reviewState = {
-      step: 'review' as const,
+      step: 'generating' as const,
       sceneId: 'brooklyn-bridge',
       photoDataUrl: 'data:image/jpeg;base64,test',
-      postcardUrl: null,
     };
 
     expect(boothReducer(reviewState, { type: 'change-scene' })).toEqual({
       step: 'scene',
       sceneId: 'brooklyn-bridge',
       photoDataUrl: null,
-      postcardUrl: null,
     });
   });
 
   it('clears the complete flow when starting over', () => {
     const reviewState = {
-      step: 'review' as const,
+      step: 'generating' as const,
       sceneId: 'subway',
       photoDataUrl: 'data:image/jpeg;base64,test',
-      postcardUrl: null,
     };
 
     expect(boothReducer(reviewState, { type: 'start-over' })).toEqual(initialBoothState);

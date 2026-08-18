@@ -1,0 +1,359 @@
+---
+import QRCode from "qrcode";
+import { env } from "cloudflare:workers";
+import BoothLayout from "../../layouts/BoothLayout.astro";
+import EventNotFound from "../../components/EventNotFound.astro";
+import { loadEventById } from "../../db/events";
+import { loadSession } from "../../db/sessions";
+
+export const prerender = false;
+
+const sessionId = Astro.params.sessionId ?? "";
+const isUuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    sessionId,
+  );
+const session = isUuid ? await loadSession(env.DB, sessionId) : null;
+const event = session ? await loadEventById(env.DB, session.event_id) : null;
+const isAvailable = Boolean(
+  session && event && session.status === "completed" && session.postcard_key,
+);
+const resultUrl = new URL(`/p/${sessionId}`, Astro.url).toString();
+const postcardUrl = isAvailable
+  ? `/api/events/${session!.event_id}/sessions/${sessionId}/postcard`
+  : null;
+let qrCode: string | null = null;
+if (isAvailable) {
+  try {
+    qrCode = await QRCode.toDataURL(resultUrl, {
+      errorCorrectionLevel: "H",
+      margin: 2,
+      width: 320,
+    });
+  } catch {
+    qrCode = null;
+  }
+}
+const title = isAvailable
+  ? `${event!.name} postcard · Caricature Booth`
+  : "Postcard not found · Caricature Booth";
+---
+
+<BoothLayout
+  title={title}
+  description="Your finished caricature postcard."
+  noIndex
+>
+  {
+    isAvailable && postcardUrl ? (
+      <main class="result-page">
+        <div class="result-copy">
+          <div class="result-top">
+            <div class="result-heading">
+              <p class="result-eyebrow">You've been caricaturized</p>
+              <h1>Postcard ready</h1>
+            </div>
+            {qrCode && (
+              <div class="result-qr">
+                <img
+                  src={qrCode}
+                  alt={`QR code for postcard ${sessionId}`}
+                  width="160"
+                  height="160"
+                />
+                <p class="result-qr-copy">Digital copy</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div class="result-media">
+          <figure class="result-postcard">
+            <img
+              src={postcardUrl}
+              alt={`Finished ${event!.name} caricature postcard`}
+              width="1800"
+              height="1200"
+            />
+          </figure>
+          <div class="result-actions">
+            <a
+              class="result-button result-button-secondary"
+              href={`${postcardUrl}?download=1`}
+              aria-label="Download postcard"
+              title="Download postcard"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+              </svg>
+              <span>Download</span>
+            </a>
+            <button
+              class="result-button result-button-primary"
+              type="button"
+              data-share
+              aria-label="Share postcard"
+              title="Share postcard"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <>
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" />
+                </>
+              </svg>
+              <span>Share</span>
+            </button>
+            <a
+              class="result-button result-button-tertiary"
+              href={`/e/${event!.slug}`}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.5-2.6L20 9M4 15l2.4 2.6A7 7 0 0 0 17.9 15" />
+              </svg>
+              <span>Start Over</span>
+            </a>
+          </div>
+          <p
+            class="result-status"
+            data-share-status
+            role="status"
+            aria-live="polite"
+          />
+        </div>
+      </main>
+    ) : (
+      <EventNotFound />
+    )
+  }
+</BoothLayout>
+
+<script>
+  const shareButton = document.querySelector<HTMLButtonElement>("[data-share]");
+  const status = document.querySelector<HTMLElement>("[data-share-status]");
+  if (shareButton && status) {
+    shareButton.addEventListener("click", async () => {
+      const shareData = {
+        title: document.title,
+        text: "Take a look at this caricature postcard.",
+        url: window.location.href,
+      };
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+          status.textContent = "Postcard shared.";
+        } else {
+          await navigator.clipboard.writeText(window.location.href);
+          status.textContent = "Review link copied.";
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError")
+          return;
+        status.textContent =
+          "Could not share automatically. Copy the URL from your browser.";
+      }
+    });
+  }
+</script>
+
+<style>
+  .result-page {
+    display: grid;
+    min-height: calc(100dvh - 8rem);
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 2rem;
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 7vh, 5rem) clamp(1.25rem, 5vw, 4rem);
+  }
+  .result-copy {
+    display: contents;
+  }
+  .result-top {
+    display: flex;
+    order: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+  .result-eyebrow,
+  .result-qr-label {
+    margin: 0 0 1rem;
+    color: var(--primary);
+    font: 600 0.72rem/1.2 var(--font-label);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .result-copy h1 {
+    max-width: 10ch;
+    margin: 0;
+    font: 600 clamp(2.7rem, 5vw, 5.2rem)/0.92 var(--font-display);
+    letter-spacing: -0.06em;
+    white-space: nowrap;
+  }
+  .result-description {
+    max-width: 28rem;
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .result-media {
+    order: 2;
+    width: 100%;
+  }
+  .result-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+  .result-button {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 0 1.15rem;
+    color: oklch(16% 0.025 55);
+    font-weight: 750;
+    text-decoration: none;
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .result-button svg {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .result-button-primary {
+    border-color: oklch(71% 0.2 330);
+    background: oklch(71% 0.2 330);
+    cursor: pointer;
+  }
+  .result-button-secondary {
+    border-color: oklch(78% 0.14 210);
+    background: oklch(78% 0.14 210);
+  }
+  .result-button-tertiary {
+    border-color: oklch(82% 0.17 85);
+    background: oklch(82% 0.17 85);
+  }
+  .result-button-primary:hover {
+    background: oklch(77% 0.18 330);
+    border-color: oklch(77% 0.18 330);
+    box-shadow: 0 0.75rem 2rem oklch(60% 0.2 330 / 0.28);
+    transform: translateY(-2px) rotate(-1deg);
+  }
+  .result-button-secondary:hover {
+    background: oklch(84% 0.12 210);
+    border-color: oklch(84% 0.12 210);
+    box-shadow: 0 0.75rem 2rem oklch(62% 0.14 210 / 0.25);
+    transform: translateY(-2px) rotate(1deg);
+  }
+  .result-button-tertiary:hover {
+    background: oklch(88% 0.15 85);
+    border-color: oklch(88% 0.15 85);
+    box-shadow: 0 0.75rem 2rem oklch(65% 0.17 85 / 0.25);
+    transform: translateY(-2px) rotate(-0.5deg);
+  }
+  .result-button:active {
+    transform: translateY(0);
+  }
+  .result-status {
+    min-height: 1.4rem;
+    margin: 0.75rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  .result-qr {
+    display: flex;
+    flex: 0 0 auto;
+    width: 7rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 0;
+  }
+  .result-qr img {
+    width: 7rem;
+    height: 7rem;
+    border: 0.5rem solid white;
+    border-radius: 0.35rem;
+  }
+  .result-qr-label {
+    margin-bottom: 0.4rem;
+    color: var(--foreground);
+    letter-spacing: 0.12em;
+  }
+  .result-qr-copy {
+    width: 10rem;
+    margin: 0;
+    color: var(--muted-foreground);
+    font: 600 0.68rem/1.35 var(--font-label);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .result-postcard {
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+    box-shadow: 0 2.5rem 6rem oklch(5% 0.01 55 / 0.55);
+    transform: rotate(1deg);
+  }
+  .result-postcard img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    object-fit: contain;
+  }
+  @media (max-width: 1000px) {
+    .result-page {
+      min-height: auto;
+      padding-top: 1.5rem;
+    }
+    .result-postcard {
+      transform: rotate(-0.8deg);
+    }
+    .result-copy h1 {
+      max-width: 12ch;
+    }
+  }
+  @media (max-width: 600px) {
+    .result-actions {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .result-top {
+      gap: 1rem;
+    }
+    .result-copy h1 {
+      font-size: clamp(1.75rem, 8vw, 2.7rem);
+    }
+    .result-qr {
+      width: 5rem;
+    }
+    .result-qr img {
+      width: 5rem;
+      height: 5rem;
+      border-width: 0.35rem;
+    }
+    .result-qr-copy {
+      width: 7rem;
+      font-size: 0.55rem;
+    }
+  }
+</style>

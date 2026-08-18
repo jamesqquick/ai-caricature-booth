@@ -3,7 +3,7 @@ import { loadSession } from '../../../../../../db/sessions';
 
 export const prerender = false;
 
-export async function GET({ params }: { params: Record<string, string | undefined> }) {
+export async function GET({ params, url }: { params: Record<string, string | undefined>; url: URL }) {
   const sessionId = params.sessionId;
   if (!sessionId || params.eventId === undefined) return new Response('Not found', { status: 404 });
   const session = await loadSession(env.DB, sessionId);
@@ -12,5 +12,11 @@ export async function GET({ params }: { params: Record<string, string | undefine
   }
   const object = await env.SELFIES.get(session.postcard_key);
   if (!object) return new Response('Not found', { status: 404 });
-  return new Response(object.body, { headers: { 'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg', 'Cache-Control': 'private, no-store' } });
+  const download = url.searchParams.get('download') === '1';
+  const headers = new Headers({
+    'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
+    'Cache-Control': 'private, no-store',
+  });
+  headers.set('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename="postcard-${session.id}.jpg"`);
+  return new Response(object.body, { headers });
 }

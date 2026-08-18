@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { scenes } from '../data/scenes';
 import { boothReducer, initialBoothState, type BoothStep } from '../lib/booth-machine';
 import { Stepper } from './Stepper';
 import { CameraStep } from './steps/CameraStep';
 import { GeneratingStep } from './steps/GeneratingStep';
-import { ReviewStep } from './steps/ReviewStep';
 import { SceneStep } from './steps/SceneStep';
 
 const stepLabels: Array<{ id: BoothStep; label: string }> = [
@@ -17,9 +16,9 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
   const [state, dispatch] = useReducer(boothReducer, initialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
-  const activeIndex = state.step === 'review' ? stepLabels.length : stepLabels.findIndex((step) => step.id === state.step);
+  const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
-  const finishGeneration = useCallback((postcardUrl: string) => dispatch({ type: 'finish-generation', postcardUrl }), []);
+  const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}`);
 
   useEffect(() => {
     if (previousStepRef.current === state.step) return;
@@ -56,15 +55,6 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
               photoDataUrl={state.photoDataUrl}
               eventSlug={eventSlug}
               onComplete={finishGeneration}
-          />
-        )}
-        {state.step === 'review' && selectedScene && state.photoDataUrl && (
-            <ReviewStep
-              scene={selectedScene}
-              photoDataUrl={state.photoDataUrl}
-              postcardUrl={state.postcardUrl}
-              onRetake={() => dispatch({ type: 'retake' })}
-              onStartOver={() => dispatch({ type: 'start-over' })}
           />
         )}
       </section>

@@ -5,11 +5,13 @@ import Navbar from '../components/Navbar.astro';
 type Props = {
   title: string;
   description?: string;
+  noIndex?: boolean;
 };
 
 const {
   title,
   description = 'Choose a New York scene, take a photo, and preview your caricature postcard.',
+  noIndex = false,
 } = Astro.props;
 ---
 
@@ -19,6 +21,7 @@ const {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {noIndex && <meta name="robots" content="noindex, nofollow" />}
     <meta name="theme-color" content="#17191b" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f8f5ef" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

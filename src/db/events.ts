@@ -41,6 +41,11 @@ export async function loadActiveEventById(database: D1Database, id: number): Pro
   return db.get<EventRecord>(sql`SELECT * FROM events WHERE id = ${id} AND status = 'active' LIMIT 1`);
 }
 
+export async function loadEventById(database: D1Database, id: number): Promise<EventRecord | null> {
+  const db = createDb(database);
+  return db.get<EventRecord>(sql`SELECT * FROM events WHERE id = ${id} LIMIT 1`);
+}
+
 export async function loadActiveEvents(database: D1Database): Promise<EventRecord[]> {
   const db = createDb(database);
   const events = await db.all<EventRecord>(sql`

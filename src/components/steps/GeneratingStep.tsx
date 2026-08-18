@@ -10,7 +10,7 @@ type Props = {
   scene: Scene;
   photoDataUrl: string;
   eventSlug: string;
-  onComplete: (postcardUrl: string) => void;
+  onComplete: (sessionId: string) => void;
 };
 
 const progressSteps = ['Reading your expression', 'Sketching bold ink lines', 'Framing the final postcard'];
@@ -36,9 +36,9 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
       while (active) {
         const status = await actions.getGeneration({ sessionId: started.data.sessionId });
         if (status.error || !status.data) throw new Error(status.error?.message ?? 'Could not read generation status.');
-        if (status.data.status === 'completed' && status.data.postcardUrl) {
+        if (status.data.status === 'completed') {
           setActiveStep(2);
-          onComplete(status.data.postcardUrl);
+          onComplete(started.data.sessionId);
           return;
         }
         if (status.data.status === 'errored') throw new Error(status.data.error ?? 'Generation failed.');
