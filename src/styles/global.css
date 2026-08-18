@@ -127,11 +127,29 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 
 .step-enter { animation: step-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .ink-scan {
+  position: absolute;
+  inset: 0;
   background: repeating-linear-gradient(12deg, transparent 0 8px, oklch(95% 0.015 75 / 0.13) 9px 10px), linear-gradient(to bottom, transparent 42%, var(--scene-accent) 49%, transparent 56%);
   background-size: 100% 100%, 100% 220%;
   mix-blend-mode: screen;
   animation: scan 1.6s ease-in-out infinite;
 }
+.generation-preview[data-phase='uploading'] .ink-scan {
+  background: linear-gradient(to bottom, transparent 40%, color-mix(in oklch, var(--scene-accent), var(--paper) 18%) 50%, transparent 60%);
+  animation: upload-sweep 1.4s ease-in-out infinite;
+}
+.generation-preview[data-phase='generating'] .ink-scan { animation: scan 1.6s ease-in-out infinite; }
+.generation-preview[data-phase='compositing'] {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--scene-accent), transparent 25%), 0 0 2rem color-mix(in oklch, var(--scene-accent) 28%, transparent);
+}
+.generation-preview[data-phase='compositing']::after {
+  position: absolute;
+  inset: .8rem;
+  border: 1px solid color-mix(in oklch, var(--scene-accent), var(--paper) 15%);
+  content: '';
+  animation: postcard-frame 900ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.generation-progress-indicator { transition: none !important; }
 .scene-card-visual {
   background: color-mix(in oklch, var(--scene-backdrop), var(--ink) 25%);
   color: oklch(95% 0.018 75);
@@ -213,6 +231,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 @keyframes step-enter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes scan { 0%, 100% { background-position: 0 0, 0 100%; } 50% { background-position: 0 0, 0 -80%; } }
+@keyframes upload-sweep { 0% { opacity: 0; transform: translateY(35%); } 35%, 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-35%); } }
+@keyframes postcard-frame { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

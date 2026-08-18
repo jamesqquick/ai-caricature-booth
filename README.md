@@ -4,10 +4,10 @@ An Astro and React event photobooth. Event pages resolve from local D1 at reques
 
 1. Choose a New York scene.
 2. Take or retake a photo with the browser camera.
-3. Watch a simulated generation sequence.
+3. Watch the photo upload, caricature generation, and postcard composition progress.
 4. Review a postcard-style local preview.
 
-Refreshing the page resets the flow, and the captured photo never leaves the browser.
+Refreshing the page resets the booth UI. The approved JPEG is validated and uploaded privately to R2, then a Cloudflare Workflow generates the caricature and composes the postcard.
 
 ## Development
 
