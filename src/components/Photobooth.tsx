@@ -18,7 +18,7 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
   const previousStepRef = useRef(state.step);
   const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
-  const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}`);
+  const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}?source=generation`);
 
   useEffect(() => {
     if (previousStepRef.current === state.step) return;

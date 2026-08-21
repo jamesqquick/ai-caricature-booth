@@ -5,6 +5,8 @@ import BoothLayout from "../../layouts/BoothLayout.astro";
 import EventNotFound from "../../components/EventNotFound.astro";
 import { loadEventById } from "../../db/events";
 import { loadSession } from "../../db/sessions";
+import { ReviewTimeoutPrompt } from "../../components/ReviewTimeoutPrompt";
+import { isGenerationReview } from "../../lib/review-entry";
 
 export const prerender = false;
 
@@ -15,6 +17,7 @@ const isUuid =
   );
 const session = isUuid ? await loadSession(env.DB, sessionId) : null;
 const event = session ? await loadEventById(env.DB, session.event_id) : null;
+const cameFromGeneration = isGenerationReview(Astro.url.searchParams.get("source"));
 const isAvailable = Boolean(
   session && event && session.status === "completed" && session.postcard_key,
 );
@@ -120,6 +123,7 @@ const title = isAvailable
             role="status"
             aria-live="polite"
           />
+          {cameFromGeneration && <ReviewTimeoutPrompt client:load eventUrl={`/e/${event!.slug}`} />}
         </div>
       </main>
     ) : (
