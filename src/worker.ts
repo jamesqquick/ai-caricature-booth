@@ -2,6 +2,7 @@ import { handle } from '@astrojs/cloudflare/handler';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { transitionSession } from './db/sessions';
 import { buildPostcard } from './lib/postcard';
+import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
 import { scenes } from './data/scenes';
 
@@ -19,6 +20,36 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     const markErrored = async (error: unknown) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: error instanceof Error ? error.message : String(error) });
     };
+    await step.do('mark-moderating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
+      await transitionSession(this.env.DB, sessionId, 'moderating', { workflow_instance_id: event.instanceId });
+      return true;
+    });
+
+    const moderationPassed = await step.do<boolean>('moderate-selfie', { retries: { limit: 2, delay: '2 seconds', backoff: 'exponential' }, timeout: '1 minute' }, async (ctx) => {
+      const startedAt = Date.now();
+      try {
+        const selfie = await this.env.SELFIES.get(selfieKey);
+        if (!selfie) throw new Error('Uploaded selfie was not found.');
+        const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
+        if (!verdict.safe) {
+          await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
+          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "Your photo didn't pass our content check. Please try again with a different selfie." });
+          console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
+          return false;
+        }
+        console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'safe' }));
+        return true;
+      } catch (error) {
+        if (ctx.attempt >= 2) {
+          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: 'We could not check your photo. Please try again.' });
+          console.error(JSON.stringify({ message: 'photo moderation failed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'service-error' }));
+        }
+        throw error;
+      }
+    });
+
+    if (!moderationPassed) return { sessionId, postcardKey: null };
+
     await step.do('mark-generating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
       await transitionSession(this.env.DB, sessionId, 'generating', { workflow_instance_id: event.instanceId });
       return true;
@@ -70,6 +101,19 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     });
     return { sessionId, postcardKey };
   }
+}
+
+async function deleteRejectedSelfie(bucket: R2Bucket, key: string) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await bucket.delete(key);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Could not delete rejected selfie.');
 }
 
 const astro = { fetch: handle } satisfies ExportedHandler<Env>;

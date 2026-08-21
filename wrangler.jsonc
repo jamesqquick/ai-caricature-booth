@@ -25,6 +25,9 @@
     "binding": "IMAGES",
     "remote": true
   },
+  "ai": {
+    "binding": "AI"
+  },
   "workflows": [
     {
       "name": "caricature-generation",

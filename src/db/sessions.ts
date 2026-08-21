@@ -4,6 +4,7 @@ import { createDb } from './index';
 export const SESSION_STATUSES = [
   'pending',
   'uploading',
+  'moderating',
   'generating',
   'compositing',
   'completed',
@@ -62,10 +63,11 @@ export async function transitionSession(
   const predecessors: Record<SessionStatus, SessionStatus[]> = {
     pending: [],
     uploading: ['pending'],
-    generating: ['pending', 'uploading'],
+    moderating: ['pending', 'uploading'],
+    generating: ['pending', 'uploading', 'moderating'],
     compositing: ['generating'],
     completed: ['compositing'],
-    errored: ['pending', 'uploading', 'generating', 'compositing'],
+    errored: ['pending', 'uploading', 'moderating', 'generating', 'compositing'],
   };
   if (!predecessors[nextStatus].includes(current.status)) return current;
 

@@ -102,7 +102,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
       <div>
         <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-primary">Creating {scene.name}</p>
         <h1 className="mb-6 max-w-[13ch] font-display text-[clamp(2.6rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Drawing outside the lines.</h1>
-        <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">Your approved photo is uploaded privately, then transformed into a print-ready postcard.</p>
+        <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">Your photo is uploaded privately, checked for safety, then transformed into a print-ready postcard.</p>
         {errorMessage && (
           <Alert className="mt-6 flex max-w-[38rem] items-start gap-3 border-danger/40 bg-danger/10 text-danger">
             <AlertCircle className="mt-0.5 shrink-0" aria-hidden="true" />
