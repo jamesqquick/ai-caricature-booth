@@ -1,0 +1,57 @@
+docs/admin-dashboard-implementation-plan.md
+  s_af0025dce4bd04::t_9bbd286c77504a 1-609
+package.json
+  s_a7f9731da857e0::t_8ad08321c7615b 33
+pnpm-lock.yaml
+  s_a7f9731da857e0::t_4f290df851247f 50-52,2315-2317,5405-5406
+src/components/admin/AdminNavbar.astro
+  s_a7f9731da857e0::t_b5f471fefdc7b9 1-71
+src/components/admin/PageHeader.astro
+  s_a7f9731da857e0::t_f74edf102fc639 1-19
+src/components/admin/StatCards.astro
+  s_a7f9731da857e0::t_c24f5c4518dc17 1-26
+src/components/admin/StatusBadge.astro
+  s_a7f9731da857e0::t_6bbfaeed38d58d 1-19
+src/db/admin.ts
+  s_a7f9731da857e0::t_9b93bb15a7905d 1-207
+src/layouts/AdminLayout.astro
+  s_a7f9731da857e0::t_558d04979cafc8 1-72
+src/lib/admin-filters.ts
+  s_a7f9731da857e0::t_7a4e74762cdd90 1-101
+src/lib/admin-layout.ts
+  s_a7f9731da857e0::t_4d6d45e2079b5e 1-16
+src/pages/admin/events/new.astro
+  s_af0025dce4bd04::t_108c866766105b 1-34
+test/admin-data.spec.ts
+  s_a7f9731da857e0::t_e3e3708eeb8d88 1-139
+test/admin-filters.spec.ts
+  s_a7f9731da857e0::t_beee0ca24f5be5 1-81
+test/admin-layout.spec.ts
+  s_a7f9731da857e0::t_cb8c7ca8b05f50 1-27
+wrangler.jsonc
+  s_a7f9731da857e0::t_5240d1a0801463 7-10,13-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "75d39ff1ec96d9b47223e292d23a47c4c64e2d6a",
+  "prompts": {},
+  "sessions": {
+    "s_a7f9731da857e0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fc462bbe2ffeZXt1qQ6xBctpEg",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_af0025dce4bd04": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fc03f7755ffeb6rr5F35zB28Hz",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
