@@ -1,0 +1,19 @@
+---
+type Props = {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+};
+
+const { eyebrow, title, description } = Astro.props;
+---
+
+<header class="grid grid-cols-[minmax(0,1fr)_minmax(16rem,28rem)] items-end gap-8 border-b border-border pb-8 max-[800px]:grid-cols-1 max-[800px]:gap-4">
+  <div>
+    {eyebrow && <p class="mb-3 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">{eyebrow}</p>}
+    <h1 class="m-0 max-w-[16ch] font-display text-[clamp(2.5rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.065em]">
+      {title}
+    </h1>
+  </div>
+  {description && <p class="m-0 max-w-xl leading-[1.65] text-muted-foreground">{description}</p>}
+</header>

@@ -1,0 +1,34 @@
+---
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="New event · Booth Admin" description="Create a draft booth event.">
+  <PageHeader
+    eyebrow="Event management"
+    title="Create a new event."
+  />
+
+  <form class="mt-8 grid max-w-2xl gap-6" method="post" action="/api/admin/events" aria-label="Create event">
+    <div class="grid gap-2">
+      <label class="font-label text-sm font-bold" for="name">Event name</label>
+      <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" />
+    </div>
+    <div class="grid gap-2">
+      <label class="font-label text-sm font-bold" for="slug">URL slug</label>
+      <input class="min-h-12 rounded-xl border border-border bg-card px-4 font-mono text-foreground" id="slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off" aria-describedby="slug-help" />
+      <p class="m-0 text-sm text-muted-foreground" id="slug-help">Lowercase letters, numbers, and single hyphens.</p>
+    </div>
+    <div class="grid gap-2">
+      <label class="font-label text-sm font-bold" for="status">Status</label>
+      <select class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status">
+        <option value="draft" selected>Draft</option>
+        <option value="active">Active</option>
+        <option value="archived">Archived</option>
+      </select>
+    </div>
+    <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Create draft event</button>
+  </form>
+</AdminLayout>

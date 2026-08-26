@@ -5,6 +5,7 @@ import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
 import { scenes } from './data/scenes';
+import { adminForbiddenResponse, isAdminPath, withVerifiedAdminIdentity } from './lib/admin-access';
 
 export type CaricaturePayload = {
   sessionId: string;
@@ -119,7 +120,13 @@ async function deleteRejectedSelfie(bucket: R2Bucket, key: string) {
 const astro = { fetch: handle } satisfies ExportedHandler<Env>;
 
 export default {
-  fetch(request, env, context) {
-    return astro.fetch(request, env, context);
+  async fetch(request: Request, env, context) {
+    const pathname = new URL(request.url).pathname;
+    if (!isAdminPath(pathname)) return astro.fetch(request, env, context);
+
+    const verifiedRequest = await withVerifiedAdminIdentity(request, context.access, env, import.meta.env.DEV);
+    if (!verifiedRequest) return adminForbiddenResponse(pathname);
+
+    return astro.fetch(verifiedRequest, env, context);
   },
 } satisfies ExportedHandler<Env>;

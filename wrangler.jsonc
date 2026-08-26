@@ -4,9 +4,14 @@
   "account_id": "e9bc21da719562a3e45d77de7dd042de",
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-13",
+  "vars": {
+    "ACCESS_AUD": "8291cc3f98abf53caa41b468eba86093437e86f53debc6a9fcf2dfa2f7a432c8",
+    "ACCESS_TEAM_DOMAIN": "https://cfcommunity.cloudflareaccess.com"
+  },
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": ["/admin", "/admin/*", "/api/admin", "/api/admin/*"]
   },
   "d1_databases": [
     {

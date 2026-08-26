@@ -1,0 +1,22 @@
+---
+import { env } from 'cloudflare:workers';
+import EventTable from '../../../components/admin/EventTable.astro';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import { loadAdminEvents } from '../../../db/events';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+const events = await loadAdminEvents(env.DB);
+---
+
+<AdminLayout
+  title="Events · Booth Admin"
+  description="Browse and manage every booth event."
+>
+  <PageHeader
+    eyebrow="Event management"
+    title="Every event, in one place."
+  />
+  <EventTable events={events} />
+</AdminLayout>

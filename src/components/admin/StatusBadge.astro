@@ -1,0 +1,19 @@
+---
+import type { SessionStatus } from '../../db/sessions';
+
+type Props = {
+  status: SessionStatus;
+};
+
+const { status } = Astro.props;
+const label = status.charAt(0).toUpperCase() + status.slice(1);
+const tone = status === 'completed'
+  ? 'border-success/35 bg-success/10 text-success'
+  : status === 'errored'
+    ? 'border-destructive/35 bg-destructive/10 text-destructive'
+    : 'border-primary/35 bg-primary/10 text-primary';
+---
+
+<span class:list={['inline-flex min-h-7 items-center rounded-full border px-2.5 font-label text-[.62rem] font-extrabold uppercase tracking-[.08em]', tone]}>
+  {label}
+</span>

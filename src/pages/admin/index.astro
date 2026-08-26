@@ -1,0 +1,65 @@
+---
+import { env } from 'cloudflare:workers';
+import { OperationsDashboard } from '../../components/admin/OperationsDashboard';
+import PageHeader from '../../components/admin/PageHeader.astro';
+import { loadAdminEventOptions, loadAdminSessions, loadAdminSessionStats } from '../../db/admin';
+import { SESSION_STATUSES } from '../../db/sessions';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { AdminFilterValidationError, normalizeAdminFilters } from '../../lib/admin-filters';
+
+export const prerender = false;
+
+let dashboard;
+let queryError: string | null = null;
+
+try {
+  const filters = normalizeAdminFilters(Astro.url.searchParams);
+  const [events, sessionResult, stats] = await Promise.all([
+    loadAdminEventOptions(env.DB),
+    loadAdminSessions(env.DB, filters),
+    loadAdminSessionStats(env.DB, filters),
+  ]);
+
+  dashboard = { events, filters, sessionResult, stats };
+} catch (error) {
+  queryError = error instanceof AdminFilterValidationError
+    ? `Invalid ${error.field} filter. Update the filters and try again.`
+    : 'Dashboard data could not be loaded. Try again in a moment.';
+}
+---
+
+<AdminLayout
+  title="Dashboard · Booth Admin"
+  description="Monitor generation activity and completion health across booth events."
+>
+  <PageHeader
+    eyebrow="Operations workspace"
+    title="Your booth, at a glance."
+    description="Monitor completion health and inspect the latest generation jobs across every event."
+  />
+
+  {
+    dashboard ? (
+      <>
+        <OperationsDashboard
+          client:load
+          events={dashboard.events}
+          statuses={SESSION_STATUSES}
+          initialFilters={dashboard.filters}
+          initialSessionResult={dashboard.sessionResult}
+          initialStats={dashboard.stats}
+          initialUpdatedAt={Date.now()}
+        />
+      </>
+    ) : (
+      <section class="mt-8 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-6" role="alert" aria-labelledby="dashboard-error-heading">
+        <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-destructive">Query error</p>
+        <h2 class="mt-3 mb-2 font-display text-xl" id="dashboard-error-heading">Unable to load the dashboard</h2>
+        <p class="m-0 text-sm leading-[1.6] text-muted-foreground">{queryError}</p>
+        <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin">
+          Clear filters
+        </a>
+      </section>
+    )
+  }
+</AdminLayout>

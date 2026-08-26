@@ -1,0 +1,72 @@
+---
+import '../styles/global.css';
+import AdminNavbar from '../components/admin/AdminNavbar.astro';
+import { getAdminEmail } from '../lib/admin-layout';
+
+type Props = {
+  title: string;
+  description?: string;
+};
+
+const {
+  title,
+  description = 'Manage events and monitor caricature generation operations.',
+} = Astro.props;
+const adminEmail = getAdminEmail(Astro.request);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#17191b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8f5ef" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <script is:inline>
+      (() => {
+        const savedTheme = localStorage.getItem('booth-theme');
+        const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.dataset.theme = savedTheme || systemTheme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="min-h-dvh bg-[radial-gradient(circle_at_82%_10%,color-mix(in_oklch,var(--primary)_8%,transparent),transparent_24rem),var(--background)]">
+      <AdminNavbar adminEmail={adminEmail} pathname={Astro.url.pathname} />
+      <main class="mx-auto w-[min(100%_-_3rem,74rem)] py-[clamp(3rem,8vw,6rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]">
+        <slot />
+      </main>
+    </div>
+    <script is:inline>
+      (() => {
+        const toggle = document.querySelector('[data-theme-toggle]');
+        const label = document.querySelector('[data-theme-label]');
+        const lightIcon = document.querySelector('[data-theme-light-icon]');
+        const darkIcon = document.querySelector('[data-theme-dark-icon]');
+        if (!toggle || !label || !lightIcon || !darkIcon) return;
+
+        const updateToggle = () => {
+          const isLight = document.documentElement.dataset.theme === 'light';
+          toggle.setAttribute('aria-pressed', String(isLight));
+          toggle.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme');
+          label.textContent = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+          lightIcon.classList.toggle('hidden', !isLight);
+          darkIcon.classList.toggle('hidden', isLight);
+        };
+
+        toggle.addEventListener('click', () => {
+          const nextTheme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+          document.documentElement.dataset.theme = nextTheme;
+          localStorage.setItem('booth-theme', nextTheme);
+          updateToggle();
+        });
+
+        updateToggle();
+      })();
+    </script>
+  </body>
+</html>

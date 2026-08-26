@@ -1,0 +1,82 @@
+---
+import type { AdminEventSummary } from '../../db/events';
+
+type Props = {
+  events: AdminEventSummary[];
+};
+
+const { events } = Astro.props;
+const statusTone = {
+  active: 'border-success/35 bg-success/10 text-success',
+  draft: 'border-primary/35 bg-primary/10 text-primary',
+  archived: 'border-border bg-muted text-muted-foreground',
+} as const;
+
+function formatDate(timestamp: number | null) {
+  if (timestamp === null) return 'No activity yet';
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(timestamp * 1000));
+}
+
+function getStatusTone(status: string) {
+  return statusTone[status as keyof typeof statusTone] ?? 'border-border bg-muted text-muted-foreground';
+}
+---
+
+<section class="mt-8" aria-labelledby="events-table-heading">
+  <div class="mb-4 flex items-end justify-between gap-4 max-[600px]:items-start max-[600px]:flex-col">
+    <div>
+      <p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Event directory</p>
+      <h2 class="m-0 font-display text-2xl font-semibold tracking-[-.03em]" id="events-table-heading">All events</h2>
+    </div>
+    <span class="font-label text-xs font-semibold text-muted-foreground">{events.length} {events.length === 1 ? 'event' : 'events'}</span>
+  </div>
+
+  {events.length > 0 ? (
+    <div class="overflow-x-auto rounded-[var(--radius-surface)] border border-border bg-card">
+      <table class="w-full min-w-[46rem] border-collapse text-left text-sm">
+        <caption class="sr-only">All booth events and their generation activity</caption>
+        <thead class="border-b border-border bg-muted/60 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
+          <tr>
+            <th class="px-5 py-4" scope="col">Event</th>
+            <th class="px-5 py-4" scope="col">Status</th>
+            <th class="px-5 py-4" scope="col">Sessions</th>
+            <th class="px-5 py-4" scope="col">Last activity</th>
+            <th class="px-5 py-4" scope="col"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          {events.map((event) => (
+            <tr class="align-middle">
+              <th class="px-5 py-4 font-semibold" scope="row">
+                <a class="text-foreground underline decoration-border underline-offset-4 hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>
+                  {event.name}
+                </a>
+                <span class="mt-1 block font-label text-xs font-medium text-muted-foreground">/{event.slug}</span>
+              </th>
+              <td class="px-5 py-4">
+                <span class:list={['inline-flex min-h-7 items-center rounded-full border px-2.5 font-label text-[.62rem] font-extrabold uppercase tracking-[.08em]', getStatusTone(event.status)]}>
+                  {event.status}
+                </span>
+              </td>
+              <td class="px-5 py-4 font-semibold">{event.sessionCount}</td>
+              <td class="px-5 py-4 text-muted-foreground">{formatDate(event.lastActivity)}</td>
+              <td class="px-5 py-4 text-right">
+                <a class="inline-flex min-h-11 items-center rounded-full border border-border px-3 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={`/admin/events/${encodeURIComponent(event.slug)}`}>
+                  Details <span class="ml-1" aria-hidden="true">&rarr;</span>
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <div class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center">
+      <h3 class="m-0 font-display text-xl">No events yet</h3>
+      <p class="mb-0 mt-2 text-sm leading-[1.6] text-muted-foreground">Create an event to make it available in the admin workspace.</p>
+    </div>
+  )}
+</section>
