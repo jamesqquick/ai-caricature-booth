@@ -19,6 +19,8 @@ export type AdminSessionSummary = {
   hasPostcard: boolean;
 };
 
+export type AdminSessionDetail = AdminSessionSummary;
+
 export type AdminSessionStats = {
   total: number;
   completed: number;
@@ -114,6 +116,36 @@ function mapSession(row: AdminSessionRow): AdminSessionSummary {
     hasCaricature: Boolean(row.has_caricature),
     hasPostcard: Boolean(row.has_postcard),
   };
+}
+
+export async function loadAdminSession(
+  database: D1Database,
+  sessionId: string,
+): Promise<AdminSessionDetail | null> {
+  const row = await database.prepare(`
+    SELECT
+      s.id AS session_id,
+      e.id AS event_id,
+      e.name AS event_name,
+      e.slug AS event_slug,
+      s.scene_id,
+      s.scene_name,
+      s.status,
+      s.created_at,
+      s.updated_at,
+      s.completed_at,
+      s.error_msg AS error_message,
+      s.workflow_instance_id AS workflow_id,
+      CASE WHEN s.selfie_key <> '' THEN 1 ELSE 0 END AS has_selfie,
+      CASE WHEN s.caricature_key IS NOT NULL AND s.caricature_key <> '' THEN 1 ELSE 0 END AS has_caricature,
+      CASE WHEN s.postcard_key IS NOT NULL AND s.postcard_key <> '' THEN 1 ELSE 0 END AS has_postcard
+    FROM sessions s
+    INNER JOIN events e ON e.id = s.event_id
+    WHERE s.id = ?
+    LIMIT 1
+  `).bind(sessionId).first<AdminSessionRow>();
+
+  return row ? mapSession(row) : null;
 }
 
 export async function loadAdminEventOptions(database: D1Database): Promise<AdminEventOption[]> {

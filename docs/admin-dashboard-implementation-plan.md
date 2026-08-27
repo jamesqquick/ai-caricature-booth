@@ -308,7 +308,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 ## Phase 4: Job and Image Inspection
 
-### - [ ] Task 10: Build the Session Detail Page Without Images
+### - [x] Task 10: Build the Session Detail Page Without Images
 
 **Outcome:** Admins can diagnose a job from lifecycle metadata and errors before image access is added.
 
@@ -330,7 +330,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - Manually inspect completed, in-flight, errored, and unknown sessions.
 
-**Completion notes:** Pending.
+**Completion notes:** Added the safe single-session read model in `src/db/admin.ts`, the server-rendered detail route in `src/pages/admin/sessions/[sessionId].astro`, the evidence-based lifecycle timeline in `src/components/admin/SessionTimeline.astro`, and focused coverage in `test/admin-session-detail.spec.ts`. The route returns `400` for malformed IDs and `404` for unknown sessions, exposes lifecycle metadata and image availability only, and labels stage timestamps as not persisted rather than inferring them. Verification passed: `pnpm test -- admin-session-detail.spec.ts` (19 files, 113 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`. Local route smoke checks returned `200` for seeded completed, in-flight, and errored sessions, `404` for an unknown session, and `400` for a malformed ID. Manual browser inspection was confirmed by the user for the completed, in-flight, errored, and unknown session views. No image proxy behavior was added.
 
 ### - [ ] Task 11: Add the Authenticated Session Image Proxy
 
