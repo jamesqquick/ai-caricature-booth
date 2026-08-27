@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import AdminNavbar from '../components/admin/AdminNavbar.astro';
+import { Toaster } from '../components/ui/sonner';
 import { getAdminEmail } from '../lib/admin-layout';
 
 type Props = {
@@ -40,6 +41,7 @@ const adminEmail = getAdminEmail(Astro.request);
       <main class="mx-auto w-[min(100%_-_3rem,74rem)] py-[clamp(3rem,8vw,6rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]">
         <slot />
       </main>
+      <Toaster client:load />
     </div>
     <script is:inline>
       (() => {

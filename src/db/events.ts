@@ -53,6 +53,11 @@ export async function loadActiveEventBySlug(
   `);
 }
 
+export async function loadEventBySlug(database: D1Database, slug: string): Promise<EventRecord | null> {
+  const db = createDb(database);
+  return db.get<EventRecord>(sql`SELECT * FROM events WHERE slug = ${slug} LIMIT 1`);
+}
+
 export async function loadActiveEventById(database: D1Database, id: number): Promise<EventRecord | null> {
   const db = createDb(database);
   return db.get<EventRecord>(sql`SELECT * FROM events WHERE id = ${id} AND status = 'active' LIMIT 1`);
@@ -78,6 +83,23 @@ export async function createEvent(database: D1Database, input: CreateEventInput,
     }
     throw error;
   }
+}
+
+export async function updateEvent(database: D1Database, id: number, input: CreateEventInput) {
+  try {
+    await database.prepare(`
+      UPDATE events
+      SET slug = ?, name = ?, status = ?
+      WHERE id = ?
+    `).bind(input.slug, input.name, input.status, id).run();
+  } catch (error) {
+    if (error instanceof Error && /unique|constraint/i.test(error.message)) {
+      throw new EventSlugConflictError(input.slug);
+    }
+    throw error;
+  }
+
+  return { id, ...input };
 }
 
 export async function loadActiveEvents(database: D1Database): Promise<EventRecord[]> {

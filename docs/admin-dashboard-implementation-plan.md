@@ -279,7 +279,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Completion notes:** Added `src/lib/event-validation.ts` with domain-specific field errors, lowercase slug validation, and supported status validation. Added the core insert helper in `src/db/events.ts`, the server-rendered creation form in `src/pages/admin/events/new.astro`, and the authenticated `POST /api/admin/events` endpoint with verified-header creator attribution, `400` field errors, `409` slug conflicts, and `303` redirect responses. Removed timezone and privacy contact email from the event model, admin event list, and creation flow, with `drizzle/migrations/0004_remove_event_timezone.sql` dropping both existing columns. Added focused coverage in `test/admin-event-create.spec.ts` and updated event-list coverage. Verification passed: `pnpm test -- admin-event-create.spec.ts` (17 files, 104 tests), `pnpm check` (0 errors; 1 existing deprecation hint for `toThrowError`), `pnpm build`, and `pnpm db:migrate:local` (no migrations to apply). Local smoke POST returned `303` and the D1 row persisted as `draft` with `created_by = local-admin@localhost`; no deployment or Access policy changes made.
 
-### - [ ] Task 9: Implement Core Event Editing
+### - [x] Task 9: Implement Core Event Editing
 
 **Outcome:** Admins can update core settings and intentionally move an event between draft, active, and archived states.
 
@@ -302,7 +302,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - Create a draft, activate it, confirm `/e/:slug` loads, archive it, and confirm the attendee route no longer loads it.
 
-**Completion notes:** Pending.
+**Completion notes:** Added the admin event editor at `src/pages/admin/events/[slug].astro`, the form/JSON update endpoint at `src/pages/api/admin/events/[slug].ts`, the conflict-aware core update helper and all-status slug loader in `src/db/events.ts`, and focused coverage in `test/admin-event-edit.spec.ts`. The editor reuses core validation, supports draft/active/archived state changes and slug conflicts, leaves attendee routing active-only, and uses the shared shadcn-style Sonner toaster for semantic success and error feedback. Verification passed: `pnpm test -- admin-event-edit.spec.ts` (18 files, 108 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`; the final event-edit and toast experience was manually approved.
 
 ---
 

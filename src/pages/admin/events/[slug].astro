@@ -1,0 +1,55 @@
+---
+import { env } from 'cloudflare:workers';
+import { EventFeedback } from '../../../components/admin/EventFeedback';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { loadEventBySlug } from '../../../db/events';
+
+export const prerender = false;
+
+const slug = Astro.params.slug ?? '';
+const event = await loadEventBySlug(env.DB, slug);
+const saved = Astro.url.searchParams.get('saved') === '1';
+const errorMessage = Astro.url.searchParams.get('error');
+
+if (!event) Astro.response.status = 404;
+---
+
+<AdminLayout title={event ? `${event.name} · Booth Admin` : 'Event not found · Booth Admin'} description="Edit the core settings for a booth event.">
+  {event ? (
+    <>
+      <PageHeader
+        eyebrow="Edit Event"
+        title={event.name}
+      />
+      <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
+
+      <form class="mt-8 grid max-w-2xl gap-6" method="post" action={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event">
+        <div class="grid gap-2">
+          <label class="font-label text-sm font-bold" for="name">Event name</label>
+          <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" value={event.name} />
+        </div>
+        <div class="grid gap-2">
+          <label class="font-label text-sm font-bold" for="slug">URL slug</label>
+          <input class="min-h-12 rounded-xl border border-border bg-card px-4 font-mono text-foreground" id="slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off" aria-describedby="slug-help" value={event.slug} />
+          <p class="m-0 text-sm text-muted-foreground" id="slug-help">Changing the slug changes the attendee URL.</p>
+        </div>
+        <div class="grid gap-2">
+          <label class="font-label text-sm font-bold" for="status">Status</label>
+          <select class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status">
+            {['draft', 'active', 'archived'].map((status) => <option value={status} selected={event.status === status}>{status[0].toUpperCase() + status.slice(1)}</option>)}
+          </select>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>
+          {event.status === 'active' && <a class="inline-flex min-h-12 items-center rounded-full border border-border px-5 font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>View attendee page</a>}
+        </div>
+      </form>
+    </>
+  ) : (
+    <section class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center">
+      <h1 class="m-0 font-display text-3xl">Event not found</h1>
+      <p class="mb-0 mt-2 text-muted-foreground">This event may have been removed or the URL may be incorrect.</p>
+    </section>
+  )}
+</AdminLayout>
