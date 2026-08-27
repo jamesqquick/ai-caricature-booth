@@ -35,6 +35,7 @@ const initialStats = {
   errored: 0,
   inFlight: 1,
   completionRate: 0,
+  averagePipelineMs: null,
   statusBreakdown: [{ status: 'generating' as const, count: 1 }],
   sceneUsage: [{ sceneId: 'subway', sceneName: 'Subway Platform', count: 1 }],
   volume: [{ bucket: '1970-01-01', count: 1 }],

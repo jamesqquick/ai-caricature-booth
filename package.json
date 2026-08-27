@@ -14,6 +14,7 @@
     "check": "wrangler types && astro check",
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply ai-caricature-booth-db --local",
+    "db:seed:local": "wrangler d1 execute ai-caricature-booth-db --local --file drizzle/seed.local.sql",
     "test": "vitest run"
   },
   "dependencies": {

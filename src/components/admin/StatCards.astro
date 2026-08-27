@@ -9,7 +9,6 @@ const { stats } = Astro.props;
 const cards = [
   { label: 'Total', value: stats.total.toLocaleString('en-US') },
   { label: 'Completed', value: stats.completed.toLocaleString('en-US') },
-  { label: 'In progress', value: stats.inFlight.toLocaleString('en-US') },
   { label: 'Errored', value: stats.errored.toLocaleString('en-US') },
   { label: 'Completion rate', value: `${stats.completionRate}%` },
 ];

@@ -138,5 +138,8 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(buildPostcard).toHaveBeenCalledTimes(1);
     expect(env.SELFIES.put).toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything());
+    expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({
+      pipeline_ms: expect.any(Number),
+    }));
   });
 });

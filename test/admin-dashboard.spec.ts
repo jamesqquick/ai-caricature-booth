@@ -83,7 +83,7 @@ describe('admin dashboard', () => {
     expect(filters.match(/focus-visible:outline-primary/g)).toHaveLength(2);
     expect(stats).toContain("label: 'Total'");
     expect(stats).toContain("label: 'Completed'");
-    expect(stats).toContain("label: 'In progress'");
+    expect(stats).not.toContain("label: 'In progress'");
     expect(stats).toContain("label: 'Errored'");
     expect(stats).toContain("label: 'Completion rate'");
   });

@@ -12,7 +12,7 @@ function createDatabase() {
       calls.push(call);
       return {
         bind(...values: unknown[]) { call.values = values; return this; },
-        async first() { return { total: 4, completed: 2, errored: 1, in_flight: 1, completion_rate: 50 }; },
+        async first() { return { total: 4, completed: 2, errored: 1, in_flight: 1, completion_rate: 50, average_pipeline_ms: 1250 }; },
         async all() {
           if (sql.includes('GROUP BY s.status')) return { results: [{ status: 'completed', count: 2 }, { status: 'errored', count: 1 }] };
           if (sql.includes('GROUP BY s.scene_id')) return { results: [{ scene_id: 'subway', scene_name: 'Subway Platform', count: 4 }] };
@@ -46,6 +46,7 @@ describe('admin metrics', () => {
       errored: 1,
       inFlight: 1,
       completionRate: 50,
+      averagePipelineMs: 1250,
       statusBreakdown: [{ status: 'completed', count: 2 }, { status: 'errored', count: 1 }],
       sceneUsage: [{ sceneId: 'subway', sceneName: 'Subway Platform', count: 4 }],
       volume: [{ bucket: '2026-08-27', count: 4 }],

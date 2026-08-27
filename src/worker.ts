@@ -17,6 +17,7 @@ export type CaricaturePayload = {
 
 export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayload> {
   async run(event: WorkflowEvent<CaricaturePayload>, step: WorkflowStep) {
+    const workflowStartedAt = Date.now();
     const { sessionId, eventId, sceneId, selfieKey, watermarkKey } = event.payload;
     const markErrored = async (error: unknown) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: error instanceof Error ? error.message : String(error) });
@@ -97,7 +98,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     });
 
     await step.do('mark-completed', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'completed', { postcard_key: postcardKey });
+      await transitionSession(this.env.DB, sessionId, 'completed', {
+        postcard_key: postcardKey,
+        pipeline_ms: Math.max(0, Date.now() - workflowStartedAt),
+      });
       return true;
     });
     return { sessionId, postcardKey };

@@ -49,6 +49,7 @@ export type AdminVolumeBucket = {
 };
 
 export type AdminStatistics = AdminSessionStats & {
+  averagePipelineMs: number | null;
   statusBreakdown: AdminStatusCount[];
   sceneUsage: AdminSceneUsage[];
   volume: AdminVolumeBucket[];
@@ -88,6 +89,7 @@ type StatsRow = {
   errored: number;
   in_flight: number;
   completion_rate: number;
+  average_pipeline_ms: number | null;
 };
 
 type StatusCountRow = { status: SessionStatus; count: number };
@@ -304,17 +306,22 @@ export async function loadAdminStatistics(
 
   const [statsRow, statusRows, sceneRows, volumeRows] = await Promise.all([
     database.prepare(`
+      WITH filtered AS (
+        SELECT s.*
+        FROM sessions s
+        ${filter.sql}
+      )
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) AS completed,
-        SUM(CASE WHEN s.status = 'errored' THEN 1 ELSE 0 END) AS errored,
-        SUM(CASE WHEN s.status NOT IN ('completed', 'errored') THEN 1 ELSE 0 END) AS in_flight,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status = 'errored' THEN 1 ELSE 0 END) AS errored,
+        SUM(CASE WHEN status NOT IN ('completed', 'errored') THEN 1 ELSE 0 END) AS in_flight,
         COALESCE(
-          ROUND(100.0 * SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1),
+          ROUND(100.0 * SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1),
           0
-        ) AS completion_rate
-      FROM sessions s
-      ${filter.sql}
+        ) AS completion_rate,
+        ROUND(AVG(CASE WHEN status = 'completed' AND pipeline_ms IS NOT NULL THEN pipeline_ms END), 0) AS average_pipeline_ms
+      FROM filtered
     `).bind(...filter.values).first<StatsRow>(),
     database.prepare(`
       SELECT s.status, COUNT(*) AS count
@@ -345,6 +352,7 @@ export async function loadAdminStatistics(
     errored: Number(statsRow?.errored ?? 0),
     inFlight: Number(statsRow?.in_flight ?? 0),
     completionRate: Number(statsRow?.completion_rate ?? 0),
+    averagePipelineMs: statsRow?.average_pipeline_ms == null ? null : Number(statsRow.average_pipeline_ms),
     statusBreakdown: statusRows.results.map((row) => ({ status: row.status, count: Number(row.count) })),
     sceneUsage: sceneRows.results.map((row) => ({
       sceneId: row.scene_id,

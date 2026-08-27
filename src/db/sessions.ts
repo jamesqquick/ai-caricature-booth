@@ -27,6 +27,7 @@ export type SessionRecord = {
   error_msg: string | null;
   created_at: number;
   completed_at: number | null;
+  pipeline_ms: number | null;
   updated_at: number;
 };
 
@@ -56,7 +57,7 @@ export async function transitionSession(
   database: D1Database,
   id: string,
   nextStatus: SessionStatus,
-  fields: Partial<Pick<SessionRecord, 'scene_name' | 'caricature_key' | 'postcard_key' | 'workflow_instance_id' | 'error_msg'>> = {},
+  fields: Partial<Pick<SessionRecord, 'scene_name' | 'caricature_key' | 'postcard_key' | 'workflow_instance_id' | 'error_msg' | 'pipeline_ms'>> = {},
 ) {
   const current = await loadSession(database, id);
   if (!current || isTerminalSessionStatus(current.status)) return current;
@@ -81,6 +82,7 @@ export async function transitionSession(
         workflow_instance_id = COALESCE(${fields.workflow_instance_id ?? null}, workflow_instance_id),
         error_msg = ${fields.error_msg ?? null},
         completed_at = CASE WHEN ${nextStatus} = 'completed' THEN unixepoch() ELSE completed_at END,
+        pipeline_ms = CASE WHEN ${nextStatus} = 'completed' THEN ${fields.pipeline_ms ?? null} ELSE pipeline_ms END,
         updated_at = unixepoch()
     WHERE id = ${id}
       AND status IN (${sql.join(predecessors[nextStatus].map((status) => sql`${status}`), sql`, `)})

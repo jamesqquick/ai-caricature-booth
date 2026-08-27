@@ -411,9 +411,9 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Completion notes:** Added `24h`, `7d`, `30d`, and all-time range normalization with explicit UTC bounds in `src/lib/admin-filters.ts`; added status breakdown, scene usage, and daily volume read models in `src/db/admin.ts`; updated `src/pages/api/admin/stats.ts` to return the detailed statistics contract; and combined the summary, daily bar chart, scene usage, and latest jobs into the shared filtered dashboard in `src/pages/admin/index.astro` and `src/components/admin/OperationsDashboard.tsx`. The dashboard defaults to the past seven UTC calendar days, and one filter form drives both the graphs and job list. Added shared `Select` and `Input` primitives with regular text weight and a spaced select chevron, plus focused coverage in `test/admin-metrics.spec.ts`, `test/admin-dashboard.spec.ts`, and `test/admin-polling.spec.tsx`. The standalone metrics route was removed and the Metrics nav item was removed. Verification passed: `pnpm test -- admin-dashboard.spec.ts admin-polling.spec.tsx admin-metrics.spec.ts admin-layout.spec.ts` (21 files, 129 tests), `pnpm check` (0 errors, 0 warnings; 1 pre-existing deprecation hint), and `git diff --check`; no follow-up blocker.
 
-### - [ ] Task 14: Persist and Display End-to-End Pipeline Duration
+### - [x] Task 14: Persist and Display End-to-End Pipeline Duration
 
-**Outcome:** Average and recent pipeline duration are based on an explicit measurement rather than inferred or zero-filled values.
+**Outcome:** Average pipeline duration is based on an explicit measurement rather than inferred or zero-filled values.
 
 **Files:**
 - Create: `drizzle/migrations/0004_session_pipeline_duration.sql`
@@ -437,7 +437,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - `pnpm build`
 
-**Completion notes:** Pending.
+**Completion notes:** Added nullable `pipeline_ms` storage in `drizzle/migrations/0005_session_pipeline_duration.sql` because migration `0004` is already occupied, measured workflow-start-to-completion duration in `src/worker.ts`, persisted it through `src/db/sessions.ts`, and added average completed-duration metrics to `src/db/admin.ts` and `src/components/admin/OperationsDashboard.tsx` with `No data` for null values. Added local-only sample rows in `drizzle/seed.local.sql` with the `db:seed:local` script, plus `test/admin-duration.spec.ts` and completion-transition coverage in `test/worker-moderation.spec.ts`. Verification passed: `pnpm db:migrate:local`, `pnpm test -- admin-duration.spec.ts worker-moderation.spec.ts`, `pnpm check` (0 errors, 1 pre-existing deprecation hint), and `pnpm build`. Follow-up: deployment smoke verification was not run; errored and legacy sessions remain null by design.
 
 ---
 

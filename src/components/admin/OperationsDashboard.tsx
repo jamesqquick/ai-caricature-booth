@@ -51,6 +51,12 @@ function statusTone(status: SessionStatus) {
   return 'border-primary/35 bg-primary/10 text-primary';
 }
 
+function formatPipelineDuration(durationMs: number | null) {
+  if (durationMs === null) return 'No data';
+  const seconds = durationMs / 1000;
+  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
 export function OperationsDashboard({
   events,
   statuses,
@@ -187,9 +193,9 @@ export function OperationsDashboard({
   const cards = [
     { label: 'Total', value: stats.total.toLocaleString('en-US') },
     { label: 'Completed', value: stats.completed.toLocaleString('en-US') },
-    { label: 'In progress', value: stats.inFlight.toLocaleString('en-US') },
     { label: 'Errored', value: stats.errored.toLocaleString('en-US') },
     { label: 'Completion rate', value: `${stats.completionRate}%` },
+    { label: 'Average duration', value: formatPipelineDuration(stats.averagePipelineMs) },
   ];
 
   return (
@@ -266,7 +272,7 @@ export function OperationsDashboard({
       <section className="mt-6 grid grid-cols-5 gap-px overflow-hidden rounded-[var(--radius-surface)] border border-border bg-border max-[900px]:grid-cols-2 max-[520px]:grid-cols-1" aria-labelledby="dashboard-stats-heading">
         <h2 className="sr-only" id="dashboard-stats-heading">Generation statistics</h2>
         {cards.map((card) => (
-          <article className="bg-card p-5 last:max-[900px]:col-span-2 last:max-[520px]:col-span-1" key={card.label}>
+          <article className="bg-card p-5" key={card.label}>
             <p className="m-0 font-label text-[.65rem] font-extrabold uppercase tracking-[.12em] text-muted-foreground">{card.label}</p>
             <p className="mt-3 mb-0 font-display text-[clamp(1.75rem,4vw,2.75rem)] font-semibold leading-none tracking-[-.045em]">{card.value}</p>
           </article>
