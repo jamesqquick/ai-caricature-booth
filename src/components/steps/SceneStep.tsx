@@ -8,15 +8,18 @@ type Props = {
   selectedSceneId: string | null;
   onSelect: (sceneId: string) => void;
   onContinue: () => void;
+  tagline: string;
+  heading: string;
 };
 
-export function SceneStep({ scenes, selectedSceneId, onSelect, onContinue }: Props) {
+export function SceneStep({ scenes, selectedSceneId, onSelect, onContinue, tagline, heading }: Props) {
   return (
     <div className="step-enter w-full max-w-[74rem]">
       <div className="mb-[clamp(1.5rem,3vw,2.75rem)] grid grid-cols-[minmax(0,1fr)_minmax(16rem,31rem)] items-end gap-8 max-[800px]:grid-cols-1 max-[800px]:gap-4">
         <div>
           <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-primary">Step one</p>
-          <h1 className="m-0 max-w-[13ch] font-display text-[clamp(2.75rem,7vw,6.5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Where should we draw you?</h1>
+          <h1 className="m-0 max-w-[13ch] font-display text-[clamp(2.75rem,7vw,6.5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>{heading}</h1>
+          <p className="mt-5 max-w-[48ch] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.55] text-muted-foreground">{tagline}</p>
         </div>
       </div>
 

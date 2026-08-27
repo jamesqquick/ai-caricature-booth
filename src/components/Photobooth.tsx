@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
 import { scenes } from '../data/scenes';
 import { boothReducer, initialBoothState, type BoothStep } from '../lib/booth-machine';
 import { Stepper } from './Stepper';
@@ -12,7 +12,7 @@ const stepLabels: Array<{ id: BoothStep; label: string }> = [
   { id: 'generating', label: 'Create' },
 ];
 
-export function Photobooth({ eventName, eventSlug }: { eventName: string; eventSlug: string }) {
+export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor }: { eventName: string; eventSlug: string; tagline: string; kioskIdleSubhead: string; scenePickerHeading: string; accentColor: string }) {
   const [state, dispatch] = useReducer(boothReducer, initialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
@@ -27,7 +27,7 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
   }, [state.step]);
 
   return (
-    <main className="relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-hidden bg-[radial-gradient(circle_at_15%_12%,oklch(72%_0.19_52_/_0.12),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)] max-[800px]:overflow-auto">
+    <main className="booth-event relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-hidden bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--event-accent)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)] max-[800px]:overflow-auto" style={{ '--event-accent': accentColor } as CSSProperties}>
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-10 opacity-[0.16]" aria-hidden="true" />
       <Stepper
         steps={stepLabels}
@@ -40,6 +40,8 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
           <SceneStep
             scenes={scenes}
             selectedSceneId={state.sceneId}
+            tagline={tagline}
+            heading={scenePickerHeading}
             onSelect={(sceneId) => dispatch({ type: 'select-scene', sceneId })}
             onContinue={() => dispatch({ type: 'open-camera' })}
           />
@@ -61,6 +63,7 @@ export function Photobooth({ eventName, eventSlug }: { eventName: string; eventS
 
       <footer className="flex justify-between gap-4 border-t border-border px-[clamp(1.25rem,4vw,4rem)] py-3.5 pb-[max(.85rem,env(safe-area-inset-bottom))] text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[520px]:flex-col max-[520px]:items-start">
         <span>{eventName}</span>
+        <span>{kioskIdleSubhead}</span>
       </footer>
     </main>
   );

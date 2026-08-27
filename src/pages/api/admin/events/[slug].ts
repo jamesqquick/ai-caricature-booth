@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { loadEventBySlug, updateEvent } from '../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../lib/admin-access';
-import { EventSlugConflictError, EventValidationError, validateCreateEvent } from '../../../../lib/event-validation';
+import { EventSlugConflictError, EventValidationError, validateEventUpdate } from '../../../../lib/event-validation';
 
 export const prerender = false;
 
@@ -33,7 +33,7 @@ export async function POST({ request, params }: { request: Request; params: { sl
     const event = await loadEventBySlug(env.DB, currentSlug);
     if (!event) return Response.json({ error: 'Event not found.' }, { status: 404 });
 
-    const input = validateCreateEvent(await readInput(request));
+    const input = validateEventUpdate(await readInput(request));
     const updated = await updateEvent(env.DB, event.id, input);
     if (json) return Response.json({ event: updated });
 

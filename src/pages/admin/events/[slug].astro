@@ -24,7 +24,7 @@ if (!event) Astro.response.status = 404;
       />
       <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
 
-      <form class="mt-8 grid max-w-2xl gap-6" method="post" action={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event">
+      <form class="mt-8 grid max-w-3xl gap-6" method="post" action={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event">
         <div class="grid gap-2">
           <label class="font-label text-sm font-bold" for="name">Event name</label>
           <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" value={event.name} />
@@ -40,6 +40,33 @@ if (!event) Astro.response.status = 404;
             {['draft', 'active', 'archived'].map((status) => <option value={status} selected={event.status === status}>{status[0].toUpperCase() + status.slice(1)}</option>)}
           </Select>
         </div>
+        <fieldset class="grid gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5">
+          <legend class="px-2 font-display text-xl font-semibold">Attendee copy and accent</legend>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="tagline">Tagline</label>
+            <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="tagline" name="tagline" required maxlength="180" value={event.tagline} />
+            <p class="m-0 text-sm text-muted-foreground">Shown in the booth page metadata and event listing.</p>
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="kiosk_idle_subhead">Kiosk idle subhead</label>
+            <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="kiosk_idle_subhead" name="kiosk_idle_subhead" required maxlength="120" value={event.kiosk_idle_subhead} />
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="scene_picker_heading">Scene picker heading</label>
+            <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="scene_picker_heading" name="scene_picker_heading" required maxlength="100" value={event.scene_picker_heading} />
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="accent_color">Accent color</label>
+            <input class="h-12 w-24 cursor-pointer rounded-xl border border-border bg-card p-1" id="accent_color" name="accent_color" type="color" value={event.accent_color} aria-describedby="accent-help" />
+            <p class="m-0 text-sm text-muted-foreground" id="accent-help">Used for the attendee booth's primary actions and focus accents.</p>
+          </div>
+          <div class="rounded-2xl border border-border bg-[var(--background)] p-5" style={`--preview-accent: ${event.accent_color}`}>
+            <p class="m-0 font-label text-xs font-bold uppercase tracking-[.12em]" style="color: var(--preview-accent)">Attendee preview</p>
+            <h2 class="mt-3 mb-2 font-display text-3xl">{event.scene_picker_heading}</h2>
+            <p class="m-0 max-w-xl text-muted-foreground">{event.tagline}</p>
+            <p class="mt-5 mb-0 font-label text-xs uppercase tracking-[.1em] text-muted-foreground">{event.kiosk_idle_subhead}</p>
+          </div>
+        </fieldset>
         <div class="flex flex-wrap items-center gap-3">
           <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>
           {event.status === 'active' && <a class="inline-flex min-h-12 items-center rounded-full border border-border px-5 font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>View attendee page</a>}

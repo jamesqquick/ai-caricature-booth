@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from './index';
-import { EventSlugConflictError, type CreateEventInput } from '../lib/event-validation';
+import { EventSlugConflictError, type CreateEventInput, type EventUpdateInput } from '../lib/event-validation';
 
 export type EventRecord = {
   id: number;
@@ -85,13 +85,14 @@ export async function createEvent(database: D1Database, input: CreateEventInput,
   }
 }
 
-export async function updateEvent(database: D1Database, id: number, input: CreateEventInput) {
+export async function updateEvent(database: D1Database, id: number, input: EventUpdateInput) {
   try {
-    await database.prepare(`
-      UPDATE events
-      SET slug = ?, name = ?, status = ?
-      WHERE id = ?
-    `).bind(input.slug, input.name, input.status, id).run();
+    const brandingFields = ['tagline', 'kiosk_idle_subhead', 'scene_picker_heading', 'accent_color']
+      .filter((field) => input[field as keyof EventUpdateInput] !== undefined);
+    const fields = ['slug', 'name', 'status', ...brandingFields];
+    const values = fields.map((field) => input[field as keyof EventUpdateInput]);
+    await database.prepare(`UPDATE events SET ${fields.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`)
+      .bind(...values, id).run();
   } catch (error) {
     if (error instanceof Error && /unique|constraint/i.test(error.message)) {
       throw new EventSlugConflictError(input.slug);

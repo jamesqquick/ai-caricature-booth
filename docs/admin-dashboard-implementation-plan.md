@@ -443,7 +443,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 ## Phase 6: Expanded Event Configuration
 
-### - [ ] Task 15: Add Event Copy and Accent Configuration
+### - [x] Task 15: Add Event Copy and Accent Configuration
 
 **Outcome:** Admins can edit attendee-facing text and accent color with validation and immediate preview feedback.
 
@@ -466,7 +466,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - Edit every field, reload `/e/:slug`, and verify the attendee-visible result.
 
-**Completion notes:** Pending.
+**Completion notes:** Implemented validated event tagline, kiosk idle subhead, scene picker heading, and six-digit hex accent color updates in `src/lib/event-validation.ts`, `src/db/events.ts`, and `src/pages/api/admin/events/[slug].ts`; added the admin branding form and bounded preview in `src/pages/admin/events/[slug].astro`; wired all four values into the attendee route and booth UI in `src/pages/e/[slug].astro`, `src/components/Photobooth.tsx`, `src/components/steps/SceneStep.tsx`, and `src/styles/global.css`; added `test/admin-event-branding.spec.ts`. Verification passed: `pnpm test -- admin-event-branding.spec.ts` (23 files, 135 tests), `pnpm check` (0 errors, 1 pre-existing deprecation hint), and `pnpm build`. Manual verification confirmed each field persisted after editing and appeared correctly on the reloaded attendee route. No `.env` or Access configuration was changed.
 
 ### - [ ] Task 16: Add One Supported Watermark Configuration
 
