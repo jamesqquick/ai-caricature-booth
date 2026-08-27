@@ -1,0 +1,21 @@
+src/db/admin.ts
+  s_f87df7d7e6726a::t_749599f1b6cbe7 22-23,121-150
+test/admin-session-detail.spec.ts
+  s_f87df7d7e6726a::t_66c2eb897edf3e 1-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7446e6d4e0f5d8a37b1a10e7266fcf36fd3f0307",
+  "prompts": {},
+  "sessions": {
+    "s_f87df7d7e6726a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbc8968e3ffec44k6zr0jKDyvH",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
