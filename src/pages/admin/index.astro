@@ -2,7 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { OperationsDashboard } from '../../components/admin/OperationsDashboard';
 import PageHeader from '../../components/admin/PageHeader.astro';
-import { loadAdminEventOptions, loadAdminSessions, loadAdminSessionStats } from '../../db/admin';
+import { loadAdminEventOptions, loadAdminSessions, loadAdminStatistics } from '../../db/admin';
 import { SESSION_STATUSES } from '../../db/sessions';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { AdminFilterValidationError, normalizeAdminFilters } from '../../lib/admin-filters';
@@ -13,11 +13,20 @@ let dashboard;
 let queryError: string | null = null;
 
 try {
-  const filters = normalizeAdminFilters(Astro.url.searchParams);
+  const params = new URLSearchParams(Astro.url.searchParams);
+  if (!params.has('from') && !params.has('to') && !params.has('range')) {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - 6);
+    params.set('from', from.toISOString().slice(0, 10));
+    params.set('to', today.toISOString().slice(0, 10));
+  }
+  const filters = normalizeAdminFilters(params);
   const [events, sessionResult, stats] = await Promise.all([
     loadAdminEventOptions(env.DB),
     loadAdminSessions(env.DB, filters),
-    loadAdminSessionStats(env.DB, filters),
+    loadAdminStatistics(env.DB, filters),
   ]);
 
   dashboard = { events, filters, sessionResult, stats };
@@ -30,12 +39,9 @@ try {
 
 <AdminLayout
   title="Dashboard · Booth Admin"
-  description="Monitor generation activity and completion health across booth events."
 >
   <PageHeader
-    eyebrow="Operations workspace"
-    title="Your booth, at a glance."
-    description="Monitor completion health and inspect the latest generation jobs across every event."
+    title="Dashboard"
   />
 
   {
@@ -46,11 +52,10 @@ try {
           events={dashboard.events}
           statuses={SESSION_STATUSES}
           initialFilters={dashboard.filters}
-          initialSessionResult={dashboard.sessionResult}
-          initialStats={dashboard.stats}
-          initialUpdatedAt={Date.now()}
-        />
-      </>
+           initialSessionResult={dashboard.sessionResult}
+           initialStats={dashboard.stats}
+         />
+       </>
     ) : (
       <section class="mt-8 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-6" role="alert" aria-labelledby="dashboard-error-heading">
         <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-destructive">Query error</p>

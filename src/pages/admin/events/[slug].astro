@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
 import PageHeader from '../../../components/admin/PageHeader.astro';
+import { Select } from '../../../components/ui/select';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
 
@@ -19,7 +20,6 @@ if (!event) Astro.response.status = 404;
   {event ? (
     <>
       <PageHeader
-        eyebrow="Edit Event"
         title={event.name}
       />
       <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
@@ -36,9 +36,9 @@ if (!event) Astro.response.status = 404;
         </div>
         <div class="grid gap-2">
           <label class="font-label text-sm font-bold" for="status">Status</label>
-          <select class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status">
+          <Select className="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status">
             {['draft', 'active', 'archived'].map((status) => <option value={status} selected={event.status === status}>{status[0].toUpperCase() + status.slice(1)}</option>)}
-          </select>
+          </Select>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>

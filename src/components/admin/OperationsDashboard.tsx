@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import type { AdminEventOption, AdminSessionStats, AdminSessionSummary } from '../../db/admin';
+import { Input } from '../ui/input';
+import { Select } from '../ui/select';
+import type { AdminEventOption, AdminStatistics, AdminSessionSummary } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
 import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
 
@@ -9,13 +11,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   timeStyle: 'short',
   timeZone: 'UTC',
 });
-const timeFormatter = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-  second: '2-digit',
-  timeZone: 'UTC',
-});
 
+function dateInputValue(timestamp: number | undefined) {
+  return timestamp === undefined ? '' : new Date(timestamp * 1000).toISOString().slice(0, 10);
+}
 type SessionResult = {
   sessions: AdminSessionSummary[];
   page: number;
@@ -29,8 +28,7 @@ type Props = {
   statuses: readonly SessionStatus[];
   initialFilters: AdminFilters;
   initialSessionResult: SessionResult;
-  initialStats: AdminSessionStats;
-  initialUpdatedAt: number;
+  initialStats: AdminStatistics;
 };
 
 function formatStatus(status: SessionStatus) {
@@ -59,15 +57,11 @@ export function OperationsDashboard({
   initialFilters,
   initialSessionResult,
   initialStats,
-  initialUpdatedAt,
 }: Props) {
   const [filters, setFilters] = useState(initialFilters);
   const [sessionResult, setSessionResult] = useState(initialSessionResult);
   const [stats, setStats] = useState(initialStats);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialUpdatedAt);
-  const [isPolling, setIsPolling] = useState(false);
   const [isStale, setIsStale] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
   const isInitialRender = useRef(true);
 
   useEffect(() => {
@@ -87,8 +81,6 @@ export function OperationsDashboard({
       if (disposed || document.visibilityState === 'hidden') return;
       controller?.abort();
       controller = new AbortController();
-      setIsPolling(true);
-
       const query = filtersToSearchParams(filters).toString();
       const suffix = query ? `?${query}` : '';
 
@@ -103,37 +95,32 @@ export function OperationsDashboard({
 
         const [nextSessionResult, nextStats] = await Promise.all([
           sessionsResponse.json() as Promise<SessionResult>,
-          statsResponse.json() as Promise<AdminSessionStats>,
+          statsResponse.json() as Promise<AdminStatistics>,
         ]);
         if (disposed) return;
 
         setSessionResult(nextSessionResult);
         setStats(nextStats);
-        setLastUpdatedAt(Date.now());
         setIsStale(false);
       } catch (error) {
         if (disposed || (error instanceof DOMException && error.name === 'AbortError')) return;
         setIsStale(true);
       } finally {
-        if (!disposed) setIsPolling(false);
       }
     };
 
     const handleVisibilityChange = () => {
       const visible = document.visibilityState !== 'hidden';
-      setIsVisible(visible);
       window.clearTimeout(timeout);
 
       if (!visible) {
         controller?.abort();
-        setIsPolling(false);
         return;
       }
 
       void refresh().finally(schedulePoll);
     };
 
-    setIsVisible(document.visibilityState !== 'hidden');
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     if (isInitialRender.current) {
@@ -174,6 +161,13 @@ export function OperationsDashboard({
     });
   };
 
+  const updateDate = (field: 'from' | 'to', value: string) => {
+    const timestamp = value
+      ? Date.parse(`${value}T${field === 'to' ? '23:59:59' : '00:00:00'}Z`) / 1000
+      : undefined;
+    replaceFilters({ ...filters, [field]: timestamp, page: 1 });
+  };
+
   const resetFilters = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     replaceFilters({ page: 1, pageSize: ADMIN_PAGE_SIZE });
@@ -201,41 +195,59 @@ export function OperationsDashboard({
   return (
     <>
       <form
-        className="mt-8 grid grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_auto_auto] items-end gap-3 rounded-[var(--radius-surface)] border border-border bg-card p-5 max-[860px]:grid-cols-2 max-[560px]:grid-cols-1"
+        className="mt-8 grid grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_repeat(2,minmax(8rem,1fr))_auto] items-end gap-3 rounded-[var(--radius-surface)] border border-border bg-card p-5 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1"
         method="get"
         action="/admin"
         aria-label="Dashboard filters"
-        onSubmit={(event) => event.preventDefault()}
       >
         <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
           Event
-          <select
-            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          <Select
+            className="min-h-11 rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             name="eventId"
             value={filters.eventId ?? ''}
             onChange={(event) => updateEvent(event.target.value)}
           >
             <option value="">All events</option>
             {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
-          </select>
+          </Select>
+        </label>
+
+        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
+          From
+          <Input
+            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            name="from"
+            type="date"
+            value={dateInputValue(filters.from)}
+            onChange={(event) => updateDate('from', event.target.value)}
+          />
+        </label>
+
+        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
+          To
+          <Input
+            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            name="to"
+            type="date"
+            value={dateInputValue(filters.to)}
+            onChange={(event) => updateDate('to', event.target.value)}
+          />
         </label>
 
         <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
           Status
-          <select
-            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          <Select
+            className="min-h-11 rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             name="status"
             value={filters.status ?? ''}
             onChange={(event) => updateStatus(event.target.value)}
           >
             <option value="">All statuses</option>
             {statuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
-          </select>
+          </Select>
         </label>
 
-        <button className="min-h-11 rounded-full bg-primary px-5 text-sm font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">
-          Apply filters
-        </button>
         <a
           className="inline-flex min-h-11 items-center justify-center rounded-full border border-border px-5 text-sm font-bold text-muted-foreground no-underline hover:border-primary hover:text-foreground"
           href="/admin"
@@ -244,15 +256,6 @@ export function OperationsDashboard({
           Reset
         </a>
       </form>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground" aria-live="polite">
-        <p className="m-0">
-          Last updated <time dateTime={new Date(lastUpdatedAt).toISOString()}>{timeFormatter.format(lastUpdatedAt)} UTC</time>
-        </p>
-        <p className="m-0 font-label text-[.68rem] font-bold uppercase tracking-[.1em]">
-          {isPolling ? 'Refreshing data' : isVisible ? 'Updates every 15 seconds' : 'Updates paused while hidden'}
-        </p>
-      </div>
 
       {isStale && (
         <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="status">
@@ -270,11 +273,47 @@ export function OperationsDashboard({
         ))}
       </section>
 
+      <div className="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] gap-6 max-[800px]:grid-cols-1">
+        <section className="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="volume-heading">
+          <div>
+            <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Volume over time</p>
+            <h2 className="m-0 font-display text-2xl font-semibold" id="volume-heading">Generation activity</h2>
+          </div>
+          {stats.volume.length > 0 ? (
+            <div className="mt-6 overflow-x-auto" role="list" aria-label="Daily generation volume">
+              <div className="grid min-w-[34rem] grid-flow-col auto-cols-fr items-end gap-2 border-b border-border pb-2" style={{ height: '15rem' }}>
+                {stats.volume.map((bucket) => (
+                  <div className="flex h-full flex-col items-center justify-end gap-2 text-sm" role="listitem" key={bucket.bucket}>
+                    <strong>{bucket.count}</strong>
+                    <div className="w-full max-w-12 rounded-t-lg bg-primary" style={{ height: `${Math.max((bucket.count / Math.max(...stats.volume.map((item) => item.count), 1)) * 100, 3)}%` }}></div>
+                    <span className="font-label text-[.62rem] text-muted-foreground">{bucket.bucket.slice(5)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <p className="mt-6 mb-0 text-sm text-muted-foreground">No generation activity in this window.</p>}
+        </section>
+
+        <section className="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="scene-heading">
+          <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Scene usage</p>
+          <h2 className="m-0 font-display text-2xl font-semibold" id="scene-heading">Most-used scenes</h2>
+          {stats.sceneUsage.length > 0 ? (
+            <div className="mt-6 grid gap-4" role="list" aria-label="Scene usage counts">
+              {stats.sceneUsage.map((scene) => (
+                <div role="listitem" key={scene.sceneId}>
+                  <div className="flex justify-between gap-3 text-sm"><span className="font-semibold">{scene.sceneName}</span><strong>{scene.count}</strong></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${(scene.count / Math.max(...stats.sceneUsage.map((item) => item.count), 1)) * 100}%` }}></div></div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-6 mb-0 text-sm text-muted-foreground">No scenes have been used in this window.</p>}
+        </section>
+      </div>
+
       <section className="mt-8" aria-labelledby="latest-jobs-heading">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <p className="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Live operations</p>
-            <h2 className="mt-2 mb-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Latest generation jobs</h2>
+            <h2 className="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Latest jobs</h2>
           </div>
           <p className="m-0 text-sm text-muted-foreground">{sessionResult.total.toLocaleString('en-US')} {sessionResult.total === 1 ? 'job' : 'jobs'}</p>
         </div>

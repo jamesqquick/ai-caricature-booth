@@ -21,12 +21,38 @@ export type AdminSessionSummary = {
 
 export type AdminSessionDetail = AdminSessionSummary;
 
+export const ADMIN_IMAGE_KINDS = ['selfie', 'caricature', 'postcard'] as const;
+export type AdminImageKind = (typeof ADMIN_IMAGE_KINDS)[number];
+
 export type AdminSessionStats = {
   total: number;
   completed: number;
   errored: number;
   inFlight: number;
   completionRate: number;
+};
+
+export type AdminStatusCount = {
+  status: SessionStatus;
+  count: number;
+};
+
+export type AdminSceneUsage = {
+  sceneId: string;
+  sceneName: string;
+  count: number;
+};
+
+export type AdminVolumeBucket = {
+  bucket: string;
+  count: number;
+};
+
+export type AdminStatistics = AdminSessionStats & {
+  statusBreakdown: AdminStatusCount[];
+  sceneUsage: AdminSceneUsage[];
+  volume: AdminVolumeBucket[];
+  volumeGranularity: 'hour' | 'day';
 };
 
 export type AdminEventOption = {
@@ -64,11 +90,25 @@ type StatsRow = {
   completion_rate: number;
 };
 
+type StatusCountRow = { status: SessionStatus; count: number };
+type SceneUsageRow = { scene_id: string; scene_name: string | null; count: number };
+type VolumeRow = { bucket: string; count: number };
+
 type AdminEventOptionRow = {
   id: number;
   name: string;
   slug: string;
   status: string;
+};
+
+type AdminImageKeyRow = {
+  image_key: string | null;
+};
+
+const ADMIN_IMAGE_KEY_COLUMNS: Record<AdminImageKind, string> = {
+  selfie: 'selfie_key',
+  caricature: 'caricature_key',
+  postcard: 'postcard_key',
 };
 
 function buildSessionFilter(filters: AdminFilters) {
@@ -163,6 +203,22 @@ export async function loadAdminEventOptions(database: D1Database): Promise<Admin
   }));
 }
 
+export async function loadAdminSessionImageKey(
+  database: D1Database,
+  sessionId: string,
+  kind: AdminImageKind,
+): Promise<string | null> {
+  const column = ADMIN_IMAGE_KEY_COLUMNS[kind];
+  const row = await database.prepare(`
+    SELECT ${column} AS image_key
+    FROM sessions
+    WHERE id = ?
+    LIMIT 1
+  `).bind(sessionId).first<AdminImageKeyRow>();
+
+  return row?.image_key || null;
+}
+
 export async function loadAdminSessions(database: D1Database, filters: AdminFilters) {
   const filter = buildSessionFilter(filters);
   const offset = (filters.page - 1) * filters.pageSize;
@@ -235,5 +291,67 @@ export async function loadAdminSessionStats(
     errored: Number(row?.errored ?? 0),
     inFlight: Number(row?.in_flight ?? 0),
     completionRate: Number(row?.completion_rate ?? 0),
+  };
+}
+
+export async function loadAdminStatistics(
+  database: D1Database,
+  filters: AdminFilters,
+): Promise<AdminStatistics> {
+  const filter = buildSessionFilter(filters);
+  const volumeGranularity: AdminStatistics['volumeGranularity'] = 'day';
+  const volumeExpression = "strftime('%Y-%m-%d', s.created_at, 'unixepoch')";
+
+  const [statsRow, statusRows, sceneRows, volumeRows] = await Promise.all([
+    database.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN s.status = 'errored' THEN 1 ELSE 0 END) AS errored,
+        SUM(CASE WHEN s.status NOT IN ('completed', 'errored') THEN 1 ELSE 0 END) AS in_flight,
+        COALESCE(
+          ROUND(100.0 * SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1),
+          0
+        ) AS completion_rate
+      FROM sessions s
+      ${filter.sql}
+    `).bind(...filter.values).first<StatsRow>(),
+    database.prepare(`
+      SELECT s.status, COUNT(*) AS count
+      FROM sessions s
+      ${filter.sql}
+      GROUP BY s.status
+      ORDER BY count DESC, s.status ASC
+    `).bind(...filter.values).all<StatusCountRow>(),
+    database.prepare(`
+      SELECT s.scene_id, MAX(s.scene_name) AS scene_name, COUNT(*) AS count
+      FROM sessions s
+      ${filter.sql}
+      GROUP BY s.scene_id
+      ORDER BY count DESC, s.scene_id ASC
+    `).bind(...filter.values).all<SceneUsageRow>(),
+    database.prepare(`
+      SELECT ${volumeExpression} AS bucket, COUNT(*) AS count
+      FROM sessions s
+      ${filter.sql}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `).bind(...filter.values).all<VolumeRow>(),
+  ]);
+
+  return {
+    total: Number(statsRow?.total ?? 0),
+    completed: Number(statsRow?.completed ?? 0),
+    errored: Number(statsRow?.errored ?? 0),
+    inFlight: Number(statsRow?.in_flight ?? 0),
+    completionRate: Number(statsRow?.completion_rate ?? 0),
+    statusBreakdown: statusRows.results.map((row) => ({ status: row.status, count: Number(row.count) })),
+    sceneUsage: sceneRows.results.map((row) => ({
+      sceneId: row.scene_id,
+      sceneName: row.scene_name || row.scene_id,
+      count: Number(row.count),
+    })),
+    volume: volumeRows.results.map((row) => ({ bucket: row.bucket, count: Number(row.count) })),
+    volumeGranularity,
   };
 }

@@ -1,10 +1,17 @@
+/** @vitest-environment jsdom */
+
 import { transform } from '@astrojs/compiler';
+import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
+import { ImagePreview } from '../src/components/admin/ImagePreview';
 import { loadAdminSession } from '../src/db/admin';
 
-const sessionDetailSource = new URL('../src/pages/admin/sessions/[sessionId].astro', import.meta.url);
-const timelineSource = new URL('../src/components/admin/SessionTimeline.astro', import.meta.url);
+const sessionDetailSource = new NodeURL('../src/pages/admin/sessions/[sessionId].astro', import.meta.url);
+const timelineSource = new NodeURL('../src/components/admin/SessionTimeline.astro', import.meta.url);
+const imagesSource = new NodeURL('../src/components/admin/SessionImages.astro', import.meta.url);
 
 function createDatabase(row: unknown) {
   return {
@@ -54,25 +61,45 @@ describe('admin session detail', () => {
   });
 
   it('compiles the detail route and timeline', async () => {
-    const sources = await Promise.all([sessionDetailSource, timelineSource].map((url) => readFile(url, 'utf8')));
-    const results = await Promise.all(sources.map((source, index) => transform(source, { filename: index === 0 ? 'session-detail.astro' : 'session-timeline.astro' })));
+    const sources = await Promise.all([sessionDetailSource, timelineSource, imagesSource].map((url) => readFile(fileURLToPath(url), 'utf8')));
+    const results = await Promise.all(sources.map((source, index) => transform(source, { filename: ['session-detail.astro', 'session-timeline.astro', 'session-images.astro'][index] })));
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
   it('documents observed state and absent persisted stage timestamps', async () => {
-    const source = await readFile(timelineSource, 'utf8');
+    const source = await readFile(fileURLToPath(timelineSource), 'utf8');
     expect(source).toContain('Observed current state');
     expect(source).toContain('No persisted timestamp for this stage');
     expect(source).toContain('Not recorded');
     expect(source).not.toContain('Date.now');
   });
 
-  it('keeps image URLs out of the detail route until the proxy exists', async () => {
-    const source = await readFile(sessionDetailSource, 'utf8');
-    expect(source).toContain('Image previews will be available after the authenticated image proxy is added.');
-    expect(source).not.toMatch(/<img\b/);
+  it('renders proxy-backed image inspection and explicit unavailable states', async () => {
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+    const images = await readFile(fileURLToPath(imagesSource), 'utf8');
+    expect(source).toContain('<SessionImages session={session} />');
+    expect(images).toContain('/api/admin/sessions/');
+    expect(images).toContain('Artifact unavailable');
     expect(source).not.toContain('selfie_key');
     expect(source).not.toContain('caricature_key');
     expect(source).not.toContain('postcard_key');
+  });
+
+  it('opens and closes the expanded preview with keyboard controls', () => {
+    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    const image = screen.getByAltText('Generated caricature');
+    fireEvent.load(image);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Generated caricature' }));
+    expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Close preview' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Expand Generated caricature' }));
+  });
+
+  it('keeps the artifact grid stacked on small screens', async () => {
+    const source = await readFile(fileURLToPath(imagesSource), 'utf8');
+    expect(source).toContain('grid gap-5 sm:grid-cols-2 lg:grid-cols-3');
+    expect(source).toContain('min-h-56');
   });
 });

@@ -1,19 +1,22 @@
 import { SESSION_STATUSES, type SessionStatus } from '../db/sessions';
 
 export const ADMIN_PAGE_SIZE = 30 as const;
+export const ADMIN_TIME_RANGES = ['24h', '7d', '30d', 'all'] as const;
+export type AdminTimeRange = (typeof ADMIN_TIME_RANGES)[number];
 
 export type AdminFilters = {
   eventId?: number;
   status?: SessionStatus;
   from?: number;
   to?: number;
+  range?: AdminTimeRange;
   page: number;
   pageSize: typeof ADMIN_PAGE_SIZE;
 };
 
 export class AdminFilterValidationError extends Error {
   constructor(
-    public readonly field: 'eventId' | 'status' | 'from' | 'to' | 'page',
+    public readonly field: 'eventId' | 'status' | 'from' | 'to' | 'range' | 'page',
     message: string,
   ) {
     super(message);
@@ -70,11 +73,12 @@ function parseDate(value: string, field: 'from' | 'to') {
   return parsed / 1000;
 }
 
-export function normalizeAdminFilters(input: AdminFilterInput): AdminFilters {
+export function normalizeAdminFilters(input: AdminFilterInput, now = Date.now()): AdminFilters {
   const eventIdValue = getFilterValue(input, 'eventId');
   const statusValue = getFilterValue(input, 'status');
   const fromValue = getFilterValue(input, 'from');
   const toValue = getFilterValue(input, 'to');
+  const rangeValue = getFilterValue(input, 'range');
   const pageValue = getFilterValue(input, 'page');
 
   const eventId = eventIdValue === undefined ? undefined : parsePositiveInteger(eventIdValue, 'eventId');
@@ -84,6 +88,13 @@ export function normalizeAdminFilters(input: AdminFilterInput): AdminFilters {
   const status = statusValue as SessionStatus | undefined;
   const from = fromValue === undefined ? undefined : parseDate(fromValue, 'from');
   const to = toValue === undefined ? undefined : parseDate(toValue, 'to');
+  if (rangeValue !== undefined && !ADMIN_TIME_RANGES.some((range) => range === rangeValue)) {
+    throw new AdminFilterValidationError('range', 'range must be 24h, 7d, 30d, or all.');
+  }
+  const range = rangeValue as AdminTimeRange | undefined;
+  const rangeStart = range && range !== 'all'
+    ? Math.floor((now - Number(range.slice(0, -1)) * (range.endsWith('h') ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000)) / 1000)
+    : undefined;
   const page = pageValue === undefined ? 1 : parsePositiveInteger(pageValue, 'page');
 
   if (from !== undefined && to !== undefined && from > to) {
@@ -95,6 +106,10 @@ export function normalizeAdminFilters(input: AdminFilterInput): AdminFilters {
     ...(status === undefined ? {} : { status }),
     ...(from === undefined ? {} : { from }),
     ...(to === undefined ? {} : { to }),
+    ...(range === undefined ? {} : { range }),
+    ...(from !== undefined || to !== undefined || rangeStart === undefined
+      ? {}
+      : { from: rangeStart, to: Math.floor(now / 1000) }),
     page,
     pageSize: ADMIN_PAGE_SIZE,
   };

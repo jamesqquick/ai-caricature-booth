@@ -56,9 +56,10 @@ describe('admin dashboard', () => {
     const source = await readSource('page');
 
     expect(source).toContain("import { env } from 'cloudflare:workers'");
-    expect(source).toContain('normalizeAdminFilters(Astro.url.searchParams)');
-    expect(source).toMatch(/Promise\.all\(\[\s*loadAdminEventOptions\(env\.DB\),\s*loadAdminSessions\(env\.DB, filters\),\s*loadAdminSessionStats\(env\.DB, filters\),/);
-    expect(source).toContain('across every event.');
+    expect(source).toContain('normalizeAdminFilters(params)');
+    expect(source).toMatch(/Promise\.all\(\[\s*loadAdminEventOptions\(env\.DB\),\s*loadAdminSessions\(env\.DB, filters\),\s*loadAdminStatistics\(env\.DB, filters\),/);
+    expect(source).toContain('title="Dashboard"');
+    expect(source).not.toContain('Monitor completion health');
     expect(source).toContain('<OperationsDashboard');
     expect(source).toContain('client:load');
     expect(source).toContain('initialFilters={dashboard.filters}');
@@ -77,7 +78,6 @@ describe('admin dashboard', () => {
     expect(filters).toContain('All statuses');
     expect(filters).toContain('data-admin-filters');
     expect(filters).toContain("form.requestSubmit()");
-    expect(filters).toContain('<noscript>');
     expect(filters.match(/focus-visible:outline-2/g)).toHaveLength(2);
     expect(filters.match(/focus-visible:outline-offset-2/g)).toHaveLength(2);
     expect(filters.match(/focus-visible:outline-primary/g)).toHaveLength(2);

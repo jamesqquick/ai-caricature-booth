@@ -29,8 +29,24 @@ const initialSessionResult = {
   total: 1,
   totalPages: 1,
 };
-const initialStats = { total: 1, completed: 0, errored: 0, inFlight: 1, completionRate: 0 };
-const completedStats = { total: 1, completed: 1, errored: 0, inFlight: 0, completionRate: 100 };
+const initialStats = {
+  total: 1,
+  completed: 0,
+  errored: 0,
+  inFlight: 1,
+  completionRate: 0,
+  statusBreakdown: [{ status: 'generating' as const, count: 1 }],
+  sceneUsage: [{ sceneId: 'subway', sceneName: 'Subway Platform', count: 1 }],
+  volume: [{ bucket: '1970-01-01', count: 1 }],
+  volumeGranularity: 'day' as const,
+};
+const completedStats = {
+  ...initialStats,
+  completed: 1,
+  inFlight: 0,
+  completionRate: 100,
+  statusBreakdown: [{ status: 'completed' as const, count: 1 }],
+};
 
 function renderDashboard() {
   return render(
@@ -43,7 +59,6 @@ function renderDashboard() {
       initialFilters={{ page: 1, pageSize: 30 }}
       initialSessionResult={initialSessionResult}
       initialStats={initialStats}
-      initialUpdatedAt={1_700_000_000_000}
     />,
   );
 }
@@ -116,7 +131,7 @@ describe('OperationsDashboard polling', () => {
 
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
     expect(fetch).not.toHaveBeenCalled();
-    expect(screen.getByText('Updates paused while hidden')).toBeTruthy();
+    expect(screen.queryByText('Updates paused while hidden')).toBeNull();
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     fireEvent(document, new Event('visibilitychange'));

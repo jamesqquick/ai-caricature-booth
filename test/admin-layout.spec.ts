@@ -7,7 +7,6 @@ describe('admin layout', () => {
     expect(ADMIN_NAV_ITEMS).toEqual([
       { label: 'Dashboard', href: '/admin' },
       { label: 'Events', href: '/admin/events' },
-      { label: 'Metrics', href: '/admin/metrics' },
     ]);
   });
 
@@ -22,6 +21,6 @@ describe('admin layout', () => {
   it('marks only the matching navigation section active', () => {
     expect(isAdminNavItemActive('/admin', '/admin')).toBe(true);
     expect(isAdminNavItemActive('/admin/events/summer-party', '/admin/events')).toBe(true);
-    expect(isAdminNavItemActive('/admin/metrics', '/admin')).toBe(false);
+    expect(isAdminNavItemActive('/admin/events', '/admin')).toBe(false);
   });
 });

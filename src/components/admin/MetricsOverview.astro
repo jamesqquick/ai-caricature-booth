@@ -1,0 +1,73 @@
+---
+import type { AdminEventOption, AdminStatistics } from '../../db/admin';
+import { Input } from '../ui/input';
+import { Select } from '../ui/select';
+import type { AdminFilters } from '../../lib/admin-filters';
+
+type Props = {
+  events: AdminEventOption[];
+  filters: AdminFilters;
+  stats: AdminStatistics;
+};
+
+const { events, filters, stats } = Astro.props;
+const maxVolume = Math.max(...stats.volume.map((bucket) => bucket.count), 1);
+const maxScene = Math.max(...stats.sceneUsage.map((scene) => scene.count), 1);
+
+function dateValue(timestamp: number | undefined) {
+  return timestamp === undefined ? '' : new Date(timestamp * 1000).toISOString().slice(0, 10);
+}
+---
+
+<section class="mt-8" aria-label="Metrics filters">
+  <form class="grid grid-cols-[minmax(12rem,1fr)_repeat(2,minmax(8rem,1fr))] items-end gap-3 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1" method="get" data-metrics-filters>
+    <label class="grid gap-2 text-sm font-semibold" for="metrics-event">Event
+      <Select className="min-h-11 rounded-xl border border-border bg-card px-3 text-foreground" id="metrics-event" name="eventId">
+        <option value="">All events</option>
+        {events.map((event) => <option value={event.id} selected={filters.eventId === event.id}>{event.name}</option>)}
+      </Select>
+    </label>
+    <label class="grid gap-2 text-sm font-semibold" for="metrics-from">From
+      <Input className="min-h-11 rounded-xl border border-border bg-card px-3 text-foreground" id="metrics-from" name="from" type="date" value={dateValue(filters.from)} />
+    </label>
+    <label class="grid gap-2 text-sm font-semibold" for="metrics-to">To
+      <Input className="min-h-11 rounded-xl border border-border bg-card px-3 text-foreground" id="metrics-to" name="to" type="date" value={dateValue(filters.to)} />
+    </label>
+  </form>
+</section>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-metrics-filters]');
+  form?.addEventListener('change', (event) => {
+    if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) return;
+    form.setAttribute('aria-busy', 'true');
+    form.requestSubmit();
+  });
+</script>
+
+<section class="mt-8 grid grid-cols-4 gap-px overflow-hidden rounded-[var(--radius-surface)] border border-border bg-border max-[800px]:grid-cols-2 max-[520px]:grid-cols-1" aria-label="Summary statistics">
+  {[
+    ['Generations', stats.total.toLocaleString('en-US')],
+    ['Completed', stats.completed.toLocaleString('en-US')],
+    ['Errored', stats.errored.toLocaleString('en-US')],
+    ['Completion rate', `${stats.completionRate}%`],
+  ].map(([label, value]) => <article class="bg-card p-5"><p class="m-0 font-label text-[.65rem] font-extrabold uppercase tracking-[.12em] text-muted-foreground">{label}</p><p class="mt-3 mb-0 font-display text-3xl font-semibold">{value}</p></article>)}
+</section>
+
+<div class="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] gap-6 max-[800px]:grid-cols-1">
+  <section class="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="volume-heading">
+    <div><p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Volume over time</p><h2 class="m-0 font-display text-2xl font-semibold" id="volume-heading">Generation activity</h2></div>
+    {stats.volume.length > 0 ? <div class="mt-6 overflow-x-auto" role="list" aria-label="Daily generation volume">
+      <div class="grid min-w-[34rem] grid-flow-col auto-cols-fr items-end gap-2 border-b border-border pb-2" style="height: 15rem">
+        {stats.volume.map((bucket) => <div class="flex h-full flex-col items-center justify-end gap-2 text-sm" role="listitem"><strong>{bucket.count}</strong><div class="w-full max-w-12 rounded-t-lg bg-primary" style={`height: ${Math.max((bucket.count / maxVolume) * 100, 3)}%`}></div><span class="font-label text-[.62rem] text-muted-foreground">{bucket.bucket.slice(5)}</span></div>)}
+      </div>
+    </div> : <p class="mt-6 mb-0 text-sm text-muted-foreground">No generation activity in this window.</p>}
+  </section>
+
+  <section class="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="scene-heading">
+    <p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Scene usage</p><h2 class="m-0 font-display text-2xl font-semibold" id="scene-heading">Most-used scenes</h2>
+    {stats.sceneUsage.length > 0 ? <div class="mt-6 grid gap-4" role="list" aria-label="Scene usage counts">
+      {stats.sceneUsage.map((scene) => <div role="listitem"><div class="flex justify-between gap-3 text-sm"><span class="font-semibold">{scene.sceneName}</span><strong>{scene.count}</strong></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-primary" style={`width: ${(scene.count / maxScene) * 100}%`}></div></div></div>)}
+    </div> : <p class="mt-6 mb-0 text-sm text-muted-foreground">No scenes have been used in this window.</p>}
+  </section>
+</div>

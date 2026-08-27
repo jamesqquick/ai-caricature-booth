@@ -22,7 +22,31 @@ const { adminEmail, pathname } = Astro.props;
       Booth Admin
     </a>
 
-    <div class="flex items-center justify-center gap-1 max-[800px]:row-start-2 max-[800px]:col-span-2 max-[800px]:grid max-[800px]:grid-cols-3">
+    <button
+      class="hidden size-11 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary hover:text-foreground max-[800px]:inline-flex"
+      type="button"
+      data-admin-menu-toggle
+      aria-controls="admin-navigation-links"
+      aria-expanded="false"
+      aria-label="Open navigation menu"
+    >
+      <svg class="size-5 fill-none stroke-current stroke-2" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+    </button>
+
+    <div id="admin-navigation-links" class="contents items-center justify-center gap-1 max-[800px]:fixed max-[800px]:inset-0 max-[800px]:z-50 max-[800px]:flex max-[800px]:flex-col max-[800px]:items-stretch max-[800px]:justify-start max-[800px]:gap-6 max-[800px]:bg-background max-[800px]:p-6" data-admin-menu hidden>
+      <div class="hidden max-[800px]:flex max-[800px]:justify-end">
+        <button
+          class="inline-flex size-11 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary hover:text-foreground"
+          type="button"
+          data-admin-menu-close
+          aria-label="Close navigation menu"
+          title="Close navigation menu"
+        >
+          <svg class="size-5 fill-none stroke-current stroke-2" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-center gap-1 max-[800px]:grid max-[800px]:w-full max-[800px]:grid-cols-1 max-[800px]:gap-3">
       {
         ADMIN_NAV_ITEMS.map((item) => {
           const active = isAdminNavItemActive(pathname, item.href);
@@ -30,7 +54,7 @@ const { adminEmail, pathname } = Astro.props;
           return (
             <a
               class:list={[
-                'inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-bold no-underline transition-colors max-[520px]:px-2 max-[520px]:text-xs',
+                'inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-bold no-underline transition-colors max-[520px]:px-2 max-[520px]:text-xs max-[800px]:w-full',
                 active
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -44,28 +68,78 @@ const { adminEmail, pathname } = Astro.props;
           );
         })
       }
-    </div>
+      </div>
 
-    <div class="flex min-w-0 items-center justify-end gap-2">
-      <span
-        class="max-w-48 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-border bg-muted px-3 py-2 font-label text-[.62rem] font-semibold text-muted-foreground max-[520px]:max-w-32"
-        title={adminEmail}
-        aria-label={`Signed in as ${adminEmail}`}
-      >
-        {adminEmail}
-      </span>
-      <button
-        class="grid size-11 shrink-0 place-items-center rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary hover:text-foreground"
-        type="button"
-        data-theme-toggle
-        aria-label="Switch to light theme"
-        aria-pressed="false"
-        title="Switch theme"
-      >
-        <svg class="hidden size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-light-icon aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
-        <svg class="size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-dark-icon aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        <span class="sr-only" data-theme-label>Switch to light theme</span>
-      </button>
+      <div class="flex min-w-0 items-center justify-end gap-2 max-[800px]:mt-auto max-[800px]:justify-between max-[800px]:border-t max-[800px]:border-border max-[800px]:pt-6">
+        <span
+          class="max-w-48 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-border bg-muted px-3 py-2 font-label text-[.62rem] font-semibold text-muted-foreground max-[520px]:max-w-32"
+          title={adminEmail}
+          aria-label={`Signed in as ${adminEmail}`}
+        >
+          {adminEmail}
+        </span>
+        <button
+          class="grid size-11 shrink-0 place-items-center rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary hover:text-foreground"
+          type="button"
+          data-theme-toggle
+          aria-label="Switch to light theme"
+          aria-pressed="false"
+          title="Switch theme"
+        >
+          <svg class="hidden size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-light-icon aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+          <svg class="size-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" data-theme-dark-icon aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <span class="sr-only" data-theme-label>Switch to light theme</span>
+        </button>
+      </div>
     </div>
   </nav>
 </header>
+
+<script is:inline>
+  (() => {
+    const toggle = document.querySelector('[data-admin-menu-toggle]');
+    const menu = document.querySelector('[data-admin-menu]');
+    const close = document.querySelector('[data-admin-menu-close]');
+    if (!toggle || !menu || !close) return;
+
+    const mediaQuery = window.matchMedia('(max-width: 800px)');
+    let wasSmall = mediaQuery.matches;
+    const setMenuState = (open) => {
+      toggle.setAttribute('aria-expanded', String(open));
+      menu.hidden = !open;
+    };
+
+    const syncMenu = () => {
+      toggle.classList.toggle('hidden', !mediaQuery.matches);
+      if (mediaQuery.matches) {
+        setMenuState(wasSmall && toggle.getAttribute('aria-expanded') === 'true');
+      } else {
+        setMenuState(true);
+      }
+      wasSmall = mediaQuery.matches;
+    };
+
+    toggle.addEventListener('click', () => {
+      setMenuState(true);
+      close.focus();
+    });
+    close.addEventListener('click', () => {
+      setMenuState(false);
+      toggle.focus();
+    });
+    menu.addEventListener('click', (event) => {
+      if (mediaQuery.matches && event.target instanceof HTMLAnchorElement) {
+        setMenuState(false);
+        toggle.focus();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && mediaQuery.matches && toggle.getAttribute('aria-expanded') === 'true') {
+        setMenuState(false);
+        toggle.focus();
+      }
+    });
+    mediaQuery.addEventListener('change', syncMenu);
+    syncMenu();
+  })();
+</script>

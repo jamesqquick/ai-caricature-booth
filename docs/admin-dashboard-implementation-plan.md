@@ -332,7 +332,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Completion notes:** Added the safe single-session read model in `src/db/admin.ts`, the server-rendered detail route in `src/pages/admin/sessions/[sessionId].astro`, the evidence-based lifecycle timeline in `src/components/admin/SessionTimeline.astro`, and focused coverage in `test/admin-session-detail.spec.ts`. The route returns `400` for malformed IDs and `404` for unknown sessions, exposes lifecycle metadata and image availability only, and labels stage timestamps as not persisted rather than inferring them. Verification passed: `pnpm test -- admin-session-detail.spec.ts` (19 files, 113 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`. Local route smoke checks returned `200` for seeded completed, in-flight, and errored sessions, `404` for an unknown session, and `400` for a malformed ID. Manual browser inspection was confirmed by the user for the completed, in-flight, errored, and unknown session views. No image proxy behavior was added.
 
-### - [ ] Task 11: Add the Authenticated Session Image Proxy
+### - [x] Task 11: Add the Authenticated Session Image Proxy
 
 **Outcome:** Admins can view private images without exposing or accepting raw R2 object keys.
 
@@ -354,9 +354,9 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - Verify each image kind, missing images, invalid kinds, unknown sessions, and download headers.
 
-**Completion notes:** Pending.
+**Completion notes:** Added the fixed-kind server-side image key resolver in `src/db/admin.ts` and the authenticated R2 streaming endpoint at `src/pages/api/admin/sessions/[sessionId]/images/[kind].ts`. The proxy accepts only selfie, caricature, and postcard, returns indistinguishable 404s for invalid/unknown/missing resources, preserves stored content types, sets private no-store and nosniff headers, and emits sanitized download filenames. Added `test/admin-image-proxy.spec.ts` covering all kinds, missing objects, invalid kinds, unknown sessions, download headers, and rejection of caller-supplied cross-session keys. Verification passed: `pnpm test -- admin-image-proxy.spec.ts` (20 files, 122 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`. Authenticated deployment/browser smoke verification was not run because no deployment or Access policy changes were authorized; no follow-up blocker for the implementation.
 
-### - [ ] Task 12: Complete Session Image Inspection UX
+### - [x] Task 12: Complete Session Image Inspection UX
 
 **Outcome:** The detail page shows every available generation artifact with useful loading, missing, and failure states.
 
@@ -378,13 +378,13 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm build`
 - Test keyboard opening/closing of the preview and mobile stacking.
 
-**Completion notes:** Pending.
+**Completion notes:** Added `src/components/admin/SessionImages.astro` with responsive selfie, caricature, and postcard artifact cards, authenticated proxy URLs, lazy loading, descriptive alt text, download links, and explicit unavailable placeholders. Added `src/components/admin/ImagePreview.tsx` with load failure feedback, keyboard-accessible expanded preview dialog, Escape/click dismissal, focus restoration, and a close control. Integrated the image section into `src/pages/admin/sessions/[sessionId].astro` and expanded `test/admin-session-detail.spec.ts` with Astro compilation, proxy/unavailable-state, keyboard dialog, and responsive stacking coverage. Verification passed: `pnpm test -- admin-session-detail.spec.ts` (20 files, 124 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`. Browser manual viewport inspection was unavailable because the Chrome DevTools session was already locked; responsive stacking and keyboard behavior were verified by the focused jsdom tests.
 
 ---
 
 ## Phase 5: Statistics and Insights
 
-### - [ ] Task 13: Add Time-Range and Scene Statistics
+### - [x] Task 13: Add Time-Range and Scene Statistics
 
 **Outcome:** Admins can answer how many generations ran, how they ended, and which scenes were used for all events or one event.
 
@@ -392,7 +392,8 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - Modify: `src/lib/admin-filters.ts`
 - Modify: `src/db/admin.ts`
 - Modify: `src/pages/api/admin/stats.ts`
-- Create: `src/pages/admin/metrics.astro`
+- Modify: `src/pages/admin/index.astro`
+- Modify: `src/components/admin/OperationsDashboard.tsx`
 - Create: `src/components/admin/MetricsOverview.astro`
 - Create: `test/admin-metrics.spec.ts`
 
@@ -408,7 +409,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm check`
 - Reconcile all-events and single-event totals against fixture rows.
 
-**Completion notes:** Pending.
+**Completion notes:** Added `24h`, `7d`, `30d`, and all-time range normalization with explicit UTC bounds in `src/lib/admin-filters.ts`; added status breakdown, scene usage, and daily volume read models in `src/db/admin.ts`; updated `src/pages/api/admin/stats.ts` to return the detailed statistics contract; and combined the summary, daily bar chart, scene usage, and latest jobs into the shared filtered dashboard in `src/pages/admin/index.astro` and `src/components/admin/OperationsDashboard.tsx`. The dashboard defaults to the past seven UTC calendar days, and one filter form drives both the graphs and job list. Added shared `Select` and `Input` primitives with regular text weight and a spaced select chevron, plus focused coverage in `test/admin-metrics.spec.ts`, `test/admin-dashboard.spec.ts`, and `test/admin-polling.spec.tsx`. The standalone metrics route was removed and the Metrics nav item was removed. Verification passed: `pnpm test -- admin-dashboard.spec.ts admin-polling.spec.tsx admin-metrics.spec.ts admin-layout.spec.ts` (21 files, 129 tests), `pnpm check` (0 errors, 0 warnings; 1 pre-existing deprecation hint), and `git diff --check`; no follow-up blocker.
 
 ### - [ ] Task 14: Persist and Display End-to-End Pipeline Duration
 

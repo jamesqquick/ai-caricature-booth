@@ -4,9 +4,10 @@ import { AdminFilterValidationError } from '../src/lib/admin-filters';
 const fakeEnv = vi.hoisted(() => ({ DB: {} }));
 const loadAdminSessions = vi.hoisted(() => vi.fn());
 const loadAdminSessionStats = vi.hoisted(() => vi.fn());
+const loadAdminStatistics = vi.hoisted(() => vi.fn());
 
 vi.mock('cloudflare:workers', () => ({ env: fakeEnv }));
-vi.mock('../src/db/admin', () => ({ loadAdminSessions, loadAdminSessionStats }));
+vi.mock('../src/db/admin', () => ({ loadAdminSessions, loadAdminSessionStats, loadAdminStatistics }));
 
 import { GET as getSessions } from '../src/pages/api/admin/sessions';
 import { GET as getStats } from '../src/pages/api/admin/stats';
@@ -57,13 +58,13 @@ describe('admin APIs', () => {
   });
 
   it('returns stats using the same normalized filter contract', async () => {
-    loadAdminSessionStats.mockResolvedValue(statsResult);
+    loadAdminStatistics.mockResolvedValue(statsResult);
 
     const response = await getStats({ url: new URL('https://booth.test/api/admin/stats?eventId=7&status=completed&page=2') });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(statsResult);
-    expect(loadAdminSessionStats).toHaveBeenCalledWith(fakeEnv.DB, {
+    expect(loadAdminStatistics).toHaveBeenCalledWith(fakeEnv.DB, {
       eventId: 7,
       status: 'completed',
       page: 2,

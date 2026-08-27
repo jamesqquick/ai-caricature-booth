@@ -1,6 +1,7 @@
 ---
 import { env } from 'cloudflare:workers';
 import PageHeader from '../../../components/admin/PageHeader.astro';
+import SessionImages from '../../../components/admin/SessionImages.astro';
 import SessionTimeline from '../../../components/admin/SessionTimeline.astro';
 import StatusBadge from '../../../components/admin/StatusBadge.astro';
 import { loadAdminSession } from '../../../db/admin';
@@ -28,7 +29,6 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   {session ? (
     <>
       <PageHeader
-        eyebrow="Generation record"
         title="Session details"
       />
 
@@ -65,7 +65,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
               </div>
             ))}
           </dl>
-          <p class="mt-5 mb-0 text-sm leading-[1.55] text-muted-foreground">Image previews will be available after the authenticated image proxy is added.</p>
+          <p class="mt-5 mb-0 text-sm leading-[1.55] text-muted-foreground">Available artifacts can be inspected below through the authenticated image proxy.</p>
         </aside>
       </section>
 
@@ -78,6 +78,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
       )}
 
       <SessionTimeline session={session} />
+      <SessionImages session={session} />
       <a class="mt-8 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin">Back to dashboard</a>
     </>
   ) : (
