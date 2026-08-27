@@ -1,0 +1,31 @@
+src/components/admin/SessionImages.astro
+  s_c83cca3da4e16a::t_c279e55670719f 1-53
+src/pages/admin/events/index.astro
+  s_5a056e26b718f2::t_11161de7452e51 18
+src/pages/admin/sessions/[sessionId].astro
+  s_5a056e26b718f2::t_358c61888760f5 4,68,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5809fbd172cacb7cc1b14989eb9d0d4d3b62d6b8",
+  "prompts": {},
+  "sessions": {
+    "s_5a056e26b718f2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbbc21e05ffeawvHb9FBeCKiM5",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_c83cca3da4e16a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbc0fbcf3ffeimle2kz7EyG5sy",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
