@@ -1,0 +1,27 @@
+src/db/events.ts
+  s_13fd7bd0d156eb::t_565dc1e4f4f98a 105-164
+src/lib/postcard.ts
+  s_13fd7bd0d156eb::t_22b3d5571d857f 3,5-10,15
+src/pages/admin/events/[slug].astro
+  s_13fd7bd0d156eb::t_13fb4efb62c2ef 27-59,116-182
+src/pages/api/admin/events/[slug]/watermark.ts
+  s_13fd7bd0d156eb::t_be748e1104567b 1-279
+test/admin-watermark.spec.ts
+  s_13fd7bd0d156eb::t_f1c17c38db8e5c 1-323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b10f16ac6c786e726bcc345ce34ca1fc1ab4e93a",
+  "prompts": {},
+  "sessions": {
+    "s_13fd7bd0d156eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbb1d482dffeQgvcqOutg4HZyz",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
