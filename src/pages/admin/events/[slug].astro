@@ -24,6 +24,39 @@ if (!event) Astro.response.status = 404;
       />
       <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
 
+      <section class="mt-8 grid max-w-3xl gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading">
+        <div>
+          <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermark</h2>
+          <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload a PNG displayed in the bottom-right corner of generated postcards.</p>
+        </div>
+        {event.watermark_image_key ? (
+          <div class="grid gap-2">
+            <p class="m-0 font-label text-sm font-bold">Current watermark</p>
+            <div class="flex min-h-40 items-end justify-end rounded-2xl border border-border bg-muted/40 p-4">
+              <img class="max-h-32 max-w-full object-contain" src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} alt="Current postcard watermark" />
+            </div>
+          </div>
+        ) : (
+          <p class="m-0 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">No watermark configured.</p>
+        )}
+        <form class="grid gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
+            <input class="min-h-12 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground" id="watermark-file" name="watermark" type="file" accept="image/png" required={!event.watermark_image_key} />
+            <p class="m-0 text-xs text-muted-foreground">Maximum 2 MB and 4096 x 4096 pixels.</p>
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="watermark-width">Width (px)</label>
+            <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="watermark-width" name="width" type="number" min="120" max="900" step="1" value={event.watermark_w ?? 540} required />
+          </div>
+          <div class="flex flex-wrap items-center gap-3 sm:col-span-2">
+            <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">{event.watermark_image_key ? 'Save watermark' : 'Upload watermark'}</button>
+            {event.watermark_image_key && <button class="min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive" id="remove-watermark" type="button">Remove watermark</button>}
+            <p class="m-0 text-sm text-muted-foreground" id="watermark-status" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      </section>
+
       <form class="mt-8 grid max-w-3xl gap-6" method="post" action={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event">
         <div class="grid gap-2">
           <label class="font-label text-sm font-bold" for="name">Event name</label>
@@ -80,3 +113,70 @@ if (!event) Astro.response.status = 404;
     </section>
   )}
 </AdminLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#watermark-form');
+  const fileInput = document.querySelector<HTMLInputElement>('#watermark-file');
+  const widthInput = document.querySelector<HTMLInputElement>('#watermark-width');
+  const removeButton = document.querySelector<HTMLButtonElement>('#remove-watermark');
+  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const status = document.querySelector<HTMLElement>('#watermark-status');
+  let pending = false;
+
+  async function readError(response: Response) {
+    const result: { error?: string } = await response.json<{ error?: string }>().catch(() => ({}));
+    return result.error ?? 'Watermark could not be updated.';
+  }
+
+  function setDisabled(disabled: boolean) {
+    [fileInput, widthInput, removeButton, submitButton].forEach((control) => {
+      if (control) control.disabled = disabled;
+    });
+  }
+
+  async function mutate(message: string, request: () => Promise<Response>) {
+    if (pending || !status) return;
+    pending = true;
+    setDisabled(true);
+    status.textContent = message;
+    let reloading = false;
+    try {
+      const response = await request();
+      if (!response.ok) {
+        status.textContent = await readError(response);
+        return;
+      }
+      reloading = true;
+      window.location.reload();
+    } catch {
+      status.textContent = 'Watermark could not be updated. Check your connection and try again.';
+    } finally {
+      if (!reloading) {
+        pending = false;
+        setDisabled(false);
+      }
+    }
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = fileInput?.files?.[0];
+    if (!widthInput) return;
+    await mutate('Saving...', () => file
+      ? fetch(`${form.dataset.endpoint}?width=${encodeURIComponent(widthInput.value)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type, 'X-Watermark-Bytes': String(file.size) },
+          body: file,
+        })
+      : fetch(form.dataset.endpoint ?? '', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ width: Number(widthInput.value) }),
+        }));
+  });
+
+  removeButton?.addEventListener('click', async () => {
+    if (!form) return;
+    await mutate('Removing...', () => fetch(form.dataset.endpoint ?? '', { method: 'DELETE' }));
+  });
+</script>

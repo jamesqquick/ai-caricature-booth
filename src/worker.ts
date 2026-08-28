@@ -4,21 +4,23 @@ import { transitionSession } from './db/sessions';
 import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
-import { scenes } from './data/scenes';
 import { adminForbiddenResponse, isAdminPath, withVerifiedAdminIdentity } from './lib/admin-access';
 
 export type CaricaturePayload = {
   sessionId: string;
   eventId: number;
   sceneId: string;
+  sceneName: string;
+  scenePrompt: string;
   selfieKey: string;
   watermarkKey: string | null;
+  watermarkWidth: number | null;
 };
 
 export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayload> {
   async run(event: WorkflowEvent<CaricaturePayload>, step: WorkflowStep) {
     const workflowStartedAt = Date.now();
-    const { sessionId, eventId, sceneId, selfieKey, watermarkKey } = event.payload;
+    const { sessionId, eventId, sceneId, sceneName, scenePrompt, selfieKey, watermarkKey, watermarkWidth } = event.payload;
     const markErrored = async (error: unknown) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: error instanceof Error ? error.message : String(error) });
     };
@@ -61,12 +63,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       try {
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');
-        const scene = scenes.find((candidate) => candidate.id === sceneId);
-        if (!scene) throw new Error('Generation scene was not found.');
-        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), `Create a bold editorial ink caricature in the ${scene.name} setting. ${scene.description} Keep the person recognizable, expressive, and centered. No text.`);
+        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), `${scenePrompt} Keep the person recognizable, expressive, and centered. No text.`);
         const key = `sessions/${sessionId}/caricature.jpg`;
         await this.env.SELFIES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { eventId: String(eventId), sceneId } });
-        await transitionSession(this.env.DB, sessionId, 'compositing', { caricature_key: key });
+        await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key });
         return key;
       } catch (error) {
         console.error(JSON.stringify({ message: 'caricature generation failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
@@ -81,7 +81,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         const caricature = await this.env.SELFIES.get(caricatureKey);
         if (!caricature) throw new Error('Generated caricature was not found.');
         console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
-        const postcard = await buildPostcard(this.env, caricature, watermarkKey);
+        const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
         if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
         console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));
         const key = `sessions/${sessionId}/postcard.jpg`;

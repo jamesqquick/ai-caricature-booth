@@ -1,15 +1,17 @@
 ---
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
-import { scenes } from "../data/scenes";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
+import { loadActiveScenesByEvent } from "../db/scenes";
 
 export const prerender = false;
 
 const events = await loadActiveEvents(env.DB);
-const featuredScenes = [scenes[5], scenes[4], scenes[3]];
-const galleryScenes = [scenes[5], scenes[3], scenes[4], scenes[0]];
+const sceneSets = await Promise.all(events.map((event) => loadActiveScenesByEvent(env.DB, event.id)));
+const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
+const featuredScenes = scenes.slice(0, 3);
+const galleryScenes = scenes.slice(0, 4);
 ---
 
 <BoothLayout

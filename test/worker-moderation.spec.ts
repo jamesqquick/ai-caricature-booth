@@ -27,8 +27,11 @@ const payload = {
   sessionId,
   eventId: 1,
   sceneId: 'brooklyn-bridge',
+  sceneName: 'Brooklyn Bridge',
+  scenePrompt: 'Stored event scene prompt.',
   selfieKey,
-  watermarkKey: null,
+  watermarkKey: 'events/1/watermarks/brand.png',
+  watermarkWidth: 620,
 };
 
 function createStep() {
@@ -129,13 +132,14 @@ describe('CaricatureWorkflow moderation gate', () => {
 
   it('continues to generation only after a safe verdict', async () => {
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
-    const { env } = createEnvironment();
+    const { env, selfie } = createEnvironment();
     const workflow = createWorkflow(env);
 
     await workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never);
 
     expect(generateCaricature).toHaveBeenCalledTimes(1);
-    expect(buildPostcard).toHaveBeenCalledTimes(1);
+    expect(generateCaricature).toHaveBeenCalledWith('test-token', expect.any(Uint8Array), 'Stored event scene prompt. Keep the person recognizable, expressive, and centered. No text.');
+    expect(buildPostcard).toHaveBeenCalledWith(env, selfie, payload.watermarkKey, payload.watermarkWidth);
     expect(env.SELFIES.put).toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything());
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({

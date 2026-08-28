@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
-import { scenes } from '../data/scenes';
-import { boothReducer, initialBoothState, type BoothStep } from '../lib/booth-machine';
+import type { Scene } from '../data/scenes';
+import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
 import { Stepper } from './Stepper';
 import { CameraStep } from './steps/CameraStep';
 import { GeneratingStep } from './steps/GeneratingStep';
@@ -12,8 +12,18 @@ const stepLabels: Array<{ id: BoothStep; label: string }> = [
   { id: 'generating', label: 'Create' },
 ];
 
-export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor }: { eventName: string; eventSlug: string; tagline: string; kioskIdleSubhead: string; scenePickerHeading: string; accentColor: string }) {
-  const [state, dispatch] = useReducer(boothReducer, initialBoothState);
+type Props = {
+  eventName: string;
+  eventSlug: string;
+  tagline: string;
+  kioskIdleSubhead: string;
+  scenePickerHeading: string;
+  accentColor: string;
+  scenes: Scene[];
+};
+
+export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor, scenes }: Props) {
+  const [state, dispatch] = useReducer(boothReducer, scenes[0]?.id ?? null, createInitialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
   const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
@@ -53,10 +63,10 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
         )}
         {state.step === 'generating' && selectedScene && state.photoDataUrl && (
           <GeneratingStep
-              scene={selectedScene}
-              photoDataUrl={state.photoDataUrl}
-              eventSlug={eventSlug}
-              onComplete={finishGeneration}
+            scene={selectedScene}
+            photoDataUrl={state.photoDataUrl}
+            eventSlug={eventSlug}
+            onComplete={finishGeneration}
           />
         )}
       </section>

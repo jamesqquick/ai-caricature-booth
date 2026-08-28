@@ -468,7 +468,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Completion notes:** Implemented validated event tagline, kiosk idle subhead, scene picker heading, and six-digit hex accent color updates in `src/lib/event-validation.ts`, `src/db/events.ts`, and `src/pages/api/admin/events/[slug].ts`; added the admin branding form and bounded preview in `src/pages/admin/events/[slug].astro`; wired all four values into the attendee route and booth UI in `src/pages/e/[slug].astro`, `src/components/Photobooth.tsx`, `src/components/steps/SceneStep.tsx`, and `src/styles/global.css`; added `test/admin-event-branding.spec.ts`. Verification passed: `pnpm test -- admin-event-branding.spec.ts` (23 files, 135 tests), `pnpm check` (0 errors, 1 pre-existing deprecation hint), and `pnpm build`. Manual verification confirmed each field persisted after editing and appeared correctly on the reloaded attendee route. No `.env` or Access configuration was changed.
 
-### - [ ] Task 16: Add One Supported Watermark Configuration
+### - [x] Task 16: Add One Supported Watermark Configuration
 
 **Outcome:** Admins can upload, preview, resize, and remove the bottom-right postcard watermark that the current pipeline supports.
 
@@ -494,9 +494,9 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm build`
 - Generate a postcard with and without a watermark and compare the output.
 
-**Completion notes:** Pending.
+**Completion notes:** Implemented bottom-right watermark upload, authenticated preview, resizing, and removal in `src/pages/admin/events/[slug].astro` and `src/pages/api/admin/events/[slug]/watermark.ts`; added bounded PNG content-type/signature/dimension validation, event-owned R2 keys, conditional D1 updates with cleanup compensation in `src/db/events.ts`, configurable postcard width in `src/lib/postcard.ts`, and key/width workflow propagation through `src/actions/index.ts` and `src/worker.ts`. Added focused API, ordering, race, rendering, and workflow coverage in `test/admin-watermark.spec.ts` and `test/worker-moderation.spec.ts`. Verification passed: `pnpm test -- admin-watermark.spec.ts` (24 files, 154 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), and `pnpm build`; a local 1.44 MB PNG upload at 300px returned `200`, and temporary local D1/R2 test data was removed. The with/without-watermark postcard comparison was deferred with explicit user approval because the remote Images binding target requires non-interactive Access Service Token credentials. No Access configuration, `.env`, deployment, commit, or push was performed.
 
-### - [ ] Task 17: Move Scenes to Event-Scoped D1 Configuration
+### - [x] Task 17: Move Scenes to Event-Scoped D1 Configuration
 
 **Outcome:** Each event can manage its own active, ordered scene set while existing seeded events retain the current six scenes.
 
@@ -527,7 +527,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm build`
 - Verify two events can expose different scene sets and cannot submit each other's scene IDs.
 
-**Completion notes:** Pending.
+**Completion notes:** Added `event_scenes` in `drizzle/migrations/0006_event_scenes.sql` because migration `0005` was already assigned, and seeded all existing events with the six prior static scenes. Added event-scoped active/ordered D1 queries in `src/db/scenes.ts`, reduced `src/data/scenes.ts` to the shared `Scene` contract, passed D1 scenes through attendee and landing routes into `Photobooth`, validated active event ownership in both `startGeneration` paths, and snapshotted the selected scene name and prompt into the durable workflow payload so generation no longer imports a global scene array. Added focused migration, isolation, route, component, session, and worker coverage. Verification passed: `pnpm db:migrate:local`, `pnpm test` (25 files, 163 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), `pnpm build`, and `git diff --check`. A local two-event D1 check returned one match for each event's own unique scene and zero for each foreign scene; all temporary verification rows were removed. Strict specification and final code reviews approved the implementation. No Task 18 UI, Access configuration, `.env` changes, deployment, commit, or push was performed.
 
 ### - [ ] Task 18: Add Scene and Prompt Management UI
 

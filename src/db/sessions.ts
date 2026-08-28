@@ -42,12 +42,12 @@ export async function loadSession(database: D1Database, id: string) {
 
 export async function createPendingSession(
   database: D1Database,
-  input: Pick<SessionRecord, 'id' | 'event_id' | 'scene_id' | 'selfie_key' | 'selfie_sha256'>,
+  input: Pick<SessionRecord, 'id' | 'event_id' | 'scene_id' | 'scene_name' | 'selfie_key' | 'selfie_sha256'>,
 ) {
   const db = createDb(database);
   const result = await db.run(sql`
-    INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, selfie_sha256, updated_at)
-    VALUES (${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.selfie_key}, ${input.selfie_sha256}, unixepoch())
+    INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, selfie_sha256, updated_at)
+    VALUES (${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.scene_name}, ${input.selfie_key}, ${input.selfie_sha256}, unixepoch())
     ON CONFLICT(id) DO NOTHING
   `);
   return { session: await loadSession(database, input.id), created: result.meta.changes === 1 };

@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { boothReducer, initialBoothState } from '../src/lib/booth-machine';
+import { boothReducer, createInitialBoothState, initialBoothState } from '../src/lib/booth-machine';
 
 describe('boothReducer', () => {
   it('starts with the first scene selected', () => {
-    expect(initialBoothState.sceneId).toBe('hot-dog-stand');
-    expect(boothReducer(initialBoothState, { type: 'open-camera' })).toEqual({
+    const eventState = createInitialBoothState('event-first-scene');
+    expect(eventState.sceneId).toBe('event-first-scene');
+    expect(boothReducer(eventState, { type: 'open-camera' })).toEqual({
       step: 'camera',
-      sceneId: 'hot-dog-stand',
+      sceneId: 'event-first-scene',
       photoDataUrl: null,
     });
+  });
+
+  it('stays on scene selection when an event has no active scenes', () => {
+    expect(boothReducer(createInitialBoothState(null), { type: 'open-camera' })).toEqual(initialBoothState);
   });
 
   it('moves from scene selection to generation after accepting a photo', () => {

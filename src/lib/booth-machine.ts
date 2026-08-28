@@ -11,13 +11,13 @@ export type BoothAction =
   | { type: 'open-camera' }
   | { type: 'accept-photo'; photoDataUrl: string }
   | { type: 'change-scene' }
-  | { type: 'start-over' };
+  | { type: 'start-over'; sceneId?: string | null };
 
-export const initialBoothState: BoothState = {
-  step: 'scene',
-  sceneId: 'hot-dog-stand',
-  photoDataUrl: null,
-};
+export function createInitialBoothState(sceneId: string | null): BoothState {
+  return { step: 'scene', sceneId, photoDataUrl: null };
+}
+
+export const initialBoothState = createInitialBoothState(null);
 
 export function boothReducer(state: BoothState, action: BoothAction): BoothState {
   switch (action.type) {
@@ -32,6 +32,6 @@ export function boothReducer(state: BoothState, action: BoothAction): BoothState
     case 'change-scene':
       return { step: 'scene', sceneId: state.sceneId, photoDataUrl: null };
     case 'start-over':
-      return initialBoothState;
+      return createInitialBoothState(action.sceneId ?? null);
   }
 }

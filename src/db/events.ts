@@ -103,6 +103,66 @@ export async function updateEvent(database: D1Database, id: number, input: Event
   return { id, ...input };
 }
 
+export async function replaceEventWatermark(
+  database: D1Database,
+  id: number,
+  expectedKey: string | null,
+  expectedWidth: number | null,
+  key: string,
+  width: number,
+) {
+  const result = await database.prepare(`
+    UPDATE events
+    SET watermark_image_key = ?, watermark_w = ?
+    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
+  `).bind(key, width, id, expectedKey, expectedWidth).run();
+  return result.meta.changes === 1;
+}
+
+export async function updateEventWatermarkWidth(
+  database: D1Database,
+  id: number,
+  expectedKey: string,
+  width: number,
+) {
+  const result = await database.prepare(`
+    UPDATE events
+    SET watermark_w = ?
+    WHERE id = ? AND watermark_image_key = ?
+  `).bind(width, id, expectedKey).run();
+  return result.meta.changes === 1;
+}
+
+export async function clearEventWatermark(
+  database: D1Database,
+  id: number,
+  expectedKey: string,
+  expectedWidth: number | null,
+) {
+  const result = await database.prepare(`
+    UPDATE events
+    SET watermark_image_key = NULL, watermark_w = NULL
+    WHERE id = ? AND watermark_image_key = ? AND watermark_w IS ?
+  `).bind(id, expectedKey, expectedWidth).run();
+  return result.meta.changes === 1;
+}
+
+export async function restoreEventWatermark(
+  database: D1Database,
+  id: number,
+  expectedKey: string | null,
+  expectedWidth: number | null,
+  key: string,
+  width: number | null,
+) {
+  const result = await database.prepare(`
+    UPDATE events
+    SET watermark_image_key = ?, watermark_w = ?
+    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
+  `).bind(key, width, id, expectedKey, expectedWidth).run();
+  return result.meta.changes === 1;
+}
+
 export async function loadActiveEvents(database: D1Database): Promise<EventRecord[]> {
   const db = createDb(database);
   const events = await db.all<EventRecord>(sql`
