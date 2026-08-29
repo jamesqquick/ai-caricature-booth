@@ -1,0 +1,39 @@
+src/pages/index.astro
+  s_165634f780a284::t_d51ba581bfe40c 6,11,63,65-67,75,137-139
+test/admin-events-list.spec.ts
+  s_8307a75427a7c0::t_8df1079e66afb4 89-105
+test/admin-watermark.spec.ts
+  s_a4001dbb440b04::t_86a59c04ba0538 175-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "48831031f5c346c30853493575cbe98141439a9b",
+  "prompts": {},
+  "sessions": {
+    "s_165634f780a284": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fbaec667cffe74CyBGhRddLv5p",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_8307a75427a7c0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fb6506e90ffeHvYt4jPvBJe4dV",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_a4001dbb440b04": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fb6f94f3fffefggpu90GfGcbES",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
