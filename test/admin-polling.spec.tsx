@@ -123,7 +123,24 @@ describe('OperationsDashboard polling', () => {
 
     expect(screen.getByText('session-1')).toBeTruthy();
     expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toMatch(/Showing the last successful update/);
+    expect(screen.getByRole('alert').textContent).toMatch(/Showing the last successful update/);
+    expect(screen.getByRole('button', { name: 'Retry now' })).toBeTruthy();
+  });
+
+  it('marks refreshes busy and announces recovery while keeping the last good snapshot', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 503 })).mockResolvedValueOnce(new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = renderDashboard();
+
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(screen.getByText('session-1')).toBeTruthy();
+
+    fetchMock.mockImplementation(successfulFetch);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+    expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('true');
+    await waitFor(() => expect(screen.getByText('Live dashboard data recovered.')).toBeTruthy());
+    expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('false');
+    expect(screen.queryByText(/Last successful update:/)).toBeNull();
   });
 
   it('pauses while hidden, refreshes on visibility, and aborts an in-flight request on unmount', async () => {

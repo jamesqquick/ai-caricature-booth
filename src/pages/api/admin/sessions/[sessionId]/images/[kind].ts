@@ -3,6 +3,9 @@ import { ADMIN_IMAGE_KINDS, loadAdminSessionImageKey, type AdminImageKind } from
 
 export const prerender = false;
 
+const SAFE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
 function isAdminImageKind(value: string | undefined): value is AdminImageKind {
   return value !== undefined && ADMIN_IMAGE_KINDS.includes(value as AdminImageKind);
 }
@@ -11,24 +14,37 @@ function safeFilenamePart(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 128) || 'session';
 }
 
+function isOwnedSessionImageKey(sessionId: string, kind: AdminImageKind, key: string) {
+  return key === `sessions/${sessionId}/${kind}.jpg`;
+}
+
+function notFound() {
+  return new Response('Not found', { status: 404 });
+}
+
 export async function GET({ params, url }: { params: Record<string, string | undefined>; url: URL }) {
   const sessionId = params.sessionId;
   const kind = params.kind;
-  if (!sessionId || !isAdminImageKind(kind)) return new Response('Not found', { status: 404 });
+  if (!sessionId || !SESSION_ID_PATTERN.test(sessionId) || !isAdminImageKind(kind)) return notFound();
 
-  const imageKey = await loadAdminSessionImageKey(env.DB, sessionId, kind);
-  if (!imageKey) return new Response('Not found', { status: 404 });
+  try {
+    const imageKey = await loadAdminSessionImageKey(env.DB, sessionId, kind);
+    if (!imageKey || !isOwnedSessionImageKey(sessionId, kind, imageKey)) return notFound();
 
-  const object = await env.SELFIES.get(imageKey);
-  if (!object) return new Response('Not found', { status: 404 });
+    const object = await env.SELFIES.get(imageKey);
+    const contentType = object?.httpMetadata?.contentType;
+    if (!object || !contentType || !SAFE_IMAGE_TYPES.has(contentType)) return notFound();
 
-  const filename = `${kind}-${safeFilenamePart(sessionId)}.jpg`;
-  const headers = new Headers({
-    'Cache-Control': 'private, no-store',
-    'Content-Type': object.httpMetadata?.contentType ?? 'application/octet-stream',
-    'Content-Disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`,
-    'X-Content-Type-Options': 'nosniff',
-  });
+    const filename = `${kind}-${safeFilenamePart(sessionId)}.jpg`;
+    const headers = new Headers({
+      'Cache-Control': 'private, no-store',
+      'Content-Type': contentType,
+      'Content-Disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`,
+      'X-Content-Type-Options': 'nosniff',
+    });
 
-  return new Response(object.body, { headers });
+    return new Response(object.body, { headers });
+  } catch {
+    return notFound();
+  }
 }

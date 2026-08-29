@@ -1,9 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { loadEventBySlug, updateEvent } from '../../../../db/events';
+import { deleteEventWithSessions, EventActivationError, loadEventBySlug, updateEvent, updateEventPrompts } from '../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../lib/admin-access';
-import { EventSlugConflictError, EventValidationError, validateEventUpdate } from '../../../../lib/event-validation';
+import { EventSlugConflictError, EventValidationError, validateEventPrompts, validateEventUpdate } from '../../../../lib/event-validation';
 
 export const prerender = false;
+
+type RouteContext = { request: Request; params: { slug?: string } };
 
 async function readInput(request: Request) {
   if (request.headers.get('content-type')?.includes('application/json')) {
@@ -24,7 +26,19 @@ function redirectWithError(request: Request, slug: string, message: string) {
   return Response.redirect(url, 303);
 }
 
-export async function POST({ request, params }: { request: Request; params: { slug?: string } }) {
+function eventDetailsDto(event: Record<string, unknown>) {
+  return {
+    name: event.name,
+    slug: event.slug,
+    status: event.status,
+    accent_color: event.accent_color,
+    tagline: event.tagline,
+    kiosk_idle_subhead: event.kiosk_idle_subhead,
+    scene_picker_heading: event.scene_picker_heading,
+  };
+}
+
+export async function POST({ request, params }: RouteContext) {
   const json = isJsonRequest(request);
   const currentSlug = params.slug ?? '';
   if (!request.headers.get(ADMIN_EMAIL_HEADER)?.trim()) return Response.json({ error: 'Forbidden' }, { status: 403 });
@@ -33,9 +47,18 @@ export async function POST({ request, params }: { request: Request; params: { sl
     const event = await loadEventBySlug(env.DB, currentSlug);
     if (!event) return Response.json({ error: 'Event not found.' }, { status: 404 });
 
-    const input = validateEventUpdate(await readInput(request));
+    const rawInput = await readInput(request);
+    if (rawInput.section === 'prompts') {
+      const updated = await updateEventPrompts(env.DB, event.id, validateEventPrompts(rawInput));
+      return Response.json({ event: {
+        scene_style_preamble: updated.scene_style_preamble,
+        scene_constraints: updated.scene_constraints,
+      } });
+    }
+
+    const input = validateEventUpdate(rawInput);
     const updated = await updateEvent(env.DB, event.id, input);
-    if (json) return Response.json({ event: updated });
+    if (json) return Response.json({ event: eventDetailsDto({ ...event, ...updated }) });
 
     const url = new URL(`/admin/events/${encodeURIComponent(updated.slug)}`, request.url);
     url.searchParams.set('saved', '1');
@@ -49,8 +72,49 @@ export async function POST({ request, params }: { request: Request; params: { sl
       if (!json) return redirectWithError(request, currentSlug, error.message);
       return Response.json({ error: error.message, field: 'slug' }, { status: 409 });
     }
+    if (error instanceof EventActivationError) {
+      if (!json) return redirectWithError(request, currentSlug, error.message);
+      return Response.json({ error: error.message, fields: { status: error.message } }, { status: 400 });
+    }
     console.error('Admin event update failed', error);
     if (!json) return redirectWithError(request, currentSlug, 'Event could not be saved.');
     return Response.json({ error: 'Event could not be saved.' }, { status: 500 });
+  }
+}
+
+function ownedEventObjects(event: { id: number; watermark_image_key: string | null; watermark_image_key_left: string | null }, sessions: { id: string; objectKeys: string[] }[]) {
+  const keys = [event.watermark_image_key, event.watermark_image_key_left]
+    .filter((key): key is string => Boolean(key?.startsWith(`events/${event.id}/watermarks/`)));
+  for (const session of sessions) {
+    keys.push(...session.objectKeys.filter((key) => key.startsWith(`sessions/${session.id}/`)));
+  }
+  return [...new Set(keys)];
+}
+
+async function deleteEventObjects(keys: string[]) {
+  for (let index = 0; index < keys.length; index += 1000) {
+    try {
+      await env.SELFIES.delete(keys.slice(index, index + 1000));
+    } catch (error) {
+      console.error('Deleted event R2 cleanup failed', error);
+    }
+  }
+}
+
+export async function DELETE({ request, params }: RouteContext) {
+  const slug = params.slug ?? '';
+  if (!request.headers.get(ADMIN_EMAIL_HEADER)?.trim()) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+  try {
+    const event = await loadEventBySlug(env.DB, slug);
+    if (!event) return Response.json({ error: 'Event not found.' }, { status: 404 });
+
+    const result = await deleteEventWithSessions(env.DB, event.id);
+    if (!result.deleted) return Response.json({ error: 'Event changed in another request. Refresh and try again.' }, { status: 409 });
+    await deleteEventObjects(ownedEventObjects(event, result.sessions));
+    return Response.json({ deleted: true, redirectTo: '/admin/events' });
+  } catch (error) {
+    console.error('Admin event deletion failed', error);
+    return Response.json({ error: 'Event could not be deleted.' }, { status: 500 });
   }
 }

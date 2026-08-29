@@ -11,24 +11,89 @@ export const prerender = false;
     title="New event"
   />
 
-  <form class="mt-8 grid max-w-2xl gap-6" method="post" action="/api/admin/events" aria-label="Create event">
+  <form class="mt-8 grid max-w-2xl gap-6" id="create-event-form" method="post" action="/api/admin/events" aria-label="Create event">
     <div class="grid gap-2">
       <label class="font-label text-sm font-bold" for="name">Event name</label>
-      <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" />
+      <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" aria-describedby="name-error" />
+      <p class="m-0 text-sm text-destructive" id="name-error" data-field-error="name" hidden></p>
     </div>
     <div class="grid gap-2">
       <label class="font-label text-sm font-bold" for="slug">URL slug</label>
-      <input class="min-h-12 rounded-xl border border-border bg-card px-4 font-mono text-foreground" id="slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off" aria-describedby="slug-help" />
+      <input class="min-h-12 rounded-xl border border-border bg-card px-4 font-mono text-foreground" id="slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off" aria-describedby="slug-help slug-error" />
       <p class="m-0 text-sm text-muted-foreground" id="slug-help">Lowercase letters, numbers, and single hyphens.</p>
+      <p class="m-0 text-sm text-destructive" id="slug-error" data-field-error="slug" hidden></p>
     </div>
     <div class="grid gap-2">
       <label class="font-label text-sm font-bold" for="status">Status</label>
-      <Select className="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status">
+      <Select className="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="status" name="status" aria-describedby="status-error">
         <option value="draft" selected>Draft</option>
-        <option value="active">Active</option>
         <option value="archived">Archived</option>
       </Select>
+      <p class="m-0 text-sm text-muted-foreground">Add at least one scene after creation before activating the event.</p>
+      <p class="m-0 text-sm text-destructive" id="status-error" data-field-error="status" hidden></p>
     </div>
-    <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Create draft event</button>
+    <div class="flex flex-wrap items-center gap-3">
+      <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Create draft event</button>
+      <p class="m-0 text-sm text-muted-foreground" id="create-event-status" role="status" aria-live="polite"></p>
+    </div>
   </form>
 </AdminLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#create-event-form');
+  const status = document.querySelector<HTMLElement>('#create-event-status');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (form.dataset.pending === 'true') return;
+    form.dataset.pending = 'true';
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLElement>('[data-field-error]').forEach((message) => {
+      message.hidden = true;
+      message.textContent = '';
+    });
+    form.querySelectorAll<HTMLElement>('[aria-invalid="true"]').forEach((field) => {
+      field.removeAttribute('aria-invalid');
+      field.removeAttribute('aria-errormessage');
+    });
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    if (status) status.textContent = 'Creating event...';
+
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(new FormData(form).entries())),
+      });
+      if (response.redirected) {
+        window.location.assign(response.url);
+        return;
+      }
+
+      const result = await response.json<{ error?: string; field?: string; fields?: Record<string, string> }>()
+        .catch((): { error?: string; field?: string; fields?: Record<string, string> } => ({}));
+      if (!response.ok) {
+        const fields = result.fields ?? (result.field ? { [result.field]: result.error ?? 'Check this field.' } : {});
+        Object.entries(fields).forEach(([name, message]) => {
+          const field = form.elements.namedItem(name);
+          const output = form.querySelector<HTMLElement>(`[data-field-error="${name}"]`);
+          if (!(field instanceof HTMLElement) || !output) return;
+          output.textContent = message;
+          output.hidden = false;
+          field.setAttribute('aria-invalid', 'true');
+          field.setAttribute('aria-errormessage', output.id);
+        });
+        form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+        throw new Error(result.error ?? 'Event could not be created. Check the highlighted fields and try again.');
+      }
+      throw new Error('Event could not be created. Try again.');
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : 'Event could not be created. Try again.';
+    } finally {
+      form.dataset.pending = 'false';
+      form.removeAttribute('aria-busy');
+      if (submit) submit.disabled = false;
+    }
+  });
+</script>

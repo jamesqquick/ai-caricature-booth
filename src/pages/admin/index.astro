@@ -6,6 +6,7 @@ import { loadAdminEventOptions, loadAdminSessions, loadAdminStatistics } from '.
 import { SESSION_STATUSES } from '../../db/sessions';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { AdminFilterValidationError, normalizeAdminFilters } from '../../lib/admin-filters';
+import { toAdminSessionListResult } from '../../lib/admin-session-list';
 
 export const prerender = false;
 
@@ -29,7 +30,7 @@ try {
     loadAdminStatistics(env.DB, filters),
   ]);
 
-  dashboard = { events, filters, sessionResult, stats };
+  dashboard = { events, filters, sessionResult: toAdminSessionListResult(sessionResult), stats };
 } catch (error) {
   queryError = error instanceof AdminFilterValidationError
     ? `Invalid ${error.field} filter. Update the filters and try again.`

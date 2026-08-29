@@ -15,7 +15,7 @@ const { adminEmail, pathname } = Astro.props;
     aria-label="Admin navigation"
   >
     <a
-      class="font-display text-xs font-extrabold uppercase tracking-[.09em] text-foreground no-underline"
+      class="inline-flex min-h-11 items-center font-display text-xs font-extrabold uppercase tracking-[.09em] text-foreground no-underline"
       href="/admin"
       aria-label="Caricature Booth admin dashboard"
     >
@@ -33,7 +33,7 @@ const { adminEmail, pathname } = Astro.props;
       <svg class="size-5 fill-none stroke-current stroke-2" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
     </button>
 
-    <div id="admin-navigation-links" class="contents items-center justify-center gap-1 max-[800px]:fixed max-[800px]:inset-0 max-[800px]:z-50 max-[800px]:flex max-[800px]:flex-col max-[800px]:items-stretch max-[800px]:justify-start max-[800px]:gap-6 max-[800px]:bg-background max-[800px]:p-6" data-admin-menu hidden>
+    <div id="admin-navigation-links" class="contents items-center justify-center gap-1 max-[800px]:fixed max-[800px]:inset-0 max-[800px]:z-50 max-[800px]:flex max-[800px]:flex-col max-[800px]:items-stretch max-[800px]:justify-start max-[800px]:gap-6 max-[800px]:overflow-y-auto max-[800px]:bg-background max-[800px]:p-6" data-admin-menu hidden>
       <div class="hidden max-[800px]:flex max-[800px]:justify-end">
         <button
           class="inline-flex size-11 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-primary hover:text-foreground"
@@ -104,9 +104,17 @@ const { adminEmail, pathname } = Astro.props;
 
     const mediaQuery = window.matchMedia('(max-width: 800px)');
     let wasSmall = mediaQuery.matches;
+    let previousOverflow = '';
     const setMenuState = (open) => {
+      const wasOpen = toggle.getAttribute('aria-expanded') === 'true';
       toggle.setAttribute('aria-expanded', String(open));
       menu.hidden = !open;
+      if (mediaQuery.matches && open && !wasOpen) {
+        previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+      } else if (!open && wasOpen) {
+        document.body.style.overflow = previousOverflow;
+      }
     };
 
     const syncMenu = () => {
@@ -114,7 +122,8 @@ const { adminEmail, pathname } = Astro.props;
       if (mediaQuery.matches) {
         setMenuState(wasSmall && toggle.getAttribute('aria-expanded') === 'true');
       } else {
-        setMenuState(true);
+        setMenuState(false);
+        menu.hidden = false;
       }
       wasSmall = mediaQuery.matches;
     };
@@ -130,13 +139,27 @@ const { adminEmail, pathname } = Astro.props;
     menu.addEventListener('click', (event) => {
       if (mediaQuery.matches && event.target instanceof HTMLAnchorElement) {
         setMenuState(false);
-        toggle.focus();
       }
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && mediaQuery.matches && toggle.getAttribute('aria-expanded') === 'true') {
+      const open = mediaQuery.matches && toggle.getAttribute('aria-expanded') === 'true';
+      if (event.key === 'Escape' && open) {
+        event.preventDefault();
         setMenuState(false);
         toggle.focus();
+        return;
+      }
+      if (event.key === 'Tab' && open) {
+        const focusable = Array.from(menu.querySelectorAll('a[href], button:not([disabled])'));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
       }
     });
     mediaQuery.addEventListener('change', syncMenu);

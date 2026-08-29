@@ -1,8 +1,8 @@
 import { ActionError, defineAction } from 'astro:actions';
 import { z } from 'astro/zod';
 import { env } from 'cloudflare:workers';
-import { loadActiveEventById, loadActiveEventBySlug } from '../db/events';
-import { loadActiveEventScene, loadEventScene } from '../db/scenes';
+import { loadActiveEventById, loadActiveEventBySlug, type EventRecord } from '../db/events';
+import { loadEventScene } from '../db/scenes';
 import { createPendingSession, loadSession, transitionSession } from '../db/sessions';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
 import type { Scene } from '../data/scenes';
@@ -35,7 +35,7 @@ export const server = {
         if (!event || event.slug !== eventSlug || existing.scene_id !== sceneId) {
           throw new ActionError({ code: 'BAD_REQUEST', message: 'That generation session does not match this booth.' });
         }
-        const scene = await loadActiveEventScene(env.DB, event.id, existing.scene_id);
+        const scene = await loadEventScene(env.DB, event.id, existing.scene_id);
         if (!scene) throw new ActionError({ code: 'BAD_REQUEST', message: 'That scene is not available for this booth.' });
         if (existing.selfie_sha256 && existing.selfie_sha256 !== selfieSha256) {
           throw new ActionError({ code: 'BAD_REQUEST', message: 'That generation session already has a different photo.' });
@@ -44,13 +44,13 @@ export const server = {
           await ensureSelfieUploaded(existing.id, existing.selfie_key, bytes);
         }
         const current = await loadSession(env.DB, existing.id);
-        if (current) await ensureWorkflow(current, scene, event.watermark_image_key, event.watermark_w);
+        if (current) await ensureWorkflow(current, scene, event);
         return { sessionId: existing.id, status: current?.status ?? existing.status };
       }
 
       const event = await loadActiveEventBySlug(env.DB, eventSlug);
       if (!event) throw new ActionError({ code: 'NOT_FOUND', message: 'This booth is not available.' });
-      const scene = await loadActiveEventScene(env.DB, event.id, sceneId);
+      const scene = await loadEventScene(env.DB, event.id, sceneId);
       if (!scene) throw new ActionError({ code: 'BAD_REQUEST', message: 'That scene is not available for this booth.' });
 
       const selfieKey = `sessions/${idempotencyKey}/selfie.jpg`;
@@ -64,13 +64,13 @@ export const server = {
           await ensureSelfieUploaded(claim.session.id, claim.session.selfie_key, bytes);
         }
         const current = await loadSession(env.DB, claim.session.id);
-        if (current) await ensureWorkflow(current, scene, event.watermark_image_key, event.watermark_w);
+        if (current) await ensureWorkflow(current, scene, event);
         return { sessionId: claim.session.id, status: current?.status ?? claim.session.status };
       }
 
       await ensureSelfieUploaded(idempotencyKey, selfieKey, bytes);
       const current = await loadSession(env.DB, idempotencyKey);
-      if (current) await ensureWorkflow(current, scene, event.watermark_image_key, event.watermark_w);
+      if (current) await ensureWorkflow(current, scene, event);
       return { sessionId: idempotencyKey, status: current?.status ?? claim.session.status };
     },
   }),
@@ -83,7 +83,7 @@ export const server = {
       if (!['completed', 'errored'].includes(session.status)) {
         const event = await loadActiveEventById(env.DB, session.event_id);
         const scene = event ? await loadEventScene(env.DB, event.id, session.scene_id) : null;
-        if (event && scene) await ensureWorkflow(session, scene, event.watermark_image_key, event.watermark_w);
+        if (event && scene) await ensureWorkflow(session, scene, event);
       }
       return {
         status: session.status,
@@ -97,8 +97,7 @@ export const server = {
 async function ensureWorkflow(
   session: NonNullable<Awaited<ReturnType<typeof loadSession>>>,
   scene: Scene,
-  watermarkKey: string | null,
-  watermarkWidth: number | null,
+  event: EventRecord,
 ) {
   if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return;
   if (!(await env.SELFIES.head(session.selfie_key))) return;
@@ -110,10 +109,13 @@ async function ensureWorkflow(
         eventId: session.event_id,
         sceneId: scene.id,
         sceneName: scene.name,
+        sceneDescription: scene.description,
         scenePrompt: scene.prompt,
+        eventPromptPreamble: event.scene_style_preamble,
+        eventConstraints: event.scene_constraints,
         selfieKey: session.selfie_key,
-        watermarkKey,
-        watermarkWidth,
+        watermarkKey: event.watermark_image_key,
+        watermarkWidth: event.watermark_w,
       },
     });
     return;

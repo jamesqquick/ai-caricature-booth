@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { updateEvent } from '../src/db/events';
 import { EventValidationError, validateEventUpdate } from '../src/lib/event-validation';
+import { eventAccentForeground } from '../src/lib/event-accent';
 
 describe('admin event branding', () => {
   it('normalizes and validates attendee copy and accent color', () => {
@@ -24,6 +25,19 @@ describe('admin event branding', () => {
       scene_picker_heading: 'Choose your backdrop',
       accent_color: '#abc123',
     });
+  });
+
+  it.each([
+    ['#ffffff', '#000000'],
+    ['#000000', '#ffffff'],
+  ])('accepts the extreme accent %s with a contrast-safe foreground', (accentColor, foreground) => {
+    expect(validateEventUpdate({
+      name: 'Event',
+      slug: 'event',
+      status: 'draft',
+      accent_color: accentColor,
+    })).toMatchObject({ accent_color: accentColor });
+    expect(eventAccentForeground(accentColor)).toBe(foreground);
   });
 
   it('rejects empty or oversized copy and unsafe colors', () => {
@@ -97,5 +111,28 @@ describe('admin event branding', () => {
     expect(attendeeSource).toContain('kioskIdleSubhead={event.kiosk_idle_subhead}');
     expect(attendeeSource).toContain('scenePickerHeading={event.scene_picker_heading}');
     expect(attendeeSource).toContain('accentColor={event.accent_color}');
+  });
+
+  it('uses event accents without replacing accessible text, focus, or selection cues', async () => {
+    const [booth, styles, button, sceneStep, editor] = await Promise.all([
+      readFile(new URL('../src/components/Photobooth.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8'),
+      readFile(new URL('../src/components/ui/button.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../src/components/steps/SceneStep.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../src/pages/admin/events/[slug].astro', import.meta.url), 'utf8'),
+    ]);
+    const boothRule = styles.match(/\.booth-event \{[^}]+\}/)?.[0] ?? '';
+
+    expect(booth).toContain("'--event-accent-foreground': accentForeground");
+    expect(boothRule).toContain('--primary-hover: var(--event-accent)');
+    expect(boothRule).toContain('--primary-foreground: var(--event-accent-foreground)');
+    expect(boothRule).not.toContain('--ring:');
+    expect(boothRule).not.toContain('--orange:');
+    expect(styles).toContain("button:focus-visible, a:focus-visible { outline: 3px solid var(--ring)");
+    expect(styles).toContain(".scene-card-visual[data-selected='true']");
+    expect(styles).toContain('outline: 2px solid var(--foreground)');
+    expect(button).toContain('border border-current bg-primary text-primary-foreground');
+    expect(sceneStep).toContain('bg-primary text-[.7rem] font-black text-primary-foreground');
+    expect(editor).not.toContain('style="color: var(--preview-accent)"');
   });
 });

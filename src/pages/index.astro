@@ -3,12 +3,12 @@ import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
-import { loadActiveScenesByEvent } from "../db/scenes";
+import { loadScenesByEvent } from "../db/scenes";
 
 export const prerender = false;
 
 const events = await loadActiveEvents(env.DB);
-const sceneSets = await Promise.all(events.map((event) => loadActiveScenesByEvent(env.DB, event.id)));
+const sceneSets = await Promise.all(events.map((event) => loadScenesByEvent(env.DB, event.id)));
 const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
 const featuredScenes = scenes.slice(0, 3);
 const galleryScenes = scenes.slice(0, 4);
@@ -60,12 +60,11 @@ const galleryScenes = scenes.slice(0, 4);
           {
             featuredScenes.map((scene, index) => (
               <article
-                class={`absolute w-[min(18rem,70%)] rounded-[.45rem] bg-[var(--scene-backdrop)] p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
-                style={`--scene-accent: ${scene.accent}; --scene-backdrop: ${scene.backdrop};`}
+                class={`absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
               >
-                <div class="landing-postcard-image relative grid aspect-[4/5] place-items-center overflow-hidden bg-[linear-gradient(140deg,color-mix(in_oklch,var(--scene-accent)_35%,var(--scene-backdrop)),var(--scene-backdrop))]">
-                  <span class="text-[7rem] saturate-[.75]" aria-hidden="true">
-                    {scene.emoji}
+                <div class="landing-postcard-image relative grid aspect-[4/5] place-items-center overflow-hidden bg-muted">
+                  <span class="font-display text-[7rem] font-semibold text-primary/70" aria-hidden="true">
+                    0{index + 1}
                   </span>
                   <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
                     AI INK STUDY
@@ -73,7 +72,7 @@ const galleryScenes = scenes.slice(0, 4);
                 </div>
                 <div class="flex min-h-[3.8rem] items-center justify-between font-display text-base">
                   <span>{scene.name}</span>
-                  <b class="text-[.7rem] tracking-[.12em] text-[var(--scene-accent)]">
+                  <b class="text-[.7rem] tracking-[.12em] text-primary">
                     NYC
                   </b>
                 </div>
@@ -134,11 +133,10 @@ const galleryScenes = scenes.slice(0, 4);
             galleryScenes.map((scene, index) => (
               <article
                 class="overflow-hidden rounded-2xl border border-border bg-card"
-                style={`--scene-accent: ${scene.accent}; --scene-backdrop: ${scene.backdrop};`}
               >
-                <div class="landing-gallery-image relative grid aspect-[1/1.15] place-items-center overflow-hidden bg-[linear-gradient(140deg,color-mix(in_oklch,var(--scene-accent)_35%,var(--scene-backdrop)),var(--scene-backdrop))]">
-                  <span class="text-[5rem]" aria-hidden="true">
-                    {scene.emoji}
+                <div class="landing-gallery-image relative grid aspect-[1/1.15] place-items-center overflow-hidden bg-muted">
+                  <span class="font-display text-[5rem] font-semibold text-primary/70" aria-hidden="true">
+                    0{index + 1}
                   </span>
                   <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
                     POSTCARD 0{index + 1}

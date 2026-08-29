@@ -4,14 +4,18 @@ import { transitionSession } from './db/sessions';
 import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
-import { adminForbiddenResponse, isAdminPath, withVerifiedAdminIdentity } from './lib/admin-access';
+import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
+import { composeGenerationPrompt } from './lib/generation-prompt';
 
 export type CaricaturePayload = {
   sessionId: string;
   eventId: number;
   sceneId: string;
   sceneName: string;
+  sceneDescription?: string;
   scenePrompt: string;
+  eventPromptPreamble?: string | null;
+  eventConstraints?: string | null;
   selfieKey: string;
   watermarkKey: string | null;
   watermarkWidth: number | null;
@@ -20,7 +24,19 @@ export type CaricaturePayload = {
 export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayload> {
   async run(event: WorkflowEvent<CaricaturePayload>, step: WorkflowStep) {
     const workflowStartedAt = Date.now();
-    const { sessionId, eventId, sceneId, sceneName, scenePrompt, selfieKey, watermarkKey, watermarkWidth } = event.payload;
+    const {
+      sessionId,
+      eventId,
+      sceneId,
+      sceneName,
+      sceneDescription,
+      scenePrompt,
+      eventPromptPreamble,
+      eventConstraints,
+      selfieKey,
+      watermarkKey,
+      watermarkWidth,
+    } = event.payload;
     const markErrored = async (error: unknown) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: error instanceof Error ? error.message : String(error) });
     };
@@ -63,7 +79,13 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       try {
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');
-        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), `${scenePrompt} Keep the person recognizable, expressive, and centered. No text.`);
+        const prompt = composeGenerationPrompt({
+          preamble: eventPromptPreamble,
+          scenePrompt,
+          sceneDescription,
+          constraints: eventConstraints,
+        });
+        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), prompt);
         const key = `sessions/${sessionId}/caricature.jpg`;
         await this.env.SELFIES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { eventId: String(eventId), sceneId } });
         await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key });
@@ -89,7 +111,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         console.info(JSON.stringify({ message: 'postcard stored', sessionId, attempt: ctx.attempt, elapsedMs: Date.now() - startedAt }));
         return key;
       } catch (error) {
-        if (ctx.attempt >= 3) {
+        if (ctx.attempt >= (ctx.config.retries?.limit ?? 1)) {
           console.error(JSON.stringify({ message: 'postcard composition failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
           await markErrored('We could not finish your postcard. Please try again.');
         }
@@ -130,6 +152,9 @@ export default {
 
     const verifiedRequest = await withVerifiedAdminIdentity(request, context.access, env, import.meta.env.DEV);
     if (!verifiedRequest) return adminForbiddenResponse(pathname);
+    if (isAdminApiPath(pathname) && !isAllowedAdminMutation(verifiedRequest)) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     return astro.fetch(verifiedRequest, env, context);
   },

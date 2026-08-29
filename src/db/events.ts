@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from './index';
-import { EventSlugConflictError, type CreateEventInput, type EventUpdateInput } from '../lib/event-validation';
+import { EventSlugConflictError, type CreateEventInput, type EventPromptInput, type EventUpdateInput } from '../lib/event-validation';
 
 export type EventRecord = {
   id: number;
@@ -69,6 +69,7 @@ export async function loadEventById(database: D1Database, id: number): Promise<E
 }
 
 export async function createEvent(database: D1Database, input: CreateEventInput, createdBy: string) {
+  if (input.status === 'active') throw new EventActivationError();
   try {
     const result = await database.prepare(`
       INSERT INTO events (slug, name, status, created_by)
@@ -87,12 +88,19 @@ export async function createEvent(database: D1Database, input: CreateEventInput,
 
 export async function updateEvent(database: D1Database, id: number, input: EventUpdateInput) {
   try {
-    const brandingFields = ['tagline', 'kiosk_idle_subhead', 'scene_picker_heading', 'accent_color']
+    const brandingFields = ['tagline', 'kiosk_idle_subhead', 'scene_picker_heading', 'accent_color', 'scene_style_preamble', 'scene_constraints']
       .filter((field) => input[field as keyof EventUpdateInput] !== undefined);
     const fields = ['slug', 'name', 'status', ...brandingFields];
     const values = fields.map((field) => input[field as keyof EventUpdateInput]);
-    await database.prepare(`UPDATE events SET ${fields.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`)
-      .bind(...values, id).run();
+    const result = await database.prepare(`
+      UPDATE events
+      SET ${fields.map((field) => `${field} = ?`).join(', ')}
+      WHERE id = ? AND (
+        ? != 'active'
+        OR EXISTS (SELECT 1 FROM event_scenes WHERE event_id = ?)
+      )
+    `).bind(...values, id, input.status, id).run();
+    if (result.meta?.changes === 0 && input.status === 'active') throw new EventActivationError();
   } catch (error) {
     if (error instanceof Error && /unique|constraint/i.test(error.message)) {
       throw new EventSlugConflictError(input.slug);
@@ -101,6 +109,53 @@ export async function updateEvent(database: D1Database, id: number, input: Event
   }
 
   return { id, ...input };
+}
+
+export async function updateEventPrompts(database: D1Database, id: number, input: EventPromptInput) {
+  await database.prepare(`
+    UPDATE events
+    SET scene_style_preamble = ?, scene_constraints = ?
+    WHERE id = ?
+  `).bind(input.scene_style_preamble, input.scene_constraints, id).run();
+
+  return { id, ...input };
+}
+
+type EventSessionAssetRow = {
+  id: string;
+  selfie_key: string;
+  caricature_key: string | null;
+  postcard_key: string | null;
+};
+
+export async function deleteEventWithSessions(database: D1Database, id: number) {
+  const sessionResult = await database.prepare(`
+    SELECT id, selfie_key, caricature_key, postcard_key
+    FROM sessions
+    WHERE event_id = ?
+  `).bind(id).all<EventSessionAssetRow>();
+
+  const results = await database.batch([
+    database.prepare('DELETE FROM sessions WHERE event_id = ?').bind(id),
+    database.prepare('DELETE FROM event_scenes WHERE event_id = ?').bind(id),
+    database.prepare('DELETE FROM events WHERE id = ?').bind(id),
+  ]);
+
+  return {
+    deleted: results[2]?.meta.changes === 1,
+    sessions: sessionResult.results.map((session) => ({
+      id: session.id,
+      objectKeys: [session.selfie_key, session.caricature_key, session.postcard_key].filter((key): key is string => Boolean(key)),
+    })),
+  };
+}
+
+export class EventActivationError extends Error {
+  name = 'EventActivationError';
+
+  constructor() {
+    super('Add at least one scene before activating this event.');
+  }
 }
 
 export async function replaceEventWatermark(

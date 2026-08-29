@@ -86,6 +86,23 @@ describe('admin events list', () => {
     expect(source).toContain('draft');
     expect(source).toContain('archived');
     expect(source).toContain('No events yet');
+    expect(source).toContain('inline-flex min-h-11 items-center text-foreground');
+    expect(source).toContain('<h2 class="m-0 font-display text-xl">No events yet</h2>');
+  });
+
+  it('renders an actionable safe state when the event query fails', async () => {
+    const source = await readFile(new URL('../src/pages/admin/events/index.astro', import.meta.url), 'utf8');
+    expect(source).toContain("console.error('Admin events list load failed'");
+    expect(source).toContain('Unable to load events');
+    expect(source).toContain('href="/admin/events">Retry</a>');
+  });
+
+  it('links to event creation from the page header', async () => {
+    const source = await readFile(new URL('../src/pages/admin/events/index.astro', import.meta.url), 'utf8');
+
+    expect(source).toContain('slot="actions"');
+    expect(source).toContain('href="/admin/events/new"');
+    expect(source).toContain('New event');
   });
 
   it('does not render removed timezone data', async () => {

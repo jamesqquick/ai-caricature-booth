@@ -14,10 +14,13 @@ export function ImagePreview({ src, alt, downloadHref }: ImagePreviewProps) {
 
   if (status === 'error') {
     return (
-      <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-destructive/40 bg-destructive/10 p-6 text-center">
+      <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-destructive/40 bg-destructive/10 p-6 text-center" role="alert">
         <div>
           <p className="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-destructive">Preview unavailable</p>
           <p className="mb-0 mt-2 text-sm text-muted-foreground">The image could not be loaded.</p>
+          <button className="mt-4 inline-flex min-h-11 items-center rounded-full border border-destructive/50 px-4 text-sm font-bold text-foreground hover:border-destructive" type="button" onClick={() => setStatus('loading')}>
+            Retry preview
+          </button>
         </div>
       </div>
     );
@@ -27,7 +30,7 @@ export function ImagePreview({ src, alt, downloadHref }: ImagePreviewProps) {
     <>
       <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30">
         {status === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground" aria-live="polite">
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground" role="status">
             Loading preview...
           </div>
         )}
@@ -52,7 +55,7 @@ export function ImagePreview({ src, alt, downloadHref }: ImagePreviewProps) {
       <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} download>
         Download image
       </a>
-      <PopupOverlay open={isOpen} label={alt} onClose={() => setIsOpen(false)} returnFocusRef={triggerRef}>
+      <PopupOverlay open={isOpen} label={alt} closeLabel="Close preview" onClose={() => setIsOpen(false)} returnFocusRef={triggerRef}>
         <img src={src} alt={alt} className="max-h-[calc(100dvh-5rem)] w-full object-contain" />
       </PopupOverlay>
     </>

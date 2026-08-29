@@ -2,10 +2,16 @@ import { transform } from '@astrojs/compiler';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { loadActiveEventScene, loadActiveScenesByEvent, loadEventScene } from '../src/db/scenes';
+import { loadEventScene, loadScenesByEvent } from '../src/db/scenes';
 import { createPendingSession } from '../src/db/sessions';
 
 const migrationUrl = new URL('../drizzle/migrations/0006_event_scenes.sql', import.meta.url);
+const simplifyMigrationUrl = new URL('../drizzle/migrations/0007_simplify_event_scenes.sql', import.meta.url);
+
+async function migrateScenes(sqlite: DatabaseSync) {
+  sqlite.exec(await readFile(migrationUrl, 'utf8'));
+  sqlite.exec(await readFile(simplifyMigrationUrl, 'utf8'));
+}
 
 function createSceneDatabase() {
   const sqlite = new DatabaseSync(':memory:');
@@ -47,7 +53,7 @@ function asD1(sqlite: DatabaseSync) {
 describe('event scene migration', () => {
   it('seeds all six scenes for every event that already exists', async () => {
     const { sqlite } = createSceneDatabase();
-    sqlite.exec(await readFile(migrationUrl, 'utf8'));
+    await migrateScenes(sqlite);
 
     const counts = sqlite.prepare(`
       SELECT event_id, COUNT(*) AS scene_count
@@ -74,41 +80,64 @@ describe('event scene migration', () => {
       'Times Square',
       'Brooklyn Bridge',
     ]);
+    expect(sqlite.prepare(`
+      SELECT prompt FROM event_scenes WHERE event_id = 1 AND id = 'hot-dog-stand'
+    `).get()).toEqual({
+      prompt: 'Create a bold editorial ink caricature in the Hot Dog Stand setting.',
+    });
+  });
+
+  it('preserves customized prompts while normalizing untouched seed prompts', async () => {
+    const { sqlite } = createSceneDatabase();
+    sqlite.exec(await readFile(migrationUrl, 'utf8'));
+    const customPrompt = 'Keep the red car visible, then draw a red car.';
+    sqlite.prepare(`
+      UPDATE event_scenes SET description = ?, prompt = ?
+      WHERE event_id = 1 AND id = 'hot-dog-stand'
+    `).run('red car', customPrompt);
+
+    sqlite.exec(await readFile(simplifyMigrationUrl, 'utf8'));
+
+    expect(sqlite.prepare(`
+      SELECT prompt FROM event_scenes WHERE event_id = 1 AND id = 'hot-dog-stand'
+    `).get()).toEqual({ prompt: customPrompt });
+    expect(sqlite.prepare(`
+      SELECT prompt FROM event_scenes WHERE event_id = 1 AND id = 'subway'
+    `).get()).toEqual({
+      prompt: 'Create a bold editorial ink caricature in the Subway Platform setting.',
+    });
   });
 });
 
 describe('event scene queries', () => {
-  it('loads only active scenes for one event in configured order', async () => {
+  it('loads every scene for one event in creation order', async () => {
     const { sqlite, database } = createSceneDatabase();
-    sqlite.exec(await readFile(migrationUrl, 'utf8'));
+    await migrateScenes(sqlite);
     sqlite.exec(`
-      UPDATE event_scenes SET active = 0 WHERE event_id = 1 AND id = 'hot-dog-stand';
       UPDATE event_scenes SET sort_order = 0 WHERE event_id = 1 AND id = 'broadway';
       UPDATE event_scenes SET name = 'Other Event Broadway' WHERE event_id = 2 AND id = 'broadway';
     `);
 
-    const scenes = await loadActiveScenesByEvent(database, 1);
+    const scenes = await loadScenesByEvent(database, 1);
 
-    expect(scenes).toHaveLength(5);
+    expect(scenes).toHaveLength(6);
     expect(scenes[0]).toMatchObject({ id: 'broadway', name: 'Broadway' });
-    expect(scenes.map((scene) => scene.id)).not.toContain('hot-dog-stand');
+    expect(scenes.map((scene) => scene.id)).toContain('hot-dog-stand');
     expect(scenes.map((scene) => scene.name)).not.toContain('Other Event Broadway');
   });
 
-  it('enforces event ownership and active state for new requests without breaking recovery', async () => {
+  it('enforces event ownership for scene requests', async () => {
     const { sqlite, database } = createSceneDatabase();
-    sqlite.exec(await readFile(migrationUrl, 'utf8'));
+    await migrateScenes(sqlite);
     sqlite.exec(`
       INSERT INTO event_scenes (
-        event_id, id, name, description, emoji, accent, backdrop, prompt, sort_order, active
+        event_id, id, name, description, prompt, sort_order
       ) VALUES
-        (1, 'first-only', 'First only', 'First event scene', '1', 'accent', 'backdrop', 'First prompt', 7, 1),
-        (2, 'second-only', 'Second only', 'Second event scene', '2', 'accent', 'backdrop', 'Second prompt', 7, 1);
-      UPDATE event_scenes SET active = 0 WHERE event_id = 1 AND id = 'first-only';
+        (1, 'first-only', 'First only', 'First event scene', 'First prompt', 7),
+        (2, 'second-only', 'Second only', 'Second event scene', 'Second prompt', 7);
     `);
 
-    await expect(loadActiveEventScene(database, 1, 'second-only')).resolves.toBeNull();
-    await expect(loadActiveEventScene(database, 1, 'first-only')).resolves.toBeNull();
+    await expect(loadEventScene(database, 1, 'second-only')).resolves.toBeNull();
     await expect(loadEventScene(database, 1, 'first-only')).resolves.toMatchObject({
       id: 'first-only',
       prompt: 'First prompt',
@@ -150,7 +179,7 @@ describe('event scene runtime wiring', () => {
     const route = await readFile(new URL('../src/pages/e/[slug].astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/e/[slug].astro' })).resolves.toBeTruthy();
-    expect(route).toContain('loadActiveScenesByEvent(env.DB, event.id)');
+    expect(route).toContain('loadScenesByEvent(env.DB, event.id)');
     expect(route).toContain('scenes={scenes}');
   });
 
@@ -177,11 +206,16 @@ describe('event scene runtime wiring', () => {
       readFile(new URL('../src/worker.ts', import.meta.url), 'utf8'),
       readFile(new URL('../src/data/scenes.ts', import.meta.url), 'utf8'),
     ]);
+    const workflowCreate = actions.slice(actions.indexOf('env.CARICATURE_WORKFLOW.create({'));
+    const workflowParams = workflowCreate.slice(0, workflowCreate.indexOf('    });'));
 
-    expect(actions.match(/loadActiveEventScene\(env\.DB, event\.id, (?:existing\.scene_id|sceneId)\)/g)).toHaveLength(2);
-    expect(actions).toContain('sceneName: scene.name');
-    expect(actions).toContain('scenePrompt: scene.prompt');
-    expect(worker).toContain('${scenePrompt} Keep the person recognizable, expressive, and centered. No text.');
+    expect(actions.match(/loadEventScene\(env\.DB, event\.id, (?:existing\.scene_id|sceneId)\)/g)).toHaveLength(2);
+    expect(workflowParams).toContain('sceneName: scene.name');
+    expect(workflowParams).toContain('sceneDescription: scene.description');
+    expect(workflowParams).toContain('scenePrompt: scene.prompt');
+    expect(workflowParams).toContain('eventPromptPreamble: event.scene_style_preamble');
+    expect(workflowParams).toContain('eventConstraints: event.scene_constraints');
+    expect(worker).toContain('composeGenerationPrompt({');
     expect(worker).not.toMatch(/data\/scenes/);
     expect(sceneData).not.toMatch(/export const (scenes|DEFAULT_SCENE_SEEDS)/);
   });

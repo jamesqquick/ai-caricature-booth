@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock('../src/lib/replicate', () => ({ generateCaricature: vi.fn() }));
 import { handle } from '@astrojs/cloudflare/handler';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import worker from '../src/worker';
-import { ADMIN_EMAIL_HEADER, isAdminPath, withVerifiedAdminIdentity } from '../src/lib/admin-access';
+import { ADMIN_EMAIL_HEADER, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from '../src/lib/admin-access';
 
 function contextWithIdentity(email?: string) {
   return {
@@ -112,6 +113,44 @@ describe('admin Access boundary', () => {
     expect(verifiedRequest?.headers.get(ADMIN_EMAIL_HEADER)).toBe('jwt-admin@example.com');
   });
 
+  it('caches remote JWKS resolvers by normalized team domain', async () => {
+    vi.mocked(jwtVerify).mockResolvedValue({
+      payload: { email: 'admin@example.com' },
+      protectedHeader: { alg: 'RS256' },
+    });
+    const config = { ACCESS_AUD: 'audience', ACCESS_TEAM_DOMAIN: 'https://cached.cloudflareaccess.com/' };
+
+    await withVerifiedAdminIdentity(new Request('https://booth.test/admin', { headers: { 'cf-access-jwt-assertion': 'one' } }), undefined, config);
+    await withVerifiedAdminIdentity(new Request('https://booth.test/admin', { headers: { 'cf-access-jwt-assertion': 'two' } }), undefined, {
+      ...config,
+      ACCESS_TEAM_DOMAIN: ' https://cached.cloudflareaccess.com ',
+    });
+
+    expect(createRemoteJWKSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows same-origin and origin-less admin mutations but rejects explicit cross-origin requests', () => {
+    expect(isAllowedAdminMutation(new Request('https://booth.test/api/admin/events', {
+      method: 'POST',
+      headers: { Origin: 'https://booth.test' },
+    }))).toBe(true);
+    expect(isAllowedAdminMutation(new Request('https://booth.test/api/admin/events', { method: 'POST' }))).toBe(true);
+    expect(isAllowedAdminMutation(new Request('https://booth.test/api/admin/events', {
+      method: 'POST',
+      headers: { Origin: 'https://attacker.test' },
+    }))).toBe(false);
+  });
+
+  it('rejects an authenticated cross-origin browser mutation at the Worker boundary', async () => {
+    const response = await worker.fetch(new Request('https://booth.example.com/api/admin/events', {
+      method: 'POST',
+      headers: { Origin: 'https://attacker.example.com' },
+    }), {} as Env, contextWithIdentity('admin@example.com'));
+
+    expect(response.status).toBe(403);
+    expect(handle).not.toHaveBeenCalled();
+  });
+
   it('fails closed when the Access JWT is invalid', async () => {
     vi.mocked(jwtVerify).mockRejectedValue(new Error('Invalid signature'));
     const request = new Request('https://booth.example.com/admin', {
@@ -164,5 +203,21 @@ describe('admin Access boundary', () => {
 
     expect(response.status).toBe(200);
     expect(handle).toHaveBeenCalledWith(request, {}, context);
+  });
+
+  it('documents path-specific Access protection while keeping attendee routes public', async () => {
+    const [readme, operations] = await Promise.all([
+      readFile(new URL('../README.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/admin-dashboard-operations.md', import.meta.url), 'utf8'),
+    ]);
+
+    for (const document of [readme, operations]) {
+      expect(document).toContain('`/admin`');
+      expect(document).toContain('`/admin/*`');
+      expect(document).toContain('`/api/admin`');
+      expect(document).toContain('`/api/admin/*`');
+      expect(document).toContain('attendee routes');
+      expect(document.toLowerCase()).not.toContain('protect all worker traffic');
+    }
   });
 });

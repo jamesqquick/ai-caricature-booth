@@ -40,21 +40,46 @@ const sessionResult = {
 const statsResult = { total: 1, completed: 1, errored: 0, inFlight: 0, completionRate: 100 };
 
 describe('admin APIs', () => {
-  it('returns filtered sessions in the stable response shape without raw image keys', async () => {
+  it('returns only the fields rendered by the polling dashboard', async () => {
     loadAdminSessions.mockResolvedValue(sessionResult);
 
     const response = await getSessions({ url: new URL('https://booth.test/api/admin/sessions?eventId=7&status=completed&page=2') });
+    const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(await response.json()).toEqual(sessionResult);
+    expect(body).toEqual({
+      sessions: [{
+        id: 'session-1',
+        eventName: 'Demo Event',
+        eventSlug: 'demo-event',
+        sceneId: 'subway',
+        sceneName: 'Subway Platform',
+        status: 'completed',
+        updatedAt: 300,
+      }],
+      page: 1,
+      pageSize: 30,
+      total: 1,
+      totalPages: 1,
+    });
+    expect(Object.keys(body as object)).toEqual(['sessions', 'page', 'pageSize', 'total', 'totalPages']);
+    expect(Object.keys((body as typeof sessionResult).sessions[0])).toEqual([
+      'id',
+      'eventName',
+      'eventSlug',
+      'sceneId',
+      'sceneName',
+      'status',
+      'updatedAt',
+    ]);
     expect(loadAdminSessions).toHaveBeenCalledWith(fakeEnv.DB, {
       eventId: 7,
       status: 'completed',
       page: 2,
       pageSize: 30,
     });
-    expect(JSON.stringify(sessionResult)).not.toContain('Key');
+    expect(JSON.stringify(body)).not.toMatch(/eventId|createdAt|completedAt|errorMessage|workflowId|hasSelfie|hasCaricature|hasPostcard|(?:selfie|caricature|postcard)Key/);
   });
 
   it('returns stats using the same normalized filter contract', async () => {

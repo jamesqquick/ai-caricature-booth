@@ -6,14 +6,20 @@ type Props = {
 };
 
 const { eyebrow, title, description } = Astro.props;
+const hasActions = Astro.slots.has('actions');
 ---
 
-<header class="grid grid-cols-[minmax(0,1fr)_minmax(16rem,28rem)] items-end gap-8 border-b border-border pb-8 max-[800px]:grid-cols-1 max-[800px]:gap-4">
-  <div>
+<header class="flex flex-wrap items-end justify-between gap-8 border-b border-border pb-8 max-[800px]:gap-4">
+  <div class="min-w-0 flex-1">
     {eyebrow && <p class="mb-3 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">{eyebrow}</p>}
     <h1 class="m-0 max-w-[16ch] font-display text-[clamp(2.5rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.065em]">
       {title}
     </h1>
   </div>
-  {description && <p class="m-0 max-w-xl leading-[1.65] text-muted-foreground">{description}</p>}
+  {(description || hasActions) && (
+    <div class="ml-auto flex min-w-[16rem] max-w-[28rem] flex-1 flex-wrap items-end justify-between gap-4 max-[800px]:min-w-full">
+      {description && <p class="m-0 max-w-xl leading-[1.65] text-muted-foreground">{description}</p>}
+      {hasActions && <div class="ml-auto"><slot name="actions" /></div>}
+    </div>
+  )}
 </header>

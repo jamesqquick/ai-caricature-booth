@@ -3,15 +3,20 @@
 import { transform } from '@astrojs/compiler';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ImagePreview } from '../src/components/admin/ImagePreview';
 import { loadAdminSession } from '../src/db/admin';
 
 const sessionDetailSource = new NodeURL('../src/pages/admin/sessions/[sessionId].astro', import.meta.url);
 const timelineSource = new NodeURL('../src/components/admin/SessionTimeline.astro', import.meta.url);
 const imagesSource = new NodeURL('../src/components/admin/SessionImages.astro', import.meta.url);
+
+afterEach(() => {
+  cleanup();
+  document.body.style.overflow = '';
+});
 
 function createDatabase(row: unknown) {
   return {
@@ -86,20 +91,48 @@ describe('admin session detail', () => {
   });
 
   it('opens and closes the expanded preview with keyboard controls', () => {
+    document.body.style.overflow = 'auto';
     render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
     const image = screen.getByAltText('Generated caricature');
     fireEvent.load(image);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand Generated caricature' }));
-    expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Close preview' })).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'Expand Generated caricature' });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog');
+    const close = screen.getByRole('button', { name: 'Close preview' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(dialog);
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(close);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Expand Generated caricature' }));
+    expect(document.activeElement).toBe(trigger);
+    expect(document.body.style.overflow).toBe('auto');
+  });
+
+  it('announces image errors and offers a touch-sized retry control', () => {
+    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    fireEvent.error(screen.getByAltText('Generated caricature'));
+
+    expect(screen.getByRole('alert').textContent).toContain('The image could not be loaded.');
+    const retry = screen.getByRole('button', { name: 'Retry preview' });
+    expect(retry.className).toContain('min-h-11');
+    fireEvent.click(retry);
+    expect(screen.getByRole('status').textContent).toContain('Loading preview');
   });
 
   it('keeps the artifact grid stacked on small screens', async () => {
     const source = await readFile(fileURLToPath(imagesSource), 'utf8');
     expect(source).toContain('grid gap-5 sm:grid-cols-2 lg:grid-cols-3');
     expect(source).toContain('min-h-56');
+  });
+
+  it('distinguishes a recoverable data failure from malformed and missing sessions', async () => {
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+    expect(source).toContain("console.error('Admin session detail load failed'");
+    expect(source).toContain('const responseStatus = loadFailed ? 503');
+    expect(source).toContain("loadFailed ? 'Retry' : 'Back to dashboard'");
   });
 });

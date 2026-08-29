@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { createEvent } from '../../../db/events';
+import { createEvent, EventActivationError } from '../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../lib/admin-access';
 import { EventSlugConflictError, EventValidationError, validateCreateEvent } from '../../../lib/event-validation';
 
@@ -29,6 +29,9 @@ export async function POST({ request }: { request: Request }) {
     }
     if (error instanceof EventSlugConflictError) {
       return Response.json({ error: error.message, field: 'slug' }, { status: 409 });
+    }
+    if (error instanceof EventActivationError) {
+      return Response.json({ error: error.message, fields: { status: error.message } }, { status: 400 });
     }
     console.error('Admin event creation failed', error);
     return Response.json({ error: 'Event could not be created.' }, { status: 500 });

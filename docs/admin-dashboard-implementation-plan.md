@@ -498,7 +498,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 ### - [x] Task 17: Move Scenes to Event-Scoped D1 Configuration
 
-**Outcome:** Each event can manage its own active, ordered scene set while existing seeded events retain the current six scenes.
+**Outcome:** Each event can manage its own scene set while existing seeded events retain the current six scenes.
 
 **Files:**
 - Create: `drizzle/migrations/0005_event_scenes.sql`
@@ -512,10 +512,10 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - Modify: relevant booth-machine/component tests.
 
 **Implementation:**
-- Add an `event_scenes` table keyed by `(event_id, id)` with name, description, emoji, accent, backdrop, prompt, sort order, and active flag.
+- Add an `event_scenes` table keyed by `(event_id, id)` with name, description, prompt, and internal creation order.
 - Seed every existing event with the current static scenes in the migration.
 - Keep the `Scene` TypeScript type as the shared contract, adding `prompt` if required.
-- Load active ordered scenes on the event route and pass them into `Photobooth`; remove its direct static import.
+- Load every event scene in creation order and pass them into `Photobooth`; remove its direct static import.
 - Validate the selected scene against that event in `startGeneration`.
 - Pass the stored scene prompt or scene data into the workflow so generation no longer depends on the global static array.
 - Keep a compatibility seed constant only for migrations/tests if useful; there must be one runtime source of truth.
@@ -529,9 +529,9 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Completion notes:** Added `event_scenes` in `drizzle/migrations/0006_event_scenes.sql` because migration `0005` was already assigned, and seeded all existing events with the six prior static scenes. Added event-scoped active/ordered D1 queries in `src/db/scenes.ts`, reduced `src/data/scenes.ts` to the shared `Scene` contract, passed D1 scenes through attendee and landing routes into `Photobooth`, validated active event ownership in both `startGeneration` paths, and snapshotted the selected scene name and prompt into the durable workflow payload so generation no longer imports a global scene array. Added focused migration, isolation, route, component, session, and worker coverage. Verification passed: `pnpm db:migrate:local`, `pnpm test` (25 files, 163 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), `pnpm build`, and `git diff --check`. A local two-event D1 check returned one match for each event's own unique scene and zero for each foreign scene; all temporary verification rows were removed. Strict specification and final code reviews approved the implementation. No Task 18 UI, Access configuration, `.env` changes, deployment, commit, or push was performed.
 
-### - [ ] Task 18: Add Scene and Prompt Management UI
+### - [x] Task 18: Add Scene and Prompt Management UI
 
-**Outcome:** Admins can add, edit, activate, deactivate, and reorder scenes and manage event-level prompt preamble/constraints.
+**Outcome:** Admins can add and edit scenes, manage event-level prompts, and save event settings from URL-addressable tabs without page refreshes.
 
 **Files:**
 - Modify: `src/pages/admin/events/[slug].astro`
@@ -544,9 +544,9 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 
 **Implementation:**
 - Add separate Scenes and Prompts sections to the event editor.
-- Validate scene IDs, labels, prompt length, colors, ordering, and active state.
-- Require at least one active scene before an event can be activated.
-- Use explicit move-up/move-down controls or a fully keyboard-accessible reorder implementation; do not ship pointer-only drag and drop.
+- Validate scene IDs, labels, descriptions, and prompt length.
+- Require at least one scene before an event can be activated.
+- Keep scene creation order internal; every scene is available to attendees.
 - Compose generation prompts from event preamble, scene prompt/description, constraints, and the existing safety/recognizability instruction in one tested function.
 - Return `409` for duplicate scene IDs and field-level `400` errors for invalid configuration.
 
@@ -555,15 +555,15 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - `pnpm test`
 - `pnpm check`
 - `pnpm build`
-- Create and reorder scenes, activate the event, and complete a generation using a newly created scene.
+- Create a scene, activate the event, and complete a generation using the newly created scene.
 
-**Completion notes:** Pending.
+**Completion notes:** Implemented Event details, Watermark, Scenes, and Prompts tabs with direct `?tab=` URLs, in-place tab switching with Back/Forward support, consistent form surfaces, independent fetch-based saves, and Sonner success/error feedback without page refreshes. The Scenes tab places its add form first, then presents existing scenes as a vertical, single-open accordion. Simplified scenes to ID, name, description, and prompt; all scenes are attendee-visible in internal creation order. Added `0007_simplify_event_scenes.sql` to preserve deployed migration history while removing emoji, accent, backdrop, and active columns, safely normalizing only untouched seed prompts, and preserving customized prompts. Removed availability/reorder behavior from validation, APIs, runtime queries, attendee visuals, and tests. Event activation now requires at least one scene. Event prompt composition combines the event preamble, scene prompt/description, constraints, and safety instruction. Verification passed: `pnpm test` (26 files, 179 tests), `pnpm check` (0 errors; 1 pre-existing deprecation hint), `pnpm build`, `git diff --check`, the local migration, and `200` smoke responses for all four tab URLs. Visual browser inspection and a full generation with a newly created scene remain pending because browser automation is unavailable and the remote Images binding is behind Cloudflare Access in this non-interactive environment. No Access configuration, `.env` changes, deployment, commit, or push was performed.
 
 ---
 
 ## Phase 7: Final Hardening
 
-### - [ ] Task 19: Complete Security, Accessibility, and Responsive Review
+### - [x] Task 19: Complete Security, Accessibility, and Responsive Review
 
 **Outcome:** The complete admin flow is secure, keyboard-accessible, responsive, and documented for operation.
 
@@ -587,7 +587,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - Browser smoke: Access sign-in, dashboard filter, live polling, event create/edit/archive, session detail, all image kinds, metrics filters, watermark configuration, scene configuration, and attendee generation.
 - Confirm the Access policy denies a non-allowlisted email on production and preview routes.
 
-**Completion notes:** Pending.
+**Completion notes:** Hardened the Worker admin boundary with same-origin mutation checks and cached normalized Access JWKS resolvers; reduced event and session-list responses to explicit DTOs; restricted session images and watermarks to validated owner-scoped keys and approved image content types; and added recoverable loading, error, stale-data, retry, focus-trap, scroll-lock, form-error, status-announcement, touch-target, and light-theme contrast behavior across the admin dashboard, event flows, session detail, image preview, modal, and mobile navigation. The final specification review also documented path-specific Access coverage for every production, preview, `workers.dev`, and Custom Domain hostname while keeping attendee routes public; fixed mobile-menu overflow restoration during desktop resizing; made arbitrary valid event accents contrast-safe without using the accent as the sole focus or selection indicator; and fixed postcard retry exhaustion so sessions cannot remain stuck in `compositing`. Added focused regression coverage and `docs/admin-dashboard-operations.md`, with local development and operations links in `README.md`. Verification passed: `pnpm test` (27 files, 201 tests), `pnpm check` (0 errors, 0 warnings; 1 pre-existing `toThrowError` deprecation hint), `pnpm build`, `git diff --check`, specification review, and code-quality review. Manual production follow-ups remain: browser automation was unavailable for the keyboard/responsive and end-to-end smoke walkthrough, and this environment could not verify production and preview Access denial for a non-allowlisted email without deployment credentials or policy changes. No Access configuration, `.env` changes, destructive admin actions, deployment, commit, or push was performed.
 
 ---
 

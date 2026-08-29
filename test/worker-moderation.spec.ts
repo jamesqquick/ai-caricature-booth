@@ -28,7 +28,10 @@ const payload = {
   eventId: 1,
   sceneId: 'brooklyn-bridge',
   sceneName: 'Brooklyn Bridge',
+  sceneDescription: 'Stone arches and Manhattan behind the guest.',
   scenePrompt: 'Stored event scene prompt.',
+  eventPromptPreamble: 'Use a bold editorial ink style.',
+  eventConstraints: 'Use the event palette and avoid logos.',
   selfieKey,
   watermarkKey: 'events/1/watermarks/brand.png',
   watermarkWidth: 620,
@@ -38,14 +41,14 @@ function createStep() {
   const calls: string[] = [];
   const step = {
     calls,
-    async do<T>(name: string, configOrCallback: unknown, callback?: (ctx: { attempt: number }) => Promise<T>) {
+    async do<T>(name: string, configOrCallback: unknown, callback?: (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T>) {
       const config = typeof configOrCallback === 'function' ? {} : configOrCallback as { retries?: { limit?: number } };
-      const run = typeof configOrCallback === 'function' ? configOrCallback as (ctx: { attempt: number }) => Promise<T> : callback!;
+      const run = typeof configOrCallback === 'function' ? configOrCallback as (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T> : callback!;
       const attempts = Math.max(1, config.retries?.limit ?? 1);
       calls.push(name);
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
-          return await run({ attempt });
+          return await run({ attempt, config: { retries: config.retries?.limit === undefined ? undefined : { limit: config.retries.limit } } });
         } catch (error) {
           if (attempt === attempts) throw error;
         }
@@ -138,12 +141,31 @@ describe('CaricatureWorkflow moderation gate', () => {
     await workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never);
 
     expect(generateCaricature).toHaveBeenCalledTimes(1);
-    expect(generateCaricature).toHaveBeenCalledWith('test-token', expect.any(Uint8Array), 'Stored event scene prompt. Keep the person recognizable, expressive, and centered. No text.');
+    expect(generateCaricature).toHaveBeenCalledWith(
+      'test-token',
+      expect.any(Uint8Array),
+      'Use a bold editorial ink style. Stored event scene prompt. Stone arches and Manhattan behind the guest. Use the event palette and avoid logos. Keep the person recognizable, expressive, and centered. No text.',
+    );
     expect(buildPostcard).toHaveBeenCalledWith(env, selfie, payload.watermarkKey, payload.watermarkWidth);
     expect(env.SELFIES.put).toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything());
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({
       pipeline_ms: expect.any(Number),
     }));
+  });
+
+  it('marks the session errored after postcard composition exhausts its configured attempts', async () => {
+    const postcardError = new Error('Images binding unavailable');
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(buildPostcard).mockRejectedValue(postcardError);
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toBe(postcardError);
+
+    expect(buildPostcard).toHaveBeenCalledTimes(2);
+    expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
+      error_msg: 'We could not finish your postcard. Please try again.',
+    });
   });
 });

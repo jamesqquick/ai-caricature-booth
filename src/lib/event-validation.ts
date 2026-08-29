@@ -14,8 +14,22 @@ export type EventBrandingInput = {
   accent_color: string;
 };
 
-export type EventUpdateInput = CreateEventInput & Partial<EventBrandingInput>;
+export type EventPromptInput = {
+  scene_style_preamble: string | null;
+  scene_constraints: string | null;
+};
+
+export type EventUpdateInput = CreateEventInput & Partial<EventBrandingInput & EventPromptInput>;
 export type EventField = keyof EventUpdateInput;
+
+export type SceneInput = {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+};
+
+export type SceneField = keyof SceneInput;
 
 export class EventValidationError extends Error {
   name = 'EventValidationError';
@@ -30,6 +44,14 @@ export class EventSlugConflictError extends Error {
 
   constructor(public readonly slug: string) {
     super(`An event with slug "${slug}" already exists.`);
+  }
+}
+
+export class SceneValidationError extends Error {
+  name = 'SceneValidationError';
+
+  constructor(public readonly fields: Partial<Record<SceneField, string>>) {
+    super('Scene configuration is invalid.');
   }
 }
 
@@ -86,6 +108,60 @@ export function validateEventUpdate(input: Partial<Record<EventField, unknown>>)
     else branding.accent_color = accentColor;
   }
 
+  const prompts: Partial<EventPromptInput> = {};
+  for (const field of ['scene_style_preamble', 'scene_constraints'] as const) {
+    if (input[field] === undefined) continue;
+    const value = typeof input[field] === 'string' ? input[field].trim() : '';
+    if (value.length > 2_000) fields[field] = 'Use 2000 characters or fewer.';
+    else prompts[field] = value || null;
+  }
+
   if (Object.keys(fields).length > 0) throw new EventValidationError(fields);
-  return { ...core, ...branding };
+  return { ...core, ...branding, ...prompts };
+}
+
+export function validateEventPrompts(input: Partial<Record<EventField, unknown>>): EventPromptInput {
+  const fields: Partial<Record<EventField, string>> = {};
+  const prompts = {} as EventPromptInput;
+
+  for (const field of ['scene_style_preamble', 'scene_constraints'] as const) {
+    const value = typeof input[field] === 'string' ? input[field].trim() : '';
+    if (value.length > 2_000) fields[field] = 'Use 2000 characters or fewer.';
+    else prompts[field] = value || null;
+  }
+
+  if (Object.keys(fields).length > 0) throw new EventValidationError(fields);
+  return prompts;
+}
+
+export function validateScene(input: Partial<Record<SceneField, unknown>>, requireId = true): SceneInput {
+  const values = {
+    id: typeof input.id === 'string' ? input.id.trim() : '',
+    name: typeof input.name === 'string' ? input.name.trim() : '',
+    description: typeof input.description === 'string' ? input.description.trim() : '',
+    prompt: typeof input.prompt === 'string' ? input.prompt.trim() : '',
+  };
+  const fields: Partial<Record<SceneField, string>> = {};
+
+  if (requireId && !values.id) fields.id = 'Enter a scene ID.';
+  else if (values.id && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(values.id)) {
+    fields.id = 'Use lowercase letters, numbers, and single hyphens only.';
+  } else if (values.id.length > 80) fields.id = 'Use 80 characters or fewer.';
+
+  validateRequiredLength(fields, 'name', values.name, 120);
+  validateRequiredLength(fields, 'description', values.description, 300);
+  validateRequiredLength(fields, 'prompt', values.prompt, 2_000);
+
+  if (Object.keys(fields).length > 0) throw new SceneValidationError(fields);
+  return values;
+}
+
+function validateRequiredLength(
+  fields: Partial<Record<SceneField, string>>,
+  field: 'name' | 'description' | 'prompt',
+  value: string,
+  limit: number,
+) {
+  if (!value) fields[field] = 'This field is required.';
+  else if (value.length > limit) fields[field] = `Use ${limit} characters or fewer.`;
 }

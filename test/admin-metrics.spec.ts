@@ -72,4 +72,16 @@ describe('admin metrics', () => {
     const results = await Promise.all(files.map(async (file) => transform(await readFile(new URL(`../${file}`, import.meta.url), 'utf8'), { filename: file })));
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
+
+  it('allows metric panels to size independently', async () => {
+    const files = [
+      'src/components/admin/OperationsDashboard.tsx',
+      'src/components/admin/MetricsOverview.astro',
+    ];
+
+    for (const file of files) {
+      const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+      expect(source).toContain('grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] items-start');
+    }
+  });
 });

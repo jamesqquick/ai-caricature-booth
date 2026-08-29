@@ -1,8 +1,20 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { EventValidationError, validateCreateEvent } from '../src/lib/event-validation';
 import { createEvent } from '../src/db/events';
 
 describe('event creation validation', () => {
+  it('progressively enhances creation with recoverable field errors and retained values', async () => {
+    const source = await readFile(new URL('../src/pages/admin/events/new.astro', import.meta.url), 'utf8');
+    expect(source).toContain('method="post" action="/api/admin/events"');
+    expect(source).toContain("headers: { 'Content-Type': 'application/json' }");
+    expect(source).toContain("field.setAttribute('aria-invalid', 'true')");
+    expect(source).toContain("field.setAttribute('aria-errormessage', output.id)");
+    expect(source).toContain("querySelector<HTMLElement>('[aria-invalid=\"true\"]')?.focus()");
+    expect(source).toContain('window.location.assign(response.url)');
+    expect(source).not.toContain('form.reset()');
+  });
+
   it('validates core fields and preserves normalized values', () => {
     expect(validateCreateEvent({
       name: '  Spring Booth  ',

@@ -12,7 +12,7 @@ describe('boothReducer', () => {
     });
   });
 
-  it('stays on scene selection when an event has no active scenes', () => {
+  it('stays on scene selection when an event has no scenes', () => {
     expect(boothReducer(createInitialBoothState(null), { type: 'open-camera' })).toEqual(initialBoothState);
   });
 

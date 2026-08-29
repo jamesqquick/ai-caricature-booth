@@ -4,12 +4,12 @@ import EventNotFound from "../../components/EventNotFound.astro";
 import BoothLayout from "../../layouts/BoothLayout.astro";
 import { env } from "cloudflare:workers";
 import { loadActiveEventBySlug } from "../../db/events";
-import { loadActiveScenesByEvent } from "../../db/scenes";
+import { loadScenesByEvent } from "../../db/scenes";
 
 export const prerender = false;
 
 const event = await loadActiveEventBySlug(env.DB, Astro.params.slug ?? "");
-const scenes = event ? await loadActiveScenesByEvent(env.DB, event.id) : [];
+const scenes = event ? await loadScenesByEvent(env.DB, event.id) : [];
 const title = event ? `${event.name} · Caricature Booth` : "Page not found · Caricature Booth";
 
 if (!event) Astro.response.status = 404;

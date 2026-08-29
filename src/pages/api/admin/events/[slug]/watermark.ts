@@ -214,9 +214,11 @@ export async function GET({ request, params }: RouteContext) {
 
   try {
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    if (!event.watermark_image_key) return new Response('Not found', { status: 404 });
+    if (!event.watermark_image_key || !isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+      return new Response('Not found', { status: 404 });
+    }
     const watermark = await env.SELFIES.get(event.watermark_image_key);
-    if (!watermark) return new Response('Not found', { status: 404 });
+    if (!watermark || watermark.httpMetadata?.contentType !== 'image/png') return new Response('Not found', { status: 404 });
     return new Response(watermark.body, {
       headers: {
         'Cache-Control': 'private, no-store',
@@ -224,8 +226,8 @@ export async function GET({ request, params }: RouteContext) {
         'X-Content-Type-Options': 'nosniff',
       },
     });
-  } catch (error) {
-    return errorResponse(error);
+  } catch {
+    return new Response('Not found', { status: 404 });
   }
 }
 

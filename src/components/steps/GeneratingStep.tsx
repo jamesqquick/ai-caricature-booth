@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { actions } from 'astro:actions';
 import { AlertCircle, Check } from 'lucide-react';
 import type { Scene } from '../../data/scenes';
@@ -93,14 +93,14 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
 
   return (
     <div className="step-enter grid w-full max-w-[64rem] grid-cols-[minmax(17rem,28rem)_minmax(18rem,1fr)] items-center gap-[clamp(2rem,7vw,7rem)] max-[800px]:grid-cols-1 max-[800px]:mx-auto max-[800px]:max-w-md max-[800px]:gap-8">
-      <Card className="generation-preview relative aspect-[4/5] w-full rotate-[-2deg] overflow-hidden rounded-[1.2rem] border-border bg-card" data-phase={activePhase} style={{ '--scene-accent': scene.accent } as CSSProperties}>
+      <Card className="generation-preview relative aspect-[4/5] w-full rotate-[-2deg] overflow-hidden rounded-[1.2rem] border-border bg-card" data-phase={activePhase}>
         <img className="size-full object-cover grayscale-[.65] contrast-[1.15]" src={photoDataUrl} alt="Your photo being prepared" />
         <div className="ink-scan" aria-hidden="true" />
         <Badge className="absolute bottom-4 right-4 rotate-[-3deg] border-current bg-[oklch(15%_.018_55)] font-label text-[.58rem] font-extrabold uppercase tracking-[.15em] text-foreground">{generationPhases[activeIndex].label}</Badge>
       </Card>
 
       <div>
-        <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-primary">Creating {scene.name}</p>
+        <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-foreground">Creating {scene.name}</p>
         <h1 className="mb-6 max-w-[13ch] font-display text-[clamp(2.6rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Drawing outside the lines.</h1>
         <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">Your photo is uploaded privately, checked for safety, then transformed into a print-ready postcard.</p>
         {errorMessage && (
@@ -120,7 +120,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
             const active = !isComplete && index === activeIndex;
             return (
               <li
-                className={`flex items-center gap-3 border-b border-border py-3 text-muted-foreground transition-colors ${active ? 'text-primary' : completed ? 'text-success' : ''}`}
+                className={`flex items-center gap-3 border-b border-border py-3 text-muted-foreground transition-colors ${active ? 'font-bold text-foreground' : completed ? 'text-success' : ''}`}
                 aria-current={active ? 'step' : undefined}
                 aria-label={`${label}, ${active ? 'in progress' : completed ? 'completed' : 'upcoming'}`}
                 key={id}

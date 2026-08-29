@@ -47,7 +47,7 @@ function getStatusTone(status: string) {
           {events.map((event) => (
             <tr class="align-middle">
               <th class="px-5 py-4 font-semibold" scope="row">
-                <a class="text-foreground underline decoration-border underline-offset-4 hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>
+                <a class="inline-flex min-h-11 items-center text-foreground underline decoration-border underline-offset-4 hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>
                   {event.name}
                 </a>
               </th>
@@ -70,7 +70,7 @@ function getStatusTone(status: string) {
     </div>
   ) : (
     <div class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center">
-      <h3 class="m-0 font-display text-xl">No events yet</h3>
+       <h2 class="m-0 font-display text-xl">No events yet</h2>
       <p class="mb-0 mt-2 text-sm leading-[1.6] text-muted-foreground">Create an event to make it available in the admin workspace.</p>
     </div>
   )}

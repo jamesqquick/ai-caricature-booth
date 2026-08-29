@@ -1,44 +1,78 @@
 ---
 import { env } from 'cloudflare:workers';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
+import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import { Select } from '../../../components/ui/select';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
+import { loadAdminScenesByEvent } from '../../../db/scenes';
 
 export const prerender = false;
 
 const slug = Astro.params.slug ?? '';
-const event = await loadEventBySlug(env.DB, slug);
+let event: Awaited<ReturnType<typeof loadEventBySlug>> = null;
+let scenes: Awaited<ReturnType<typeof loadAdminScenesByEvent>> = [];
+let loadFailed = false;
+try {
+  event = await loadEventBySlug(env.DB, slug);
+  scenes = event ? await loadAdminScenesByEvent(env.DB, event.id) : [];
+} catch (error) {
+  console.error('Admin event editor load failed', error);
+  loadFailed = true;
+}
 const saved = Astro.url.searchParams.get('saved') === '1';
 const errorMessage = Astro.url.searchParams.get('error');
+const tabs = [
+  { id: 'details', label: 'Event details' },
+  { id: 'watermark', label: 'Watermark' },
+  { id: 'scenes', label: 'Scenes' },
+  { id: 'prompts', label: 'Prompts' },
+] as const;
+const requestedTab = Astro.url.searchParams.get('tab');
+const activeTab = tabs.some(({ id }) => id === requestedTab) ? requestedTab : 'details';
 
-if (!event) Astro.response.status = 404;
+if (!event) Astro.response.status = loadFailed ? 503 : 404;
 ---
 
 <AdminLayout title={event ? `${event.name} · Booth Admin` : 'Event not found · Booth Admin'} description="Edit the core settings for a booth event.">
   {event ? (
     <>
-      <PageHeader
-        title={event.name}
-      />
+      <div data-event-page-header>
+        <PageHeader title={event.name}>
+          <EventDeleteControl
+            slot="actions"
+            client:load
+            eventName={event.name}
+            endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}
+          />
+        </PageHeader>
+      </div>
       <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
 
-      <section class="mt-8 grid max-w-3xl gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading">
+      <nav class="mt-8 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-border bg-card/60 p-1" aria-label="Event settings">
+        {tabs.map((tab) => (
+          <a
+            class:list={['min-h-11 whitespace-nowrap rounded-full px-5 py-3 text-sm font-bold no-underline transition-colors', activeTab === tab.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground']}
+            href={`?tab=${tab.id}`}
+            data-tab-link={tab.id}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+          >{tab.label}</a>
+        ))}
+      </nav>
+
+      <section class="mt-8 grid max-w-3xl gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading" data-tab-panel="watermark" hidden={activeTab !== 'watermark'}>
         <div>
           <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermark</h2>
           <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload a PNG displayed in the bottom-right corner of generated postcards.</p>
         </div>
-        {event.watermark_image_key ? (
-          <div class="grid gap-2">
-            <p class="m-0 font-label text-sm font-bold">Current watermark</p>
-            <div class="flex min-h-40 items-end justify-end rounded-2xl border border-border bg-muted/40 p-4">
-              <img class="max-h-32 max-w-full object-contain" src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} alt="Current postcard watermark" />
-            </div>
+        <div class="grid gap-2">
+          <p class="m-0 font-label text-sm font-bold">Current watermark</p>
+          <div class="flex min-h-40 items-end justify-end rounded-2xl border border-border bg-muted/40 p-4">
+            <img class:list={['max-h-32 max-w-full object-contain', !event.watermark_image_key && 'hidden']} id="watermark-preview" src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} alt="Current postcard watermark" />
+            <p class:list={['m-auto text-sm text-muted-foreground', event.watermark_image_key && 'hidden']} id="watermark-empty">No watermark configured.</p>
           </div>
-        ) : (
-          <p class="m-0 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">No watermark configured.</p>
-        )}
+        </div>
         <form class="grid gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
@@ -51,13 +85,18 @@ if (!event) Astro.response.status = 404;
           </div>
           <div class="flex flex-wrap items-center gap-3 sm:col-span-2">
             <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">{event.watermark_image_key ? 'Save watermark' : 'Upload watermark'}</button>
-            {event.watermark_image_key && <button class="min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive" id="remove-watermark" type="button">Remove watermark</button>}
+            <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" type="button">Remove watermark</button>
             <p class="m-0 text-sm text-muted-foreground" id="watermark-status" role="status" aria-live="polite"></p>
           </div>
         </form>
       </section>
 
-      <form class="mt-8 grid max-w-3xl gap-6" method="post" action={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event">
+      <form class="max-w-3xl" data-event-form="details" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event details">
+        <section class="mt-8 grid gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" data-tab-panel="details" hidden={activeTab !== 'details'}>
+          <div>
+            <h2 class="m-0 font-display text-xl font-semibold">Event details</h2>
+            <p class="mb-0 mt-2 text-sm text-muted-foreground">Configure the event and the copy attendees see throughout the booth.</p>
+          </div>
         <div class="grid gap-2">
           <label class="font-label text-sm font-bold" for="name">Event name</label>
           <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="name" name="name" required maxlength="120" autocomplete="off" value={event.name} />
@@ -73,8 +112,8 @@ if (!event) Astro.response.status = 404;
             {['draft', 'active', 'archived'].map((status) => <option value={status} selected={event.status === status}>{status[0].toUpperCase() + status.slice(1)}</option>)}
           </Select>
         </div>
-        <fieldset class="grid gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5">
-          <legend class="px-2 font-display text-xl font-semibold">Attendee copy and accent</legend>
+        <div class="grid gap-5 border-t border-border pt-5">
+          <h3 class="m-0 font-display text-lg font-semibold">Attendee copy and accent</h3>
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="tagline">Tagline</label>
             <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="tagline" name="tagline" required maxlength="180" value={event.tagline} />
@@ -91,92 +130,420 @@ if (!event) Astro.response.status = 404;
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="accent_color">Accent color</label>
             <input class="h-12 w-24 cursor-pointer rounded-xl border border-border bg-card p-1" id="accent_color" name="accent_color" type="color" value={event.accent_color} aria-describedby="accent-help" />
-            <p class="m-0 text-sm text-muted-foreground" id="accent-help">Used for the attendee booth's primary actions and focus accents.</p>
+            <p class="m-0 text-sm text-muted-foreground" id="accent-help">Used for attendee action backgrounds and decorative accents. Text and focus indicators remain contrast-safe.</p>
           </div>
-          <div class="rounded-2xl border border-border bg-[var(--background)] p-5" style={`--preview-accent: ${event.accent_color}`}>
-            <p class="m-0 font-label text-xs font-bold uppercase tracking-[.12em]" style="color: var(--preview-accent)">Attendee preview</p>
-            <h2 class="mt-3 mb-2 font-display text-3xl">{event.scene_picker_heading}</h2>
-            <p class="m-0 max-w-xl text-muted-foreground">{event.tagline}</p>
-            <p class="mt-5 mb-0 font-label text-xs uppercase tracking-[.1em] text-muted-foreground">{event.kiosk_idle_subhead}</p>
+          <div class="rounded-2xl border border-border bg-[var(--background)] p-5" style={`--preview-accent: ${event.accent_color}`} data-preview-container>
+            <p class="m-0 inline-flex items-center gap-2 font-label text-xs font-bold uppercase tracking-[.12em] text-foreground"><span class="size-3 rounded-full border border-foreground" style="background: var(--preview-accent)" aria-hidden="true"></span>Attendee preview</p>
+            <h2 class="mt-3 mb-2 font-display text-3xl" data-preview-scene-heading>{event.scene_picker_heading}</h2>
+            <p class="m-0 max-w-xl text-muted-foreground" data-preview-tagline>{event.tagline}</p>
+            <p class="mt-5 mb-0 font-label text-xs uppercase tracking-[.1em] text-muted-foreground" data-preview-idle-subhead>{event.kiosk_idle_subhead}</p>
           </div>
-        </fieldset>
-        <div class="flex flex-wrap items-center gap-3">
-          <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>
-          {event.status === 'active' && <a class="inline-flex min-h-12 items-center rounded-full border border-border px-5 font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={`/e/${encodeURIComponent(event.slug)}`}>View attendee page</a>}
         </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>
+            <a class:list={['inline-flex min-h-12 items-center rounded-full border border-border px-5 font-bold text-foreground no-underline hover:border-primary hover:text-primary', event.status !== 'active' && 'hidden']} id="attendee-page-link" href={`/e/${encodeURIComponent(event.slug)}`}>View attendee page</a>
+            <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
+          </div>
+        </section>
       </form>
+      <form class="max-w-3xl" data-event-form="prompts" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event prompts">
+        <section class="mt-8 grid gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-describedby="prompts-help" data-tab-panel="prompts" hidden={activeTab !== 'prompts'}>
+          <div>
+            <h2 class="m-0 font-display text-xl font-semibold">Prompts</h2>
+            <p class="mb-0 mt-2 text-sm text-muted-foreground" id="prompts-help">These event-level instructions wrap every scene prompt. Leave either field empty when it is not needed.</p>
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="scene_style_preamble">Style preamble</label>
+            <textarea class="min-h-32 rounded-xl border border-border bg-card px-4 py-3 text-foreground" id="scene_style_preamble" name="scene_style_preamble" maxlength="2000">{event.scene_style_preamble ?? ''}</textarea>
+          </div>
+          <div class="grid gap-2">
+            <label class="font-label text-sm font-bold" for="scene_constraints">Constraints</label>
+            <textarea class="min-h-32 rounded-xl border border-border bg-card px-4 py-3 text-foreground" id="scene_constraints" name="scene_constraints" maxlength="2000">{event.scene_constraints ?? ''}</textarea>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save prompts</button>
+            <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
+          </div>
+        </section>
+      </form>
+
+      <section class="mt-8 grid max-w-5xl gap-5" aria-labelledby="scenes-heading" data-tab-panel="scenes" hidden={activeTab !== 'scenes'}>
+        <div>
+          <h2 class="m-0 font-display text-2xl font-semibold" id="scenes-heading">Scenes</h2>
+          <p class="mb-0 mt-2 text-sm text-muted-foreground">Every scene is available to attendees in creation order.</p>
+        </div>
+        <form class="grid max-w-3xl gap-4 rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/20 p-5" id="add-scene-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/scenes`}>
+          <div>
+            <h3 class="m-0 font-display text-xl font-semibold">Add scene</h3>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="grid gap-2 font-label text-sm font-bold">Scene ID<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-mono font-normal text-foreground" name="id" required maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="rooftop-party" /></label>
+            <label class="grid gap-2 font-label text-sm font-bold">Name<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="name" required maxlength="120" /></label>
+          </div>
+          <label class="grid gap-2 font-label text-sm font-bold">Description<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="description" required maxlength="300" /></label>
+          <label class="grid gap-2 font-label text-sm font-bold">Generation prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
+          <div class="flex flex-wrap items-center gap-3">
+            <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Add scene</button>
+            <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
+          </div>
+        </form>
+
+        <div class="grid max-w-3xl gap-3" id="scene-list">
+          <p class="m-0 rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground" id="scene-empty" hidden={scenes.length > 0}>No scenes configured yet. Add the first scene above before activating this event.</p>
+          {scenes.map((scene, index) => (
+            <details class="group overflow-hidden rounded-[var(--radius-surface)] border border-border bg-card/40 open:bg-card/65" name="scene-editor" data-scene-accordion open={index === 0}>
+              <summary class="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+                <span class="min-w-0">
+                  <span class="block truncate font-display text-lg font-semibold" data-scene-title>{scene.name}</span>
+                  <span class="mt-1 block truncate font-mono text-xs text-muted-foreground">{scene.id}</span>
+                </span>
+                <svg class="size-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </summary>
+              <form class="grid gap-4 border-t border-border px-5 pb-5 pt-4" data-scene-form data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/scenes/${encodeURIComponent(scene.id)}`}>
+                <label class="grid gap-2 font-label text-sm font-bold">Name<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="name" required maxlength="120" value={scene.name} /></label>
+                <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300">{scene.description}</textarea></label>
+                <label class="grid gap-2 font-label text-sm font-bold">Generation prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000">{scene.prompt}</textarea></label>
+                <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                  <button class="min-h-11 rounded-full bg-primary px-5 font-bold text-primary-foreground hover:bg-primary-hover" type="submit">Save scene</button>
+                </div>
+                <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
+              </form>
+            </details>
+          ))}
+        </div>
+
+        <template id="scene-form-template">
+          <details class="group overflow-hidden rounded-[var(--radius-surface)] border border-border bg-card/40 open:bg-card/65" name="scene-editor" data-scene-accordion open>
+            <summary class="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+              <span class="min-w-0">
+                <span class="block truncate font-display text-lg font-semibold" data-scene-title></span>
+                <span class="mt-1 block truncate font-mono text-xs text-muted-foreground" data-scene-id></span>
+              </span>
+              <svg class="size-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </summary>
+            <form class="grid gap-4 border-t border-border px-5 pb-5 pt-4" data-scene-form>
+              <label class="grid gap-2 font-label text-sm font-bold">Name<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="name" required maxlength="120" /></label>
+              <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300"></textarea></label>
+              <label class="grid gap-2 font-label text-sm font-bold">Generation prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
+              <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+                <button class="min-h-11 rounded-full bg-primary px-5 font-bold text-primary-foreground hover:bg-primary-hover" type="submit">Save scene</button>
+              </div>
+              <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
+            </form>
+          </details>
+        </template>
+      </section>
     </>
   ) : (
-    <section class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center">
-      <h1 class="m-0 font-display text-3xl">Event not found</h1>
-      <p class="mb-0 mt-2 text-muted-foreground">This event may have been removed or the URL may be incorrect.</p>
+    <section class:list={['rounded-[var(--radius-surface)] border p-8 text-center', loadFailed ? 'border-destructive/40 bg-destructive/10' : 'border-dashed border-border bg-muted/30']} role={loadFailed ? 'alert' : undefined}>
+      <h1 class="m-0 font-display text-3xl">{loadFailed ? 'Unable to load event' : 'Event not found'}</h1>
+      <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? 'The event data is temporarily unavailable. Reload the page to try again.' : 'This event may have been removed or the URL may be incorrect.'}</p>
+      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={loadFailed ? Astro.url.pathname : '/admin/events'}>{loadFailed ? 'Retry' : 'Back to events'}</a>
     </section>
   )}
 </AdminLayout>
 
 <script>
-  const form = document.querySelector<HTMLFormElement>('#watermark-form');
-  const fileInput = document.querySelector<HTMLInputElement>('#watermark-file');
-  const widthInput = document.querySelector<HTMLInputElement>('#watermark-width');
-  const removeButton = document.querySelector<HTMLButtonElement>('#remove-watermark');
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const status = document.querySelector<HTMLElement>('#watermark-status');
-  let pending = false;
+  import { toast } from 'sonner';
 
-  async function readError(response: Response) {
-    const result: { error?: string } = await response.json<{ error?: string }>().catch(() => ({}));
-    return result.error ?? 'Watermark could not be updated.';
-  }
+  type ApiResult = {
+    error?: string;
+    field?: string;
+    fields?: Record<string, string>;
+    event?: {
+      name: string;
+      slug: string;
+      status: string;
+      accent_color: string;
+      tagline: string;
+      kiosk_idle_subhead: string;
+      scene_picker_heading: string;
+    };
+    scene?: { id: string; name: string; description: string; prompt: string };
+  };
 
-  function setDisabled(disabled: boolean) {
-    [fileInput, widthInput, removeButton, submitButton].forEach((control) => {
-      if (control) control.disabled = disabled;
-    });
-  }
-
-  async function mutate(message: string, request: () => Promise<Response>) {
-    if (pending || !status) return;
-    pending = true;
-    setDisabled(true);
-    status.textContent = message;
-    let reloading = false;
-    try {
-      const response = await request();
-      if (!response.ok) {
-        status.textContent = await readError(response);
-        return;
-      }
-      reloading = true;
-      window.location.reload();
-    } catch {
-      status.textContent = 'Watermark could not be updated. Check your connection and try again.';
-    } finally {
-      if (!reloading) {
-        pending = false;
-        setDisabled(false);
-      }
+  class FormSubmissionError extends Error {
+    constructor(message: string, readonly fields: Record<string, string> = {}) {
+      super(message);
+      this.name = 'FormSubmissionError';
     }
   }
 
-  form?.addEventListener('submit', async (event) => {
+  let fieldErrorId = 0;
+
+  function clearFieldErrors(form: HTMLFormElement) {
+    form.querySelectorAll('[data-generated-field-error]').forEach((message) => message.remove());
+    form.querySelectorAll('[aria-invalid="true"]').forEach((field) => {
+      field.removeAttribute('aria-invalid');
+      field.removeAttribute('aria-errormessage');
+    });
+  }
+
+  function showFieldErrors(form: HTMLFormElement, fields: Record<string, string>) {
+    Object.entries(fields).forEach(([name, message]) => {
+      const field = form.elements.namedItem(name);
+      if (!(field instanceof HTMLElement)) return;
+      const output = document.createElement('p');
+      output.id = `field-error-${fieldErrorId += 1}`;
+      output.dataset.generatedFieldError = '';
+      output.className = 'm-0 text-sm text-destructive';
+      output.textContent = message;
+      (field.closest('label') ?? field).insertAdjacentElement('afterend', output);
+      field.setAttribute('aria-invalid', 'true');
+      field.setAttribute('aria-errormessage', output.id);
+    });
+    form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }
+
+  function formControls(form: HTMLFormElement): Array<Element & { disabled: boolean }> {
+    return Array.from(form.querySelectorAll<Element>('input, button, textarea, select')).filter(
+      (control): control is Element & { disabled: boolean } => 'disabled' in control,
+    );
+  }
+
+  function payload(form: HTMLFormElement) {
+    return Object.fromEntries(new FormData(form).entries());
+  }
+
+  const tabLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-tab-link]'));
+  const tabPanels = Array.from(document.querySelectorAll<HTMLElement>('[data-tab-panel]'));
+
+  function activateTab(tabId: string, updateHistory = false) {
+    if (!tabLinks.some((link) => link.dataset.tabLink === tabId)) tabId = 'details';
+    tabLinks.forEach((link) => {
+      const selected = link.dataset.tabLink === tabId;
+      if (selected) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+      link.classList.toggle('bg-primary', selected);
+      link.classList.toggle('text-primary-foreground', selected);
+      link.classList.toggle('text-muted-foreground', !selected);
+      link.classList.toggle('hover:bg-muted', !selected);
+      link.classList.toggle('hover:text-foreground', !selected);
+    });
+    tabPanels.forEach((panel) => panel.hidden = panel.dataset.tabPanel !== tabId);
+
+    const currentTab = new URL(window.location.href).searchParams.get('tab') ?? 'details';
+    if (updateHistory && currentTab !== tabId) {
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.searchParams.set('tab', tabId);
+      history.pushState({}, '', `${url.pathname}${url.search}`);
+    }
+  }
+
+  tabLinks.forEach((link) => {
+    link.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      activateTab(link.dataset.tabLink ?? 'details', true);
+    });
+  });
+
+  window.addEventListener('popstate', () => {
+    activateTab(new URL(window.location.href).searchParams.get('tab') ?? 'details');
+  });
+
+  async function readResult(response: Response, fallback: string) {
+    const result = await response.json<ApiResult>().catch((): ApiResult => ({}));
+    if (response.ok) return result;
+    const fields = result.fields ?? (result.field ? { [result.field]: result.error ?? fallback } : {});
+    throw new FormSubmissionError(result.error ?? fallback, fields);
+  }
+
+  async function submitMutation(
+    form: HTMLFormElement,
+    pendingMessage: string,
+    successMessage: string,
+    request: () => Promise<Response>,
+  ) {
+    if (form.dataset.pending === 'true') return null;
+    form.dataset.pending = 'true';
+    form.setAttribute('aria-busy', 'true');
+    clearFieldErrors(form);
+    const statuses = form.querySelectorAll<HTMLElement>('[role="status"]');
+    statuses.forEach((status) => status.textContent = pendingMessage);
+    const controls = formControls(form).filter((control) => !control.disabled);
+    controls.forEach((control) => control.disabled = true);
+    try {
+      const result = await readResult(await request(), `${successMessage} failed.`);
+      statuses.forEach((status) => status.textContent = 'Saved.');
+      toast.success(successMessage);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${successMessage} failed. Check your connection and try again.`;
+      if (error instanceof FormSubmissionError) showFieldErrors(form, error.fields);
+      statuses.forEach((status) => status.textContent = message);
+      toast.error(message);
+      return null;
+    } finally {
+      form.dataset.pending = 'false';
+      form.removeAttribute('aria-busy');
+      controls.forEach((control) => control.disabled = false);
+    }
+  }
+
+  document.querySelectorAll<HTMLFormElement>('[data-event-form]').forEach((eventForm) => {
+    eventForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const eventPayload = { ...payload(eventForm), section: eventForm.dataset.eventForm };
+      const successMessage = eventForm.dataset.eventForm === 'prompts' ? 'Prompts saved.' : 'Event saved.';
+      const result = await submitMutation(eventForm, 'Saving...', successMessage, () => fetch(eventForm.dataset.endpoint ?? '', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(eventPayload),
+      }));
+      if (!result?.event || eventForm.dataset.eventForm !== 'details') return;
+
+      const encodedSlug = encodeURIComponent(result.event.slug);
+      document.querySelectorAll<HTMLFormElement>('[data-endpoint]').forEach((form) => {
+        form.dataset.endpoint = form.dataset.endpoint?.replace(/\/api\/admin\/events\/[^/]+/, `/api/admin/events/${encodedSlug}`);
+      });
+      const attendeeLink = document.querySelector<HTMLAnchorElement>('#attendee-page-link');
+      if (attendeeLink) {
+        attendeeLink.href = `/e/${encodedSlug}`;
+        attendeeLink.classList.toggle('hidden', result.event.status !== 'active');
+      }
+      const pageHeading = document.querySelector<HTMLElement>('[data-event-page-header] h1');
+      const previewHeading = document.querySelector<HTMLElement>('[data-preview-scene-heading]');
+      const previewTagline = document.querySelector<HTMLElement>('[data-preview-tagline]');
+      const previewIdleSubhead = document.querySelector<HTMLElement>('[data-preview-idle-subhead]');
+      const previewContainer = document.querySelector<HTMLElement>('[data-preview-container]');
+      if (pageHeading) pageHeading.textContent = result.event.name;
+      if (previewHeading) previewHeading.textContent = result.event.scene_picker_heading;
+      if (previewTagline) previewTagline.textContent = result.event.tagline;
+      if (previewIdleSubhead) previewIdleSubhead.textContent = result.event.kiosk_idle_subhead;
+      previewContainer?.style.setProperty('--preview-accent', result.event.accent_color);
+      const currentWatermark = document.querySelector<HTMLImageElement>('#watermark-preview');
+      if (currentWatermark) currentWatermark.src = `/api/admin/events/${encodedSlug}/watermark`;
+      document.title = `${result.event.name} · Booth Admin`;
+      const tab = new URL(window.location.href).searchParams.get('tab') ?? 'details';
+      history.replaceState({}, '', `/admin/events/${encodedSlug}?tab=${encodeURIComponent(tab)}`);
+    });
+  });
+
+  const watermarkForm = document.querySelector<HTMLFormElement>('#watermark-form');
+  const watermarkFile = document.querySelector<HTMLInputElement>('#watermark-file');
+  const watermarkWidth = document.querySelector<HTMLInputElement>('#watermark-width');
+  const removeWatermark = document.querySelector<HTMLButtonElement>('#remove-watermark');
+  const saveWatermark = watermarkForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const watermarkPreview = document.querySelector<HTMLImageElement>('#watermark-preview');
+  const watermarkEmpty = document.querySelector<HTMLElement>('#watermark-empty');
+
+  watermarkForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const file = fileInput?.files?.[0];
-    if (!widthInput) return;
-    await mutate('Saving...', () => file
-      ? fetch(`${form.dataset.endpoint}?width=${encodeURIComponent(widthInput.value)}`, {
+    const file = watermarkFile?.files?.[0];
+    if (!watermarkWidth) return;
+    const result = await submitMutation(watermarkForm, 'Saving...', 'Watermark saved.', () => file
+      ? fetch(`${watermarkForm.dataset.endpoint}?width=${encodeURIComponent(watermarkWidth.value)}`, {
           method: 'PUT',
           headers: { 'Content-Type': file.type, 'X-Watermark-Bytes': String(file.size) },
           body: file,
         })
-      : fetch(form.dataset.endpoint ?? '', {
+      : fetch(watermarkForm.dataset.endpoint ?? '', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ width: Number(widthInput.value) }),
+          body: JSON.stringify({ width: Number(watermarkWidth.value) }),
         }));
+    if (!result) return;
+    if (watermarkPreview) {
+      watermarkPreview.src = `${watermarkForm.dataset.endpoint}?v=${Date.now()}`;
+      watermarkPreview.classList.remove('hidden');
+    }
+    watermarkEmpty?.classList.add('hidden');
+    removeWatermark?.classList.remove('hidden');
+    if (saveWatermark) saveWatermark.textContent = 'Save watermark';
+    if (watermarkFile) {
+      watermarkFile.required = false;
+      watermarkFile.value = '';
+    }
   });
 
-  removeButton?.addEventListener('click', async () => {
-    if (!form) return;
-    await mutate('Removing...', () => fetch(form.dataset.endpoint ?? '', { method: 'DELETE' }));
+  removeWatermark?.addEventListener('click', async () => {
+    if (!watermarkForm) return;
+    const result = await submitMutation(watermarkForm, 'Removing...', 'Watermark removed.', () =>
+      fetch(watermarkForm.dataset.endpoint ?? '', { method: 'DELETE' }));
+    if (!result) return;
+    watermarkPreview?.classList.add('hidden');
+    watermarkEmpty?.classList.remove('hidden');
+    removeWatermark.classList.add('hidden');
+    if (saveWatermark) saveWatermark.textContent = 'Upload watermark';
+    if (watermarkFile) watermarkFile.required = true;
+  });
+
+  function scenePayload(form: HTMLFormElement) {
+    const data = payload(form);
+    return { id: data.id, name: data.name, description: data.description, prompt: data.prompt };
+  }
+
+  function connectSceneForm(sceneForm: HTMLFormElement) {
+    sceneForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const sceneData = scenePayload(sceneForm);
+      const result = await submitMutation(sceneForm, 'Saving...', 'Scene saved.', () => fetch(sceneForm.dataset.endpoint ?? '', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sceneData),
+      }));
+      if (result?.scene) {
+        const title = sceneForm.closest<HTMLElement>('[data-scene-accordion]')?.querySelector<HTMLElement>('[data-scene-title]');
+        if (title) title.textContent = result.scene.name;
+      }
+    });
+  }
+
+  function connectSceneAccordion(accordion: HTMLDetailsElement) {
+    accordion.addEventListener('toggle', () => {
+      if (!accordion.open) return;
+      document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]').forEach((other) => {
+        if (other !== accordion) other.open = false;
+      });
+    });
+  }
+
+  document.querySelectorAll<HTMLFormElement>('[data-scene-form]').forEach(connectSceneForm);
+  document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]').forEach(connectSceneAccordion);
+
+  const addSceneForm = document.querySelector<HTMLFormElement>('#add-scene-form');
+  addSceneForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const sceneData = scenePayload(addSceneForm);
+    const result = await submitMutation(addSceneForm, 'Adding...', 'Scene added.', () => fetch(addSceneForm.dataset.endpoint ?? '', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sceneData),
+    }));
+    if (!result?.scene) return;
+
+    const template = document.querySelector<HTMLTemplateElement>('#scene-form-template');
+    const sceneList = document.querySelector<HTMLElement>('#scene-list');
+    const sceneAccordion = template?.content.firstElementChild?.cloneNode(true);
+    if (!(sceneAccordion instanceof HTMLDetailsElement) || !sceneList) return;
+    const sceneForm = sceneAccordion.querySelector<HTMLFormElement>('[data-scene-form]');
+    if (!sceneForm) return;
+    sceneForm.dataset.endpoint = `${addSceneForm.dataset.endpoint}/${encodeURIComponent(result.scene.id)}`;
+    const title = sceneAccordion.querySelector<HTMLElement>('[data-scene-title]');
+    const id = sceneAccordion.querySelector<HTMLElement>('[data-scene-id]');
+    const name = sceneForm.elements.namedItem('name');
+    const description = sceneForm.elements.namedItem('description');
+    const prompt = sceneForm.elements.namedItem('prompt');
+    if (title) title.textContent = result.scene.name;
+    if (id) id.textContent = result.scene.id;
+    if (name instanceof HTMLInputElement) name.value = result.scene.name;
+    if (description instanceof HTMLTextAreaElement) description.value = result.scene.description;
+    if (prompt instanceof HTMLTextAreaElement) prompt.value = result.scene.prompt;
+    connectSceneForm(sceneForm);
+    connectSceneAccordion(sceneAccordion);
+    document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]').forEach((accordion) => accordion.open = false);
+    sceneList.insertAdjacentElement('beforeend', sceneAccordion);
+    document.querySelector<HTMLElement>('#scene-empty')?.remove();
+    addSceneForm.reset();
+    const summary = sceneAccordion.querySelector<HTMLElement>('summary');
+    const addStatus = addSceneForm.querySelector<HTMLElement>('[data-scene-status]');
+    if (addStatus) addStatus.textContent = `Scene added: ${result.scene.name}.`;
+    summary?.focus();
   });
 </script>

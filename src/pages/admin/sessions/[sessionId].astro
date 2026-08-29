@@ -11,8 +11,17 @@ export const prerender = false;
 
 const sessionId = Astro.params.sessionId ?? '';
 const isValidSessionId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId);
-const session = isValidSessionId ? await loadAdminSession(env.DB, sessionId) : null;
-const responseStatus = isValidSessionId ? (session ? 200 : 404) : 400;
+let session: Awaited<ReturnType<typeof loadAdminSession>> = null;
+let loadFailed = false;
+if (isValidSessionId) {
+  try {
+    session = await loadAdminSession(env.DB, sessionId);
+  } catch (error) {
+    console.error('Admin session detail load failed', error);
+    loadFailed = true;
+  }
+}
+const responseStatus = loadFailed ? 503 : isValidSessionId ? (session ? 200 : 404) : 400;
 Astro.response.status = responseStatus;
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -83,9 +92,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
     </>
   ) : (
     <section class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center" role="alert">
-      <h1 class="m-0 font-display text-3xl">{isValidSessionId ? 'Session not found' : 'Invalid session ID'}</h1>
-      <p class="mb-0 mt-2 text-muted-foreground">{isValidSessionId ? 'This session may have been removed or the URL may be incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
-      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin">Back to dashboard</a>
+       <h1 class="m-0 font-display text-3xl">{loadFailed ? 'Unable to load session' : isValidSessionId ? 'Session not found' : 'Invalid session ID'}</h1>
+       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? 'Session data is temporarily unavailable. Retry without changing the session URL.' : isValidSessionId ? 'This session may have been removed or the URL may be incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
+       <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={loadFailed ? Astro.url.pathname : '/admin'}>{loadFailed ? 'Retry' : 'Back to dashboard'}</a>
     </section>
   )}
 </AdminLayout>

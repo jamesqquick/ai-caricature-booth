@@ -7,15 +7,31 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 
 export const prerender = false;
 
-const events = await loadAdminEvents(env.DB);
+let events: Awaited<ReturnType<typeof loadAdminEvents>> = [];
+let loadFailed = false;
+try {
+  events = await loadAdminEvents(env.DB);
+} catch (error) {
+  console.error('Admin events list load failed', error);
+  loadFailed = true;
+  Astro.response.status = 503;
+}
 ---
 
 <AdminLayout
   title="Events · Booth Admin"
   description="Browse and manage every booth event."
 >
-  <PageHeader
-    title="Events"
-  />
-  <EventTable events={events} />
+  <PageHeader title="Events">
+    <a slot="actions" class="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-extrabold text-primary-foreground no-underline hover:bg-primary-hover" href="/admin/events/new">
+      New event
+    </a>
+  </PageHeader>
+  {loadFailed ? (
+    <section class="mt-8 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-6" role="alert">
+      <h2 class="m-0 font-display text-xl">Unable to load events</h2>
+      <p class="mb-0 mt-2 text-sm text-muted-foreground">Event data is temporarily unavailable.</p>
+      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin/events">Retry</a>
+    </section>
+  ) : <EventTable events={events} />}
 </AdminLayout>

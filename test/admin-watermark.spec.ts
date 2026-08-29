@@ -172,6 +172,20 @@ describe('admin event watermark', () => {
     expect(await response.arrayBuffer()).toEqual(new Uint8Array([1, 2, 3]).buffer);
   });
 
+  it.each([
+    ['cross-owned key', { ...event, watermark_image_key: 'events/8/watermarks/other.png' }, imageObject(), false],
+    ['corrupted key', { ...event, watermark_image_key: 'sessions/session-1/postcard.jpg' }, imageObject(), false],
+    ['unsafe content type', event, { ...imageObject(), httpMetadata: { contentType: 'text/html' } }, true],
+  ])('returns an indistinguishable 404 for a %s', async (_label, storedEvent, object, readsObject) => {
+    loadEventBySlug.mockResolvedValue(storedEvent);
+    fakeEnv.SELFIES.get.mockResolvedValue(object);
+
+    const response = await GET({ request: request('GET'), params: { slug: event.slug } });
+
+    expect(response.status).toBe(404);
+    expect(fakeEnv.SELFIES.get).toHaveBeenCalledTimes(readsObject ? 1 : 0);
+  });
+
   it('resizes an existing watermark without replacing its object', async () => {
     const resizeRequest = new Request('https://booth.test/api/admin/events/launch-night/watermark', {
       method: 'PATCH',

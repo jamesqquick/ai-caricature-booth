@@ -11,6 +11,8 @@ type AdminAccessConfig = {
   ACCESS_TEAM_DOMAIN?: string;
 };
 
+const jwksResolvers = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
 export function isAdminApiPath(pathname: string) {
   return pathname === '/api/admin' || pathname.startsWith('/api/admin/');
 }
@@ -31,14 +33,43 @@ function isLoopbackRequest(request: Request) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
+function normalizeTeamDomain(value: string | undefined) {
+  try {
+    return new URL(value?.trim() ?? '').origin;
+  } catch {
+    return null;
+  }
+}
+
+function jwksForTeamDomain(teamDomain: string) {
+  let jwks = jwksResolvers.get(teamDomain);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
+    jwksResolvers.set(teamDomain, jwks);
+  }
+  return jwks;
+}
+
+export function isAllowedAdminMutation(request: Request) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase())) return true;
+  const origin = request.headers.get('origin');
+  if (!origin) return true;
+
+  try {
+    return new URL(origin).origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+}
+
 async function verifiedJwtEmail(request: Request, config: AdminAccessConfig) {
   const audience = config.ACCESS_AUD?.trim();
-  const teamDomain = config.ACCESS_TEAM_DOMAIN?.trim().replace(/\/$/, '');
+  const teamDomain = normalizeTeamDomain(config.ACCESS_TEAM_DOMAIN);
   const token = request.headers.get('cf-access-jwt-assertion');
   if (!audience || !teamDomain || !token) return null;
 
   try {
-    const jwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
+    const jwks = jwksForTeamDomain(teamDomain);
     const { payload } = await jwtVerify(token, jwks, {
       issuer: teamDomain,
       audience,

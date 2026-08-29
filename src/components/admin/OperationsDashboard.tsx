@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Input } from '../ui/input';
 import { Select } from '../ui/select';
-import type { AdminEventOption, AdminStatistics, AdminSessionSummary } from '../../db/admin';
+import type { AdminEventOption, AdminStatistics } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
 import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
+import type { AdminSessionListItem } from '../../lib/admin-session-list';
 
 const POLL_INTERVAL_MS = 15_000;
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -16,7 +17,7 @@ function dateInputValue(timestamp: number | undefined) {
   return timestamp === undefined ? '' : new Date(timestamp * 1000).toISOString().slice(0, 10);
 }
 type SessionResult = {
-  sessions: AdminSessionSummary[];
+  sessions: AdminSessionListItem[];
   page: number;
   pageSize: number;
   total: number;
@@ -68,7 +69,11 @@ export function OperationsDashboard({
   const [sessionResult, setSessionResult] = useState(initialSessionResult);
   const [stats, setStats] = useState(initialStats);
   const [isStale, setIsStale] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recoveryAnnouncement, setRecoveryAnnouncement] = useState('');
+  const [retrySequence, setRetrySequence] = useState(0);
   const isInitialRender = useRef(true);
+  const staleRef = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -85,15 +90,17 @@ export function OperationsDashboard({
 
     const refresh = async () => {
       if (disposed || document.visibilityState === 'hidden') return;
+      setIsRefreshing(true);
       controller?.abort();
-      controller = new AbortController();
+      const refreshController = new AbortController();
+      controller = refreshController;
       const query = filtersToSearchParams(filters).toString();
       const suffix = query ? `?${query}` : '';
 
       try {
         const [sessionsResponse, statsResponse] = await Promise.all([
-          fetch(`/api/admin/sessions${suffix}`, { signal: controller.signal }),
-          fetch(`/api/admin/stats${suffix}`, { signal: controller.signal }),
+          fetch(`/api/admin/sessions${suffix}`, { signal: refreshController.signal }),
+          fetch(`/api/admin/stats${suffix}`, { signal: refreshController.signal }),
         ]);
         if (!sessionsResponse.ok || !statsResponse.ok) {
           throw new Error('Admin polling request failed.');
@@ -107,11 +114,16 @@ export function OperationsDashboard({
 
         setSessionResult(nextSessionResult);
         setStats(nextStats);
+        setRecoveryAnnouncement(staleRef.current ? 'Live dashboard data recovered.' : '');
+        staleRef.current = false;
         setIsStale(false);
       } catch (error) {
         if (disposed || (error instanceof DOMException && error.name === 'AbortError')) return;
+        staleRef.current = true;
+        setRecoveryAnnouncement('');
         setIsStale(true);
       } finally {
+        if (!disposed && controller === refreshController) setIsRefreshing(false);
       }
     };
 
@@ -142,7 +154,7 @@ export function OperationsDashboard({
       controller?.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [filters]);
+  }, [filters, retrySequence]);
 
   const replaceFilters = (nextFilters: AdminFilters) => {
     const params = filtersToSearchParams(nextFilters);
@@ -199,7 +211,7 @@ export function OperationsDashboard({
   ];
 
   return (
-    <>
+    <div aria-busy={isRefreshing}>
       <form
         className="mt-8 grid grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_repeat(2,minmax(8rem,1fr))_auto] items-end gap-3 rounded-[var(--radius-surface)] border border-border bg-card p-5 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1"
         method="get"
@@ -263,9 +275,15 @@ export function OperationsDashboard({
         </a>
       </form>
 
+      <span className="sr-only" role="status" aria-live="polite">{isRefreshing ? 'Refreshing dashboard data...' : ''}</span>
+      <span className="sr-only" role="status" aria-live="polite">{recoveryAnnouncement}</span>
+
       {isStale && (
-        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="status">
-          Live data could not be refreshed. Showing the last successful update.
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">
+          <span>Live data could not be refreshed. Showing the last successful update.</span>
+          <button className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
+            Retry now
+          </button>
         </div>
       )}
 
@@ -279,7 +297,7 @@ export function OperationsDashboard({
         ))}
       </section>
 
-      <div className="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] gap-6 max-[800px]:grid-cols-1">
+      <div className="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] items-start gap-6 max-[800px]:grid-cols-1">
         <section className="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="volume-heading">
           <div>
             <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Volume over time</p>
@@ -391,6 +409,6 @@ export function OperationsDashboard({
           </>
         )}
       </section>
-    </>
+    </div>
   );
 }
