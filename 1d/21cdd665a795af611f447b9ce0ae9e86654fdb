@@ -1,0 +1,21 @@
+.gitignore
+  s_59f412b013c503::t_a427514898234b 11-13
+drizzle/migrations/0008_print_jobs.sql
+  s_59f412b013c503::t_9cdb877814b17f 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1d21cdd665a795af611f447b9ce0ae9e86654fdb",
+  "prompts": {},
+  "sessions": {
+    "s_59f412b013c503": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fc9c8599fffe5COTaaZEAOITSE",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
