@@ -1,0 +1,33 @@
+src/components/admin/SessionTable.astro
+  s_f9352a92366fb0::t_09e7d98c525ec4 32,34,39-40
+src/components/admin/StatCards.astro
+  s_f9352a92366fb0::t_cff70d7dcd7630 12,18
+src/components/admin/StatusBadge.astro
+  s_f9352a92366fb0::t_b7b80b6a0620f3 9
+test/admin-event-create.spec.ts
+  s_9884f63630972f::t_e217f5a268bd2e 42,58-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "205f9649733c506d5835a483a0a4dff6c0c64df6",
+  "prompts": {},
+  "sessions": {
+    "s_9884f63630972f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_faf8bb36effe9anUy3uNKvzAvU",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_f9352a92366fb0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fac918251ffeJpw7H3REtMFfqP",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
