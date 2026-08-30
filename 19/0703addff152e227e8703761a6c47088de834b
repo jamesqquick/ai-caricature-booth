@@ -1,0 +1,21 @@
+drizzle/migrations/0009_literal_event_copy.sql
+  s_fb5dc35a954d86::t_47e31b00b164d1 3-4,8-9
+test/admin-scenes.spec.ts
+  s_fb5dc35a954d86::t_184ec33fc7b781 10,21-22,111-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "190703addff152e227e8703761a6c47088de834b",
+  "prompts": {},
+  "sessions": {
+    "s_fb5dc35a954d86": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_faf74c11affeCpY5c3130w569u",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
