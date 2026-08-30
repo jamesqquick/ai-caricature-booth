@@ -107,7 +107,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
           <Alert className="mt-6 flex max-w-[38rem] items-start gap-3 border-danger/40 bg-danger/10 text-danger">
             <AlertCircle className="mt-0.5 shrink-0" aria-hidden="true" />
             <div>
-              <AlertTitle>We could not finish that postcard.</AlertTitle>
+              <AlertTitle>We couldn't finish that postcard.</AlertTitle>
               <AlertDescription className="text-foreground/80"><p>{errorMessage}</p></AlertDescription>
               <Button className="mt-3" variant="secondary" type="button" onClick={() => window.location.reload()}>Try again</Button>
             </div>

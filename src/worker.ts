@@ -53,7 +53,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
         if (!verdict.safe) {
           await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
-          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: 'This photo could not be used after the safety check. Try a different photo.' });
+          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "We couldn't use this photo after the safety check. Try a different photo." });
           console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
           return false;
         }

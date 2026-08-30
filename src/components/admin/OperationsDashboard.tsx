@@ -281,7 +281,7 @@ export function OperationsDashboard({
 
       {isStale && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">
-          <span>Dashboard data could not be refreshed. Showing the most recent data.</span>
+          <span>Dashboard data couldn't be refreshed. Showing the most recent data.</span>
           <button className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
             Retry now
           </button>
@@ -352,7 +352,7 @@ export function OperationsDashboard({
           <>
             <div className="overflow-x-auto rounded-[var(--radius-surface)] border border-border bg-card">
               <table className="w-full min-w-[62rem] border-collapse text-left text-sm">
-                <caption className="sr-only">Latest filtered generation jobs</caption>
+                 <caption className="sr-only">Filtered booth sessions</caption>
                 <thead className="border-b border-border bg-muted">
                   <tr>
                     {['Session', 'Event', 'Scene', 'Status', 'Updated', 'Details'].map((heading) => (

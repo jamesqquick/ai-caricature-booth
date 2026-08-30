@@ -25,4 +25,5 @@ WHERE description IN (
   'Bow Bridge, leafy shadows, and skyline peeks.',
   'Opening-night lights under a glowing marquee.',
   'Big screens, bright color, and midnight motion.'
-);
+)
+AND event_id IN (1, 2);

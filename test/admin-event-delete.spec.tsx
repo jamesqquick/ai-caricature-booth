@@ -27,7 +27,7 @@ describe('event deletion', () => {
 
   it('keeps the dialog open and reports delete failures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
-      JSON.stringify({ error: 'Event could not be deleted.' }),
+      JSON.stringify({ error: "Couldn't delete the event." }),
       { status: 500, headers: { 'content-type': 'application/json' } },
     )));
     render(<EventDeleteControl eventName="Demo Event" endpoint="/api/admin/events/demo-event" />);
@@ -38,7 +38,7 @@ describe('event deletion', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Permanently delete event' }));
     });
 
-    await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toBe('Event could not be deleted.'));
+    await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toBe("Couldn't delete the event."));
     expect(fetch).toHaveBeenCalledWith('/api/admin/events/demo-event', { method: 'DELETE' });
   });
 

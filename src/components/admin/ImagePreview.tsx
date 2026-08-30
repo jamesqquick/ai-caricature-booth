@@ -52,7 +52,7 @@ export function ImagePreview({ src, alt, downloadHref }: ImagePreviewProps) {
           />
         </button>
       </div>
-      <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} download>
+      <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} aria-label={`Download ${alt}`} download>
         Download
       </a>
       <PopupOverlay open={isOpen} label={alt} closeLabel="Close preview" onClose={() => setIsOpen(false)} returnFocusRef={triggerRef}>

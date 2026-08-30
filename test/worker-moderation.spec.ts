@@ -101,7 +101,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(env.SELFIES.delete).toHaveBeenCalledWith(selfieKey);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: 'This photo could not be used after the safety check. Try a different photo.',
+      error_msg: "We couldn't use this photo after the safety check. Try a different photo.",
     });
   });
 

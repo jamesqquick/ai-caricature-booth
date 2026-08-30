@@ -112,7 +112,7 @@ describe('admin APIs', () => {
     const response = adminErrorResponse(new Error('database details'));
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: 'Admin data could not be loaded.' });
+    expect(await response.json()).toEqual({ error: "Couldn't load admin data." });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
