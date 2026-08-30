@@ -8,6 +8,9 @@ worker-configuration.d.ts
 .wrangler/
 .worktrees/
 
+# Local migration/export artifacts
+tmp/
+
 # dependencies
 node_modules/
 
