@@ -1,11 +1,11 @@
 UPDATE events
 SET tagline = 'Take a selfie, choose a scene, and download your caricature postcard.'
-WHERE id = 1
+WHERE slug = 'nyc-tech-week-2026'
   AND tagline = 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.';
 
 UPDATE events
 SET tagline = 'Turn your conference selfie into a downloadable caricature postcard.'
-WHERE id = 2
+WHERE slug = 'cloudflare-connect-2026'
   AND tagline = 'Turn your conference selfie into a one-of-a-kind caricature postcard.';
 
 UPDATE event_scenes
@@ -24,4 +24,8 @@ WHERE description IN (
   'Opening-night lights under a glowing marquee.',
   'Big screens, bright color, and midnight motion.'
 )
-AND event_id IN (1, 2);
+AND event_id IN (
+  SELECT id
+  FROM events
+  WHERE slug IN ('nyc-tech-week-2026', 'cloudflare-connect-2026')
+);

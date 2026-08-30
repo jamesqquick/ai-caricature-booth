@@ -113,16 +113,30 @@ describe('event scene migration', () => {
     const { sqlite } = createSceneDatabase();
     sqlite.exec(await readFile(migrationUrl, 'utf8'));
     sqlite.exec(`
-      UPDATE events SET tagline = 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.' WHERE id = 1;
-      UPDATE events SET tagline = 'Turn your conference selfie into a one-of-a-kind caricature postcard.' WHERE id = 2;
-      INSERT INTO events (id, slug, tagline) VALUES (3, 'custom-event', 'Turn your conference selfie into a one-of-a-kind caricature postcard.');
+      UPDATE events SET slug = 'custom-one', tagline = 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.' WHERE id = 1;
+      UPDATE events SET slug = 'custom-two', tagline = 'Turn your conference selfie into a one-of-a-kind caricature postcard.' WHERE id = 2;
+      INSERT INTO events (id, slug, tagline) VALUES
+        (3, 'nyc-tech-week-2026', 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.'),
+        (4, 'cloudflare-connect-2026', 'Turn your conference selfie into a one-of-a-kind caricature postcard.'),
+        (5, 'custom-event', 'Turn your conference selfie into a one-of-a-kind caricature postcard.');
+      INSERT INTO event_scenes (event_id, id, name, description, emoji, accent, backdrop, prompt, sort_order, active)
+      VALUES
+        (3, 'hot-dog-stand', 'Hot Dog Stand', 'A curbside classic with mustard-yellow swagger.', '', '', '', '', 1, 1),
+        (5, 'hot-dog-stand', 'Hot Dog Stand', 'A curbside classic with mustard-yellow swagger.', '', '', '', '', 1, 1);
     `);
     sqlite.exec(await readFile(literalCopyMigrationUrl, 'utf8'));
 
     expect(sqlite.prepare('SELECT id, tagline FROM events ORDER BY id').all()).toEqual([
-      { id: 1, tagline: 'Take a selfie, choose a scene, and download your caricature postcard.' },
-      { id: 2, tagline: 'Turn your conference selfie into a downloadable caricature postcard.' },
-      { id: 3, tagline: 'Turn your conference selfie into a one-of-a-kind caricature postcard.' },
+      { id: 1, tagline: 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.' },
+      { id: 2, tagline: 'Turn your conference selfie into a one-of-a-kind caricature postcard.' },
+      { id: 3, tagline: 'Take a selfie, choose a scene, and download your caricature postcard.' },
+      { id: 4, tagline: 'Turn your conference selfie into a downloadable caricature postcard.' },
+      { id: 5, tagline: 'Turn your conference selfie into a one-of-a-kind caricature postcard.' },
+    ]);
+    expect(sqlite.prepare("SELECT event_id, description FROM event_scenes WHERE id = 'hot-dog-stand' AND event_id IN (1, 3, 5) ORDER BY event_id").all()).toEqual([
+      { event_id: 1, description: 'A curbside classic with mustard-yellow swagger.' },
+      { event_id: 3, description: 'A New York hot dog cart with a yellow umbrella and condiment bottles.' },
+      { event_id: 5, description: 'A curbside classic with mustard-yellow swagger.' },
     ]);
   });
 });

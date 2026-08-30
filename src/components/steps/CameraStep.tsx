@@ -32,7 +32,7 @@ export function CameraStep({ onUsePhoto }: Props) {
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatus('error');
-         setErrorMessage('This browser cannot access a camera on this page. Try another browser or device.');
+         setErrorMessage('This browser cannot access a camera on this page. Open the page over HTTPS or try another browser or device.');
         return;
       }
 
