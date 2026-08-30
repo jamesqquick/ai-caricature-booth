@@ -57,6 +57,7 @@ describe('admin dashboard', () => {
 
     expect(source).toContain("import { env } from 'cloudflare:workers'");
     expect(source).toContain('normalizeAdminFilters(params)');
+    expect(source).not.toContain('setUTCDate');
     expect(source).toMatch(/Promise\.all\(\[\s*loadAdminEventOptions\(env\.DB\),\s*loadAdminSessions\(env\.DB, filters\),\s*loadAdminStatistics\(env\.DB, filters\),/);
     expect(source).toContain('title="Dashboard"');
     expect(source).not.toContain('Monitor completion health');
