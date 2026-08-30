@@ -33,6 +33,7 @@ type Props = {
 };
 
 function formatStatus(status: SessionStatus) {
+  if (status === 'errored') return 'Failed';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -53,7 +54,7 @@ function statusTone(status: SessionStatus) {
 }
 
 function formatPipelineDuration(durationMs: number | null) {
-  if (durationMs === null) return 'No data';
+  if (durationMs === null) return 'Not available';
   const seconds = durationMs / 1000;
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
@@ -114,7 +115,7 @@ export function OperationsDashboard({
 
         setSessionResult(nextSessionResult);
         setStats(nextStats);
-        setRecoveryAnnouncement(staleRef.current ? 'Live dashboard data recovered.' : '');
+        setRecoveryAnnouncement(staleRef.current ? 'Dashboard data is current again.' : '');
         staleRef.current = false;
         setIsStale(false);
       } catch (error) {
@@ -205,7 +206,7 @@ export function OperationsDashboard({
   const cards = [
     { label: 'Total', value: stats.total.toLocaleString('en-US') },
     { label: 'Completed', value: stats.completed.toLocaleString('en-US') },
-    { label: 'Errored', value: stats.errored.toLocaleString('en-US') },
+    { label: 'Failed', value: stats.errored.toLocaleString('en-US') },
     { label: 'Completion rate', value: `${stats.completionRate}%` },
     { label: 'Average duration', value: formatPipelineDuration(stats.averagePipelineMs) },
   ];
@@ -280,7 +281,7 @@ export function OperationsDashboard({
 
       {isStale && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">
-          <span>Live data could not be refreshed. Showing the last successful update.</span>
+          <span>Dashboard data could not be refreshed. Showing the most recent data.</span>
           <button className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
             Retry now
           </button>
@@ -288,7 +289,7 @@ export function OperationsDashboard({
       )}
 
       <section className="mt-6 grid grid-cols-5 gap-px overflow-hidden rounded-[var(--radius-surface)] border border-border bg-border max-[900px]:grid-cols-2 max-[520px]:grid-cols-1" aria-labelledby="dashboard-stats-heading">
-        <h2 className="sr-only" id="dashboard-stats-heading">Generation statistics</h2>
+        <h2 className="sr-only" id="dashboard-stats-heading">Session statistics</h2>
         {cards.map((card) => (
           <article className="bg-card p-5" key={card.label}>
             <p className="m-0 font-label text-[.65rem] font-extrabold uppercase tracking-[.12em] text-muted-foreground">{card.label}</p>
@@ -300,8 +301,8 @@ export function OperationsDashboard({
       <div className="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] items-start gap-6 max-[800px]:grid-cols-1">
         <section className="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="volume-heading">
           <div>
-            <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Volume over time</p>
-            <h2 className="m-0 font-display text-2xl font-semibold" id="volume-heading">Generation activity</h2>
+            <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Sessions over time</p>
+            <h2 className="m-0 font-display text-2xl font-semibold" id="volume-heading">Sessions by day</h2>
           </div>
           {stats.volume.length > 0 ? (
             <div className="mt-6 overflow-x-auto" role="list" aria-label="Daily generation volume">
@@ -320,7 +321,7 @@ export function OperationsDashboard({
 
         <section className="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="scene-heading">
           <p className="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Scene usage</p>
-          <h2 className="m-0 font-display text-2xl font-semibold" id="scene-heading">Most-used scenes</h2>
+          <h2 className="m-0 font-display text-2xl font-semibold" id="scene-heading">Sessions by scene</h2>
           {stats.sceneUsage.length > 0 ? (
             <div className="mt-6 grid gap-4" role="list" aria-label="Scene usage counts">
               {stats.sceneUsage.map((scene) => (
@@ -337,15 +338,15 @@ export function OperationsDashboard({
       <section className="mt-8" aria-labelledby="latest-jobs-heading">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <h2 className="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Latest jobs</h2>
+            <h2 className="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Recent sessions</h2>
           </div>
-          <p className="m-0 text-sm text-muted-foreground">{sessionResult.total.toLocaleString('en-US')} {sessionResult.total === 1 ? 'job' : 'jobs'}</p>
+          <p className="m-0 text-sm text-muted-foreground">{sessionResult.total.toLocaleString('en-US')} {sessionResult.total === 1 ? 'session' : 'sessions'}</p>
         </div>
 
         {sessionResult.sessions.length === 0 ? (
           <div className="rounded-[var(--radius-surface)] border border-dashed border-border bg-card p-8 text-center">
-            <h3 className="m-0 font-display text-xl">No generation jobs found</h3>
-            <p className="mt-2 mb-0 text-sm leading-[1.6] text-muted-foreground">No sessions match the current event and status filters.</p>
+            <h3 className="m-0 font-display text-xl">No sessions found</h3>
+            <p className="mt-2 mb-0 text-sm leading-[1.6] text-muted-foreground">No sessions match the selected event, status, or dates.</p>
           </div>
         ) : (
           <>

@@ -123,7 +123,7 @@ describe('OperationsDashboard polling', () => {
 
     expect(screen.getByText('session-1')).toBeTruthy();
     expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
-    expect(screen.getByRole('alert').textContent).toMatch(/Showing the last successful update/);
+    expect(screen.getByRole('alert').textContent).toMatch(/Showing the most recent data/);
     expect(screen.getByRole('button', { name: 'Retry now' })).toBeTruthy();
   });
 
@@ -138,7 +138,7 @@ describe('OperationsDashboard polling', () => {
     fetchMock.mockImplementation(successfulFetch);
     fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
     expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('true');
-    await waitFor(() => expect(screen.getByText('Live dashboard data recovered.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Dashboard data is current again.')).toBeTruthy());
     expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('false');
     expect(screen.queryByText(/Last successful update:/)).toBeNull();
   });

@@ -22,10 +22,10 @@ function imageUrl(kind: AdminImageKind, download = false) {
 <section class="mt-8" aria-labelledby="session-images-heading">
   <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Generated artifacts</p>
-      <h2 class="mt-2 mb-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="session-images-heading">Image inspection</h2>
+      <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Saved images</p>
+      <h2 class="mt-2 mb-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="session-images-heading">Session images</h2>
     </div>
-    <p class="m-0 max-w-sm text-right text-sm leading-[1.5] text-muted-foreground">Private previews are loaded through the authenticated session image proxy.</p>
+    <p class="m-0 max-w-sm text-right text-sm leading-[1.5] text-muted-foreground">Saved images appear below.</p>
   </div>
 
   <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -42,8 +42,8 @@ function imageUrl(kind: AdminImageKind, download = false) {
         ) : (
           <div class="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
             <div>
-              <p class="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-muted-foreground">Artifact unavailable</p>
-              <p class="mb-0 mt-2 text-sm leading-[1.5] text-muted-foreground">No {label.toLowerCase()} was recorded for this session.</p>
+              <p class="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-muted-foreground">Image not saved</p>
+              <p class="mb-0 mt-2 text-sm leading-[1.5] text-muted-foreground">No {label.toLowerCase()} was saved for this session.</p>
             </div>
           </div>
         )}

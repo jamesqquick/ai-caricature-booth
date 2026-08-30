@@ -8,7 +8,7 @@ type Props = {
 
 export function EventFeedback({ saved, errorMessage }: Props) {
   useEffect(() => {
-    if (saved) toast.success('Event saved successfully.');
+    if (saved) toast.success('Event saved.');
     if (errorMessage) toast.error(errorMessage);
   }, [saved, errorMessage]);
 

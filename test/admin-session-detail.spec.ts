@@ -73,9 +73,9 @@ describe('admin session detail', () => {
 
   it('documents observed state and absent persisted stage timestamps', async () => {
     const source = await readFile(fileURLToPath(timelineSource), 'utf8');
-    expect(source).toContain('Observed current state');
-    expect(source).toContain('No persisted timestamp for this stage');
-    expect(source).toContain('Not recorded');
+    expect(source).toContain('Current status');
+    expect(source).toContain('No timestamp stored');
+    expect(source).toContain('Not available');
     expect(source).not.toContain('Date.now');
   });
 
@@ -84,7 +84,7 @@ describe('admin session detail', () => {
     const images = await readFile(fileURLToPath(imagesSource), 'utf8');
     expect(source).toContain('<SessionImages session={session} />');
     expect(images).toContain('/api/admin/sessions/');
-    expect(images).toContain('Artifact unavailable');
+    expect(images).toContain('Image not saved');
     expect(source).not.toContain('selfie_key');
     expect(source).not.toContain('caricature_key');
     expect(source).not.toContain('postcard_key');
@@ -116,11 +116,11 @@ describe('admin session detail', () => {
     render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
     fireEvent.error(screen.getByAltText('Generated caricature'));
 
-    expect(screen.getByRole('alert').textContent).toContain('The image could not be loaded.');
+    expect(screen.getByRole('alert').textContent).toContain("We couldn't load this image.");
     const retry = screen.getByRole('button', { name: 'Retry preview' });
     expect(retry.className).toContain('min-h-11');
     fireEvent.click(retry);
-    expect(screen.getByRole('status').textContent).toContain('Loading preview');
+    expect(screen.getByRole('status').textContent).toContain('Loading image');
   });
 
   it('keeps the artifact grid stacked on small screens', async () => {

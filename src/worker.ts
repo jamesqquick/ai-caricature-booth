@@ -53,7 +53,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
         if (!verdict.safe) {
           await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
-          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "Your photo didn't pass our content check. Please try again with a different selfie." });
+          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: 'This photo could not be used after the safety check. Try a different photo.' });
           console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
           return false;
         }
@@ -61,7 +61,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         return true;
       } catch (error) {
         if (ctx.attempt >= 2) {
-          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: 'We could not check your photo. Please try again.' });
+          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "We couldn't check your photo. Please try again." });
           console.error(JSON.stringify({ message: 'photo moderation failed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'service-error' }));
         }
         throw error;
@@ -92,7 +92,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         return key;
       } catch (error) {
         console.error(JSON.stringify({ message: 'caricature generation failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
-        await markErrored('We could not create your caricature. Please try again.');
+        await markErrored("We couldn't create your caricature. Please try again.");
         throw error;
       }
     });
@@ -113,7 +113,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       } catch (error) {
         if (ctx.attempt >= (ctx.config.retries?.limit ?? 1)) {
           console.error(JSON.stringify({ message: 'postcard composition failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
-          await markErrored('We could not finish your postcard. Please try again.');
+          await markErrored("We couldn't finish your postcard. Please try again.");
         }
         throw error;
       }
