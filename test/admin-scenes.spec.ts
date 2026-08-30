@@ -7,6 +7,7 @@ import { createPendingSession } from '../src/db/sessions';
 
 const migrationUrl = new URL('../drizzle/migrations/0006_event_scenes.sql', import.meta.url);
 const simplifyMigrationUrl = new URL('../drizzle/migrations/0007_simplify_event_scenes.sql', import.meta.url);
+const literalCopyMigrationUrl = new URL('../drizzle/migrations/0009_literal_event_copy.sql', import.meta.url);
 
 async function migrateScenes(sqlite: DatabaseSync) {
   sqlite.exec(await readFile(migrationUrl, 'utf8'));
@@ -17,8 +18,8 @@ function createSceneDatabase() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(`
     PRAGMA foreign_keys = ON;
-    CREATE TABLE events (id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE);
-    INSERT INTO events (id, slug) VALUES (1, 'first-event'), (2, 'second-event');
+     CREATE TABLE events (id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, tagline TEXT NOT NULL DEFAULT '');
+     INSERT INTO events (id, slug) VALUES (1, 'first-event'), (2, 'second-event');
   `);
 
   return { sqlite, database: asD1(sqlite) };
@@ -106,6 +107,23 @@ describe('event scene migration', () => {
     `).get()).toEqual({
       prompt: 'Create a bold editorial ink caricature in the Subway Platform setting.',
     });
+  });
+
+  it('updates only the seeded event copy', async () => {
+    const { sqlite } = createSceneDatabase();
+    sqlite.exec(await readFile(migrationUrl, 'utf8'));
+    sqlite.exec(`
+      UPDATE events SET tagline = 'Take a selfie, pick an iconic NYC scene, and walk away with a printed postcard.' WHERE id = 1;
+      UPDATE events SET tagline = 'Turn your conference selfie into a one-of-a-kind caricature postcard.' WHERE id = 2;
+      INSERT INTO events (id, slug, tagline) VALUES (3, 'custom-event', 'Turn your conference selfie into a one-of-a-kind caricature postcard.');
+    `);
+    sqlite.exec(await readFile(literalCopyMigrationUrl, 'utf8'));
+
+    expect(sqlite.prepare('SELECT id, tagline FROM events ORDER BY id').all()).toEqual([
+      { id: 1, tagline: 'Take a selfie, choose a scene, and download your caricature postcard.' },
+      { id: 2, tagline: 'Turn your conference selfie into a downloadable caricature postcard.' },
+      { id: 3, tagline: 'Turn your conference selfie into a one-of-a-kind caricature postcard.' },
+    ]);
   });
 });
 
