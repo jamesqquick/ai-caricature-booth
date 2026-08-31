@@ -2,7 +2,7 @@ import type { AdminSessionSummary } from '../db/admin';
 
 export type AdminSessionListItem = Pick<
   AdminSessionSummary,
-  'id' | 'eventName' | 'eventSlug' | 'sceneId' | 'sceneName' | 'status' | 'updatedAt'
+  'id' | 'eventName' | 'eventSlug' | 'sceneId' | 'sceneName' | 'status' | 'updatedAt' | 'hasPostcard'
 >;
 
 type AdminSessionResult = {
@@ -23,6 +23,7 @@ export function toAdminSessionListResult(result: AdminSessionResult) {
       sceneName: session.sceneName,
       status: session.status,
       updatedAt: session.updatedAt,
+      hasPostcard: session.hasPostcard,
     })),
     page: result.page,
     pageSize: result.pageSize,

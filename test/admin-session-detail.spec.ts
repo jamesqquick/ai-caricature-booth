@@ -112,6 +112,19 @@ describe('admin session detail', () => {
     expect(document.body.style.overflow).toBe('auto');
   });
 
+  it('supports a compact preview without a download action', () => {
+    render(createElement(ImagePreview, { src: '/postcard-thumb.jpg', fullSrc: '/postcard.jpg', alt: 'Final postcard', compact: true, showDownload: false }));
+    const image = screen.getByAltText('Final postcard');
+    fireEvent.load(image);
+
+    expect(screen.getByRole('button', { name: 'Expand Final postcard' })).toBeTruthy();
+    expect(screen.queryByText('Download image')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Final postcard' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/postcard.jpg');
+  });
+
   it('announces image errors and offers a touch-sized retry control', () => {
     render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
     fireEvent.error(screen.getByAltText('Generated caricature'));

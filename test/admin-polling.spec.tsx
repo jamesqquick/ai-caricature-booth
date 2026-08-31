@@ -104,6 +104,26 @@ describe('OperationsDashboard polling', () => {
     expect(screen.getByText('100%')).toBeTruthy();
   });
 
+  it('renders a postcard thumbnail and opens the full postcard preview', () => {
+    render(
+      <OperationsDashboard
+        events={[]}
+        statuses={['pending', 'completed']}
+        initialFilters={{ page: 1, pageSize: 30 }}
+        initialSessionResult={{ ...initialSessionResult, sessions: [{ ...initialSession, status: 'completed', hasPostcard: true }] }}
+        initialStats={initialStats}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /session-1/ });
+    const image = within(row).getByAltText('Final postcard for session session-1');
+    expect(image.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard?variant=thumbnail');
+    const trigger = within(row).getByRole('button', { name: 'Expand Final postcard for session session-1' });
+    fireEvent.load(image);
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard');
+  });
+
   it('refreshes immediately on filter changes and replaces the dashboard URL', async () => {
     renderDashboard();
 
