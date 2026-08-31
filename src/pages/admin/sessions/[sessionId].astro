@@ -1,5 +1,6 @@
 ---
 import { env } from 'cloudflare:workers';
+import { ImagePreview } from '../../../components/admin/ImagePreview';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import SessionImages from '../../../components/admin/SessionImages.astro';
 import SessionTimeline from '../../../components/admin/SessionTimeline.astro';
@@ -59,22 +60,24 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
           </dl>
         </div>
 
-        <aside class="rounded-[var(--radius-surface)] border border-border bg-muted/30 p-6" aria-labelledby="artifacts-heading">
-          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Saved images</p>
-          <h2 class="mt-2 mb-4 font-display text-2xl tracking-[-.04em]" id="artifacts-heading">Images</h2>
-          <dl class="grid gap-3">
-            {[
-              ['Selfie', session.hasSelfie],
-              ['Caricature', session.hasCaricature],
-              ['Postcard', session.hasPostcard],
-            ].map(([label, available]) => (
-              <div class="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-0 last:pb-0">
-                <dt class="text-sm">{label}</dt>
-                <dd class="m-0 font-label text-xs font-bold uppercase tracking-[.08em]" class:text-success={available} class:text-muted-foreground={!available}>{available ? 'Available' : 'Not available'}</dd>
+        <aside class="rounded-[var(--radius-surface)] border border-border bg-muted/30 p-6" aria-labelledby="final-postcard-heading">
+          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Final output</p>
+          <h2 class="mt-2 mb-4 font-display text-2xl tracking-[-.04em]" id="final-postcard-heading">Final postcard</h2>
+          {session.hasPostcard ? (
+            <ImagePreview
+              client:load
+              src={`/api/admin/sessions/${encodeURIComponent(session.id)}/images/postcard`}
+              alt={`Final postcard for session ${session.id}`}
+              downloadHref={`/api/admin/sessions/${encodeURIComponent(session.id)}/images/postcard?download=1`}
+            />
+          ) : (
+            <div class="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border bg-background/40 p-6 text-center">
+              <div>
+                <p class="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-muted-foreground">{session.status === 'errored' ? 'Postcard unavailable' : 'Postcard in progress'}</p>
+                <p class="mb-0 mt-2 text-sm leading-[1.5] text-muted-foreground">{session.status === 'errored' ? 'No final postcard was recorded for this session.' : 'The final postcard will appear here when generation finishes.'}</p>
               </div>
-            ))}
-          </dl>
-          <p class="mt-5 mb-0 text-sm leading-[1.55] text-muted-foreground">Saved images appear below.</p>
+            </div>
+          )}
         </aside>
       </section>
 

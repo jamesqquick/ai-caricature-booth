@@ -3,7 +3,7 @@
 import { transform } from '@astrojs/compiler';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ImagePreview } from '../src/components/admin/ImagePreview';
@@ -12,10 +12,14 @@ import { loadAdminSession } from '../src/db/admin';
 const sessionDetailSource = new NodeURL('../src/pages/admin/sessions/[sessionId].astro', import.meta.url);
 const timelineSource = new NodeURL('../src/components/admin/SessionTimeline.astro', import.meta.url);
 const imagesSource = new NodeURL('../src/components/admin/SessionImages.astro', import.meta.url);
+const originalComplete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete');
+const originalNaturalWidth = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'naturalWidth');
 
 afterEach(() => {
   cleanup();
   document.body.style.overflow = '';
+  if (originalComplete) Object.defineProperty(HTMLImageElement.prototype, 'complete', originalComplete);
+  if (originalNaturalWidth) Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', originalNaturalWidth);
 });
 
 function createDatabase(row: unknown) {
@@ -83,6 +87,13 @@ describe('admin session detail', () => {
     const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
     const images = await readFile(fileURLToPath(imagesSource), 'utf8');
     expect(source).toContain('<SessionImages session={session} />');
+    expect(source).toContain("import { ImagePreview } from '../../../components/admin/ImagePreview';");
+    expect(source).toContain('id="final-postcard-heading"');
+    expect(source).toContain('Final output');
+    expect(source).toContain('src={`/api/admin/sessions/${encodeURIComponent(session.id)}/images/postcard`}');
+    expect(source).toContain('downloadHref={`/api/admin/sessions/${encodeURIComponent(session.id)}/images/postcard?download=1`}');
+    expect(source).toContain('Postcard unavailable');
+    expect(source).toContain('Postcard in progress');
     expect(images).toContain('/api/admin/sessions/');
     expect(images).toContain('Image not saved');
     expect(source).not.toContain('selfie_key');
@@ -110,6 +121,16 @@ describe('admin session detail', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe('auto');
+  });
+
+  it('recognizes a cached image after the preview island hydrates', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, value: true });
+    Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', { configurable: true, value: 640 });
+
+    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Expand Generated caricature' }).getAttribute('disabled')).toBeNull());
+    expect(screen.queryByText('Loading preview...')).toBeNull();
   });
 
   it('announces image errors and offers a touch-sized retry control', () => {
