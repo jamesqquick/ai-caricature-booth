@@ -33,8 +33,8 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
     <>
       <div className={`relative overflow-hidden rounded-xl border border-border bg-muted/30 ${compact ? 'aspect-[3/2]' : ''}`}>
         {status === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground" role="status">
-            Loading preview...
+          <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${compact ? 'font-label text-[.58rem] font-bold uppercase tracking-[.08em]' : 'text-sm'}`} role="status">
+            {compact ? 'Loading' : 'Loading preview...'}
           </div>
         )}
         <button
@@ -47,9 +47,10 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
         >
           <img
             src={src}
-            alt={alt}
+            alt={status === 'loaded' ? alt : ''}
+            aria-hidden={status !== 'loaded'}
             loading="lazy"
-            className={`w-full object-contain ${compact ? 'h-full' : 'h-56'}`}
+            className={`w-full object-contain transition-opacity ${compact ? 'h-full' : 'h-56'} ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setStatus('loaded')}
             onError={() => setStatus('error')}
           />

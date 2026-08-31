@@ -92,8 +92,9 @@ describe('admin session detail', () => {
 
   it('opens and closes the expanded preview with keyboard controls', () => {
     document.body.style.overflow = 'auto';
-    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
-    const image = screen.getByAltText('Generated caricature');
+    const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a preview image.');
     fireEvent.load(image);
     const trigger = screen.getByRole('button', { name: 'Expand Generated caricature' });
     fireEvent.click(trigger);
@@ -113,10 +114,12 @@ describe('admin session detail', () => {
   });
 
   it('supports a compact preview without a download action', () => {
-    render(createElement(ImagePreview, { src: '/postcard-thumb.jpg', fullSrc: '/postcard.jpg', alt: 'Final postcard', compact: true, showDownload: false }));
-    const image = screen.getByAltText('Final postcard');
+    const { container } = render(createElement(ImagePreview, { src: '/postcard-thumb.jpg', fullSrc: '/postcard.jpg', alt: 'Final postcard', compact: true, showDownload: false }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a compact preview image.');
     fireEvent.load(image);
 
+    expect(screen.getByAltText('Final postcard')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Expand Final postcard' })).toBeTruthy();
     expect(screen.queryByText('Download image')).toBeNull();
 
@@ -126,8 +129,10 @@ describe('admin session detail', () => {
   });
 
   it('announces image errors and offers a touch-sized retry control', () => {
-    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
-    fireEvent.error(screen.getByAltText('Generated caricature'));
+    const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a preview image.');
+    fireEvent.error(image);
 
     expect(screen.getByRole('alert').textContent).toContain('The image could not be loaded.');
     const retry = screen.getByRole('button', { name: 'Retry preview' });

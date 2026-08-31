@@ -370,15 +370,17 @@ export function OperationsDashboard({
                     const updatedAt = new Date(session.updatedAt * 1000);
                     return (
                       <tr className="align-top hover:bg-muted/50" key={session.id}>
-                        <td className="w-32 px-4 py-4">
+                        <td className="px-4 py-4">
                           {session.hasPostcard ? (
-                            <ImagePreview
-                              src={postcardImageUrl(session.id, 'thumbnail')}
-                              fullSrc={postcardImageUrl(session.id)}
-                              alt={`Final postcard for session ${session.id}`}
-                              compact
-                              showDownload={false}
-                            />
+                            <div className="w-28">
+                              <ImagePreview
+                                src={postcardImageUrl(session.id, 'thumbnail')}
+                                fullSrc={postcardImageUrl(session.id)}
+                                alt={`Final postcard for session ${session.id}`}
+                                compact
+                                showDownload={false}
+                              />
+                            </div>
                           ) : (
                             <span className="flex aspect-[3/2] min-h-16 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-2 text-center font-label text-[.58rem] font-bold uppercase leading-tight tracking-[.08em] text-muted-foreground">
                               Not available

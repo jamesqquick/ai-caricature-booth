@@ -116,10 +116,12 @@ describe('OperationsDashboard polling', () => {
     );
 
     const row = screen.getByRole('row', { name: /session-1/ });
-    const image = within(row).getByAltText('Final postcard for session session-1');
+    const image = row.querySelector<HTMLImageElement>('img');
+    if (!image) throw new Error('Expected a postcard thumbnail image.');
     expect(image.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard?variant=thumbnail');
     const trigger = within(row).getByRole('button', { name: 'Expand Final postcard for session session-1' });
     fireEvent.load(image);
+    expect(within(row).getByAltText('Final postcard for session session-1')).toBeTruthy();
     fireEvent.click(trigger);
     expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard');
   });
