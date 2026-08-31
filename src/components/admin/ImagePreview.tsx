@@ -10,20 +10,35 @@ type ImagePreviewProps = {
   showDownload?: boolean;
 };
 
+type ImagePlaceholderProps = {
+  label: string;
+  compact?: boolean;
+  role?: 'alert' | 'img';
+};
+
+export function ImagePlaceholder({ label, compact = false, role = 'img' }: ImagePlaceholderProps) {
+  return (
+    <div
+      className={`flex items-center justify-center rounded-xl border border-border bg-muted/30 text-muted-foreground ${compact ? 'aspect-[3/2] min-h-16 p-2' : 'min-h-56 p-6'}`}
+      role={role}
+      aria-label={label}
+    >
+      <svg className={compact ? 'size-10' : 'size-20'} viewBox="0 0 120 90" fill="none" aria-hidden="true">
+        <rect x="9" y="10" width="102" height="70" rx="10" stroke="currentColor" strokeWidth="7" />
+        <circle cx="82" cy="31" r="9" fill="currentColor" />
+        <path d="m14 74 30-31 18 20 13-14 31 25H14Z" fill="currentColor" />
+      </svg>
+    </div>
+  );
+}
+
 export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = false, showDownload = !compact }: ImagePreviewProps) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   if (status === 'error') {
-    return (
-      <div className={`flex items-center justify-center rounded-xl border border-dashed border-destructive/40 bg-destructive/10 text-center ${compact ? 'aspect-[3/2] min-h-16 p-2' : 'min-h-56 p-6'}`} role="alert">
-        <div>
-          <p className="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-destructive">{compact ? 'Unavailable' : 'Preview unavailable'}</p>
-          {!compact && <p className="mb-0 mt-2 text-sm text-muted-foreground">The image could not be loaded.</p>}
-        </div>
-      </div>
-    );
+    return <ImagePlaceholder label={alt} compact={compact} role="alert" />;
   }
 
   return (

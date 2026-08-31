@@ -104,6 +104,13 @@ describe('OperationsDashboard polling', () => {
     expect(screen.getByText('100%')).toBeTruthy();
   });
 
+  it('renders a neutral placeholder when a session has no postcard', () => {
+    renderDashboard();
+
+    expect(screen.getByRole('img', { name: 'No postcard preview for session session-1' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('Not available')).toBeNull();
+  });
+
   it('renders a postcard thumbnail and opens the full postcard preview', () => {
     render(
       <OperationsDashboard

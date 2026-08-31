@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Input } from '../ui/input';
 import { Select } from '../ui/select';
-import { ImagePreview } from './ImagePreview';
+import { ImagePlaceholder, ImagePreview } from './ImagePreview';
 import type { AdminEventOption, AdminStatistics } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
 import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
@@ -382,9 +382,7 @@ export function OperationsDashboard({
                               />
                             </div>
                           ) : (
-                            <span className="flex aspect-[3/2] min-h-16 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-2 text-center font-label text-[.58rem] font-bold uppercase leading-tight tracking-[.08em] text-muted-foreground">
-                              Not available
-                            </span>
+                            <ImagePlaceholder label={`No postcard preview for session ${session.id}`} compact />
                           )}
                         </td>
                         <th className="max-w-44 px-4 py-4 font-label text-xs font-semibold" scope="row">

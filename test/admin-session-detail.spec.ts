@@ -128,13 +128,14 @@ describe('admin session detail', () => {
     expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/postcard.jpg');
   });
 
-  it('announces image errors without a retry action', () => {
+  it('renders a neutral image placeholder without a retry action', () => {
     const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
     const image = container.querySelector('img');
     if (!image) throw new Error('Expected a preview image.');
     fireEvent.error(image);
 
-    expect(screen.getByRole('alert').textContent).toContain('The image could not be loaded.');
+    expect(screen.getByRole('alert', { name: 'Generated caricature' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('The image could not be loaded.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry preview' })).toBeNull();
   });
 
