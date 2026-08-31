@@ -33,7 +33,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 <AdminLayout
   title={session ? `Session ${session.id} · Booth Admin` : 'Session not found · Booth Admin'}
-  description="Inspect generation lifecycle metadata for a booth session."
+  description="Review a booth session's status, timestamps, errors, and images."
 >
   {session ? (
     <>
@@ -60,7 +60,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
         </div>
 
         <aside class="rounded-[var(--radius-surface)] border border-border bg-muted/30 p-6" aria-labelledby="artifacts-heading">
-          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Artifact availability</p>
+          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Saved images</p>
           <h2 class="mt-2 mb-4 font-display text-2xl tracking-[-.04em]" id="artifacts-heading">Images</h2>
           <dl class="grid gap-3">
             {[
@@ -74,14 +74,14 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
               </div>
             ))}
           </dl>
-          <p class="mt-5 mb-0 text-sm leading-[1.55] text-muted-foreground">Available artifacts can be inspected below through the authenticated image proxy.</p>
+          <p class="mt-5 mb-0 text-sm leading-[1.55] text-muted-foreground">Saved images appear below.</p>
         </aside>
       </section>
 
       {session.errorMessage && (
         <section class="mt-6 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-5" role="alert" aria-labelledby="session-error-heading">
-          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-destructive">Generation error</p>
-          <h2 class="mt-2 mb-1 font-display text-xl" id="session-error-heading">The workflow reported an error</h2>
+          <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-destructive">Session error</p>
+           <h2 class="mt-2 mb-1 font-display text-xl" id="session-error-heading">Session failed</h2>
           <p class="m-0 text-sm leading-[1.6] text-muted-foreground">{session.errorMessage}</p>
         </section>
       )}
@@ -93,7 +93,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   ) : (
     <section class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center" role="alert">
        <h1 class="m-0 font-display text-3xl">{loadFailed ? 'Unable to load session' : isValidSessionId ? 'Session not found' : 'Invalid session ID'}</h1>
-       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? 'Session data is temporarily unavailable. Retry without changing the session URL.' : isValidSessionId ? 'This session may have been removed or the URL may be incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
+       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? "Couldn't load the session. Try again without changing the URL." : isValidSessionId ? 'This session may have been deleted or the URL is incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
        <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={loadFailed ? Astro.url.pathname : '/admin'}>{loadFailed ? 'Retry' : 'Back to dashboard'}</a>
     </section>
   )}

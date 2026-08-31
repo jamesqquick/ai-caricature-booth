@@ -7,7 +7,7 @@ export type ModerationVerdict = {
 
 const MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 const MODERATION_SYSTEM_PROMPT = `You are a strict SFW content moderation system for a public photo booth at a corporate event.
-Examine the provided image and decide whether it is SAFE to use as the input photo for an AI caricature generator that will be printed as a postcard and displayed on a public screen.
+Examine the provided image and decide whether it is SAFE to use as the input photo for an AI caricature generator and display on a public postcard page.
 
 Reject the image as UNSAFE if it contains any of:
 - nudity or sexual content

@@ -17,6 +17,6 @@ export async function GET({ params, url }: { params: Record<string, string | und
     'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
     'Cache-Control': 'private, no-store',
   });
-  headers.set('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename="postcard-${session.id}.jpg"`);
+  headers.set('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename="caricature-postcard.jpg"`);
   return new Response(object.body, { headers });
 }

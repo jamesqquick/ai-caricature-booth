@@ -32,7 +32,7 @@ export function CameraStep({ onUsePhoto }: Props) {
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatus('error');
-        setErrorMessage('Camera access is not supported here. Open this page on localhost or HTTPS.');
+         setErrorMessage('This browser cannot access a camera on this page. Open the page over HTTPS or try another browser or device.');
         return;
       }
 
@@ -60,7 +60,7 @@ export function CameraStep({ onUsePhoto }: Props) {
         setErrorMessage(
           denied
             ? 'Camera access was blocked. Allow camera access in your browser settings, then try again.'
-            : 'We could not start the camera. Make sure another app is not using it, then try again.',
+            : "We couldn't start the camera. Make sure another app isn't using it, then try again.",
         );
         setStatus('error');
       }
@@ -119,7 +119,7 @@ export function CameraStep({ onUsePhoto }: Props) {
     canvas.height = outputHeight;
     const context = canvas.getContext('2d');
     if (!context) {
-      showCameraError('This browser could not prepare the photo. Please try another browser.');
+       showCameraError("This browser couldn't prepare the photo. Please try another browser.");
       return;
     }
 

@@ -21,7 +21,7 @@ export async function POST({ request }: { request: Request }) {
   try {
     const input = validateCreateEvent(await readInput(request));
     const event = await createEvent(env.DB, input, createdBy);
-    if (!event) return Response.json({ error: 'Event could not be created.' }, { status: 500 });
+     if (!event) return Response.json({ error: "Couldn't create the event." }, { status: 500 });
     return Response.redirect(new URL(`/admin/events/${encodeURIComponent(event.slug)}`, request.url), 303);
   } catch (error) {
     if (error instanceof EventValidationError) {
@@ -34,6 +34,6 @@ export async function POST({ request }: { request: Request }) {
       return Response.json({ error: error.message, fields: { status: error.message } }, { status: 400 });
     }
     console.error('Admin event creation failed', error);
-    return Response.json({ error: 'Event could not be created.' }, { status: 500 });
+     return Response.json({ error: "Couldn't create the event." }, { status: 500 });
   }
 }

@@ -52,19 +52,19 @@ const title = isAvailable
        <main class="mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-5xl content-start gap-8 px-[clamp(1.25rem,5vw,4rem)] py-[clamp(2rem,7vh,5rem)] max-[1000px]:min-h-0 max-[1000px]:pt-6">
          <div class="flex items-center justify-between gap-8 max-[600px]:gap-4">
            <div>
-             <p class="mb-4 font-label text-[.72rem] font-semibold uppercase tracking-[.2em] text-primary">You've been caricaturized</p>
+              <p class="mb-4 font-label text-[.72rem] font-semibold uppercase tracking-[.2em] text-primary">Your caricature is complete</p>
              <h1 class="m-0 max-w-[10ch] whitespace-nowrap font-display text-[clamp(2.7rem,5vw,5.2rem)] font-semibold leading-[.92] tracking-[-.06em] max-[1000px]:max-w-[12ch] max-[600px]:text-[clamp(1.75rem,8vw,2.7rem)]">Postcard ready</h1>
              </div>
              {qrCode && (
                <div class="flex w-28 shrink-0 flex-col items-center gap-2.5 max-[600px]:w-20">
                  <img
                    src={qrCode}
-                   alt={`QR code for postcard ${sessionId}`}
+                    alt="QR code to open your digital postcard"
                    width="160"
                    height="160"
                    class="size-28 rounded-[.35rem] border-[.5rem] border-solid border-white max-[600px]:size-20 max-[600px]:border-[.35rem]"
                  />
-                 <p class="m-0 w-40 text-center font-label text-[.68rem] font-semibold uppercase leading-[1.35] tracking-[.08em] text-muted-foreground max-[600px]:w-28 max-[600px]:text-[.55rem]">Digital copy</p>
+                  <p class="m-0 w-40 text-center font-label text-[.68rem] font-semibold uppercase leading-[1.35] tracking-[.08em] text-muted-foreground max-[600px]:w-28 max-[600px]:text-[.55rem]">Scan for digital copy</p>
                </div>
              )}
            </div>
@@ -139,7 +139,7 @@ const title = isAvailable
     shareButton.addEventListener("click", async () => {
       const shareData = {
         title: document.title,
-        text: "Take a look at this caricature postcard.",
+        text: "View my caricature postcard.",
         url: window.location.href,
       };
       try {
@@ -148,13 +148,13 @@ const title = isAvailable
           status.textContent = "Postcard shared.";
         } else {
           await navigator.clipboard.writeText(window.location.href);
-          status.textContent = "Review link copied.";
+          status.textContent = "Postcard link copied.";
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError")
           return;
         status.textContent =
-          "Could not share automatically. Copy the URL from your browser.";
+          "We couldn't share automatically. Copy the URL from your browser.";
       }
     });
   }

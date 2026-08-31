@@ -19,5 +19,5 @@ export function adminErrorResponse(error: unknown) {
   }
 
   console.error('Admin API request failed', error);
-  return adminJsonResponse({ error: 'Admin data could not be loaded.' }, 500);
+  return adminJsonResponse({ error: "Couldn't load admin data." }, 500);
 }

@@ -36,10 +36,10 @@ export function EventDeleteControl({ eventName, endpoint }: EventDeleteControlPr
     try {
       const response = await fetch(endpoint, { method: 'DELETE' });
       const result = await response.json<DeleteEventResult>().catch((): DeleteEventResult => ({}));
-      if (!response.ok) throw new EventDeletionError(result.error ?? 'Event could not be deleted.');
+       if (!response.ok) throw new EventDeletionError(result.error ?? "Couldn't delete the event. Try again.");
       window.location.assign(result.redirectTo ?? '/admin/events');
     } catch (cause) {
-      setError(cause instanceof EventDeletionError ? cause.message : 'Event could not be deleted. Check your connection and try again.');
+       setError(cause instanceof EventDeletionError ? cause.message : "Couldn't delete the event. Check your connection and try again.");
       setPending(false);
     }
   };

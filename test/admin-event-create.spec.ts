@@ -39,7 +39,7 @@ describe('event creation validation', () => {
 });
 
 describe('createEvent', () => {
-  it('writes only the core fields and verified creator', async () => {
+  it('writes the core fields, attendee default copy, and verified creator', async () => {
     const calls: unknown[][] = [];
     const database = {
       prepare(query: string) {
@@ -55,7 +55,13 @@ describe('createEvent', () => {
     await expect(createEvent(database, {
       name: 'New Event', slug: 'new-event', status: 'draft',
     }, 'admin@example.com')).resolves.toMatchObject({ id: 9, slug: 'new-event', createdBy: 'admin@example.com' });
-    expect(calls[0]).toEqual(expect.arrayContaining(['new-event', 'New Event', 'draft', 'admin@example.com']));
+    expect(calls[0]).toEqual(expect.arrayContaining([
+      'new-event',
+      'New Event',
+      'draft',
+      'Take a selfie, choose a scene, and download your caricature postcard.',
+      'admin@example.com',
+    ]));
     expect(calls[0][0]).toContain('created_by');
   });
 });

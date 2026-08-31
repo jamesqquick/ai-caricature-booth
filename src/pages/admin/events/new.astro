@@ -6,7 +6,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 export const prerender = false;
 ---
 
-<AdminLayout title="New event · Booth Admin" description="Create a draft booth event.">
+<AdminLayout title="New event · Booth Admin" description="Create a draft event for the attendee booth.">
   <PageHeader
     title="New event"
   />
@@ -85,11 +85,11 @@ export const prerender = false;
           field.setAttribute('aria-errormessage', output.id);
         });
         form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-        throw new Error(result.error ?? 'Event could not be created. Check the highlighted fields and try again.');
+        throw new Error(result.error ?? "Couldn't create the event. Check the highlighted fields and try again.");
       }
-      throw new Error('Event could not be created. Try again.');
+      throw new Error("Couldn't create the event. Try again.");
     } catch (error) {
-      if (status) status.textContent = error instanceof Error ? error.message : 'Event could not be created. Try again.';
+      if (status) status.textContent = error instanceof Error ? error.message : "Couldn't create the event. Try again.";
     } finally {
       form.dataset.pending = 'false';
       form.removeAttribute('aria-busy');

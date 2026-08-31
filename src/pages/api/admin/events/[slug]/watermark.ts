@@ -145,7 +145,7 @@ function errorResponse(error: unknown) {
     return Response.json({ error: error.message }, { status: error.status });
   }
   console.error('Admin watermark request failed', error);
-  return Response.json({ error: 'Watermark could not be updated.' }, { status: 500 });
+  return Response.json({ error: "Couldn't update the watermark." }, { status: 500 });
 }
 
 export async function PUT({ request, params }: RouteContext) {

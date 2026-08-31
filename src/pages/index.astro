@@ -15,8 +15,8 @@ const galleryScenes = scenes.slice(0, 4);
 ---
 
 <BoothLayout
-  title="Caricature Booth · Cloud-native creative technology"
-  description="Turn a selfie into a custom ink caricature postcard in one remarkable minute."
+  title="Caricature Booth · AI selfie-to-postcard booth"
+  description="Turn a selfie into a custom ink caricature postcard."
 >
   <div class="min-h-dvh bg-[radial-gradient(circle_at_78%_15%,color-mix(in_oklch,var(--primary)_11%,transparent),transparent_26rem),var(--background)]">
     <main>
@@ -27,29 +27,29 @@ const galleryScenes = scenes.slice(0, 4);
           <p
             class="mb-4 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary"
           >
-            AI creativity at the edge
+            AI caricature photo booth
           </p>
           <h1
             class="m-0 max-w-[10ch] font-display text-[clamp(3.5rem,7vw,6.8rem)] font-semibold leading-[.9] tracking-[-.07em] max-[800px]:text-[clamp(3.3rem,14vw,5.5rem)]"
           >
-            From selfie to print.
+            Selfie to postcard.
           </h1>
           <p
             class="mt-7 max-w-xl text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.65] text-muted-foreground"
           >
-            A real-time AI studio that captures your photo, creates a custom ink
-            caricature, and prints a postcard on the spot.
+            Take a selfie, choose a scene, and get a caricature postcard to download
+            or share.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a
               class="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-extrabold text-primary-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:bg-primary-hover"
-              href="#booths">Create yours <span aria-hidden="true">→</span></a
+              href="#booths">Choose a booth <span aria-hidden="true">→</span></a
             >
           </div>
           <p
             class="mt-4 font-label text-[.65rem] uppercase tracking-[.08em] text-muted-foreground"
           >
-            Generated live · Printed locally · Delivered digitally
+            Generated live · Downloadable and shareable
           </p>
         </div>
 
@@ -67,7 +67,7 @@ const galleryScenes = scenes.slice(0, 4);
                     0{index + 1}
                   </span>
                   <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
-                    AI INK STUDY
+                    AI CARICATURE
                   </small>
                 </div>
                 <div class="flex min-h-[3.8rem] items-center justify-between font-display text-base">
@@ -87,8 +87,7 @@ const galleryScenes = scenes.slice(0, 4);
         id="how"
       >
         <SectionHeader
-          title="A complete creative pipeline."
-          subtitle="The interaction stays simple while Cloudflare coordinates every step behind the scenes."
+          title="How your postcard is made."
         />
         <div class="grid grid-cols-3 gap-px bg-border max-[800px]:grid-cols-1">
           {
@@ -100,13 +99,13 @@ const galleryScenes = scenes.slice(0, 4);
               ],
               [
                 "02 · GENERATE",
-                "Choose your world",
+                "Choose a scene",
                 "Select a scene and follow the transformation in real time.",
               ],
               [
                 "03 · DELIVER",
-                "Walk away with both",
-                "Collect a physical print and receive the digital original.",
+                "Download or share it",
+                "Download the postcard or share its link.",
               ],
             ].map(([label, title, copy]) => (
               <article class="min-h-52 bg-background p-6">
@@ -127,7 +126,7 @@ const galleryScenes = scenes.slice(0, 4);
         class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
         id="gallery"
       >
-        <SectionHeader title="Generated at the edge. Made to keep." />
+        <SectionHeader title="Example caricature postcards" />
         <div class="grid grid-cols-4 gap-4 max-[800px]:grid-cols-2">
           {
             galleryScenes.map((scene, index) => (
@@ -146,7 +145,7 @@ const galleryScenes = scenes.slice(0, 4);
                   <>
                     <b class="text-sm">{scene.name}</b>
                     <span class="font-label text-[.58rem] text-muted-foreground">
-                      {48 + index * 4} sec
+                      EXAMPLE
                     </span>
                   </>
                 </div>
@@ -176,7 +175,7 @@ const galleryScenes = scenes.slice(0, 4);
                     <h3 class="mb-1.5 font-display text-[1.4rem]">{event.name}</h3>
                     <p class="m-0 text-muted-foreground">{event.tagline}</p>
                   </div>
-                  <span>Launch →</span>
+                  <span>Open booth →</span>
                 </a>
               ))}
             </div>
@@ -191,21 +190,20 @@ const galleryScenes = scenes.slice(0, 4);
         id="pipeline"
       >
         <SectionHeader
-          title="Ten products. One continuous experience."
-          subtitle="The application runs end-to-end on Cloudflare, with durable execution and real-time status from capture through delivery."
+          title="Six steps from selfie to postcard."
         />
         <div class="pipeline-visual overflow-hidden border border-border bg-[color-mix(in_oklch,var(--card),var(--background)_34%)]" data-pipeline aria-label="Animated image processing pipeline">
           <div class="grid grid-cols-[minmax(16rem,1fr)_minmax(14rem,.8fr)] items-center gap-[clamp(1.5rem,5vw,5rem)] bg-[radial-gradient(circle_at_25%_50%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_18rem)] p-[clamp(1.25rem,4vw,3rem)] max-[800px]:grid-cols-1">
             <div class="flex min-h-[15rem] flex-col justify-between p-3">
-              <span class="font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">ONE IMAGE · MULTIPLE PASSES</span>
+              <span class="font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">SELFIE · CARICATURE · POSTCARD</span>
               <span class="pipeline-result-canvas relative mt-3 block aspect-[3/2] min-h-0 overflow-hidden border border-dashed border-primary/55 bg-[repeating-linear-gradient(135deg,transparent_0_.55rem,color-mix(in_oklch,var(--primary)_5%,transparent)_.56rem_1.12rem)]" aria-hidden="true">
                 <span class="pipeline-result-placeholder">AWAITING IMAGE</span>
                 <img class="pipeline-result-image" src="/demo-selfie.jpeg" alt="" />
                 <img class="pipeline-result-caricature" src="/demo-caricature.jpeg" alt="" />
                 <span class="pipeline-result-ink"></span>
                 <span class="pipeline-result-details">
-                  <span>INK STUDY</span>
-                  <span>NYC · 2026</span>
+                  <span>CARICATURE</span>
+                  <span>POSTCARD</span>
                 </span>
               </span>
               <span class="mt-3 flex items-center justify-between gap-2">
@@ -216,13 +214,13 @@ const galleryScenes = scenes.slice(0, 4);
             </div>
             <div class="self-center">
               <span class="font-label text-[.62rem] font-extrabold uppercase tracking-[.14em] text-primary">
-                THE VISIBLE TRANSFORMATION
+                SELFIE TO POSTCARD
               </span>
               <h3 class="mt-3 font-display text-[clamp(1.8rem,4vw,3.6rem)] leading-[.95] tracking-[-.06em]">
-                One image.<br />Several passes.
+                One selfie.<br />One finished postcard.
               </h3>
               <p class="mt-4 max-w-[28ch] leading-[1.55] text-muted-foreground">
-                Watch the same image arrive, transform into a caricature, and pick up the details that make it collectible.
+                Watch your selfie become a caricature and then a finished postcard.
               </p>
             </div>
           </div>
@@ -234,12 +232,12 @@ const galleryScenes = scenes.slice(0, 4);
           <div class="relative mt-5 grid grid-cols-6 gap-px bg-border max-[800px]:grid-cols-2 max-[520px]:grid-cols-1" role="list" aria-label="Technology pipeline">
             {
               [
-                ["◎", "Take Selfie", "Camera", "Capture your starting point in the booth."],
-                ["↥", "Upload Image", "Workers + R2", "Your photo moves securely into the cloud."],
-                ["◇", "Check Image", "Workers AI · Image Moderation", "The image is checked before the creative work begins."],
-                ["✦", "Create Caricature", "Workflows · AI Generation", "The portrait transforms into a New York ink study."],
+                ["◎", "Take Selfie", "Camera", "Take a selfie with your device camera."],
+                ["↥", "Upload Image", "Cloudflare R2", "The booth uploads your photo to Cloudflare R2."],
+                ["◇", "Check Image", "Workers AI · Image Moderation", "Workers AI checks the photo before generation."],
+                ["✦", "Create Caricature", "Cloudflare Workflows · Replicate", "Replicate creates a caricature using the selected scene."],
                 ["▣", "Make It a Postcard", "Cloudflare Images · Overlay", "The caricature gets its scene and postcard details."],
-                ["✉", "Print & Share", "Email + Print", "Take home the physical keepsake and digital original."],
+                ["⇩", "Download & Share", "Browser download + Web Share", "Download the postcard or share its link."],
               ].map(([icon, title, copy, detail], index) => (
                 <div class="pipeline-node relative z-[1] flex min-h-[14.5rem] flex-col gap-1.5 border-b-2 border-b-transparent bg-background p-5 transition-[background-color,border-color,transform] duration-200 max-[800px]:min-h-48 max-[520px]:min-h-0" data-pipeline-node={index} role="listitem">
                   <span class="text-2xl text-primary" aria-hidden="true">{icon}</span>
@@ -254,7 +252,7 @@ const galleryScenes = scenes.slice(0, 4);
           </div>
           <p class="pipeline-status m-0 flex items-center gap-2 p-4 font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground" aria-live="polite">
             <span class="pipeline-status-dot" aria-hidden="true"></span>
-            <span>LIVE RELAY · STEP-BY-STEP PROGRESS</span>
+            <span>PROCESS OVERVIEW · SIX STEPS</span>
           </p>
         </div>
         <script>
@@ -291,7 +289,7 @@ const galleryScenes = scenes.slice(0, 4);
     <footer
       class="mx-auto flex w-[min(100%_-_3rem,74rem)] justify-between gap-4 border-t border-border py-5 text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[800px]:w-[min(100%_-_2rem,40rem)] max-[800px]:flex-col"
     >
-      <span>Built end-to-end on Cloudflare</span>
+      <span>Build with Cloudflare</span>
     </footer>
   </div>
 </BoothLayout>

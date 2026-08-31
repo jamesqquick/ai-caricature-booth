@@ -29,21 +29,21 @@ function pageHref(nextPage: number) {
 <section class="mt-8" aria-labelledby="latest-jobs-heading">
   <div class="mb-4 flex items-end justify-between gap-4">
     <div>
-      <h2 class="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Latest jobs</h2>
+      <h2 class="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Recent sessions</h2>
     </div>
-    <p class="m-0 text-sm text-muted-foreground">{total.toLocaleString('en-US')} {total === 1 ? 'job' : 'jobs'}</p>
+      <p class="m-0 text-sm text-muted-foreground">{total.toLocaleString('en-US')} {total === 1 ? 'session' : 'sessions'}</p>
   </div>
 
   {sessions.length === 0 ? (
     <div class="rounded-[var(--radius-surface)] border border-dashed border-border bg-card p-8 text-center">
-      <h3 class="m-0 font-display text-xl">No generation jobs found</h3>
-      <p class="mt-2 mb-0 text-sm leading-[1.6] text-muted-foreground">No sessions match the current event and status filters.</p>
+      <h3 class="m-0 font-display text-xl">No sessions found</h3>
+      <p class="mt-2 mb-0 text-sm leading-[1.6] text-muted-foreground">No sessions match the selected event, status, or dates.</p>
     </div>
   ) : (
     <>
       <div class="overflow-x-auto rounded-[var(--radius-surface)] border border-border bg-card">
         <table class="w-full min-w-[62rem] border-collapse text-left text-sm">
-          <caption class="sr-only">Latest filtered generation jobs</caption>
+         <caption class="sr-only">Filtered booth sessions</caption>
           <thead class="border-b border-border bg-muted">
             <tr>
               {['Session', 'Event', 'Scene', 'Status', 'Updated', 'Details'].map((heading) => (
