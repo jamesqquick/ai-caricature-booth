@@ -5,7 +5,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-13",
   "vars": {
-    "ACCESS_AUD": "8291cc3f98abf53caa41b468eba86093437e86f53debc6a9fcf2dfa2f7a432c8",
+    "ACCESS_AUD": "f62b95fcf95dce07fb61b7d64381fc36317d10aca666a829c095745c07f83972",
     "ACCESS_TEAM_DOMAIN": "https://cfcommunity.cloudflareaccess.com"
   },
   "assets": {
