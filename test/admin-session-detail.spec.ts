@@ -117,6 +117,8 @@ describe('admin session detail', () => {
     const { container } = render(createElement(ImagePreview, { src: '/postcard-thumb.jpg', fullSrc: '/postcard.jpg', alt: 'Final postcard', compact: true, showDownload: false }));
     const image = container.querySelector('img');
     if (!image) throw new Error('Expected a compact preview image.');
+    expect(screen.getByRole('img', { name: 'Final postcard' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('Loading')).toBeNull();
     fireEvent.load(image);
 
     expect(screen.getByAltText('Final postcard')).toBeTruthy();
@@ -135,6 +137,7 @@ describe('admin session detail', () => {
     fireEvent.error(image);
 
     expect(screen.getByRole('alert', { name: 'Generated caricature' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('Loading preview...')).toBeNull();
     expect(screen.queryByText('The image could not be loaded.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry preview' })).toBeNull();
   });

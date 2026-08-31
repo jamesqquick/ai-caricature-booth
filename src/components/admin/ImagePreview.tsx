@@ -14,12 +14,13 @@ type ImagePlaceholderProps = {
   label: string;
   compact?: boolean;
   role?: 'alert' | 'img';
+  className?: string;
 };
 
-export function ImagePlaceholder({ label, compact = false, role = 'img' }: ImagePlaceholderProps) {
+export function ImagePlaceholder({ label, compact = false, role = 'img', className = '' }: ImagePlaceholderProps) {
   return (
     <div
-      className={`flex items-center justify-center rounded-xl border border-border bg-muted/30 text-muted-foreground ${compact ? 'aspect-[3/2] min-h-16 p-2' : 'min-h-56 p-6'}`}
+      className={`flex items-center justify-center rounded-xl border border-border bg-muted/30 text-muted-foreground ${compact ? 'aspect-[3/2] min-h-16 p-2' : 'min-h-56 p-6'} ${className}`}
       role={role}
       aria-label={label}
     >
@@ -44,10 +45,12 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
   return (
     <>
       <div className={`relative overflow-hidden rounded-xl border border-border bg-muted/30 ${compact ? 'aspect-[3/2]' : ''}`}>
-        {status === 'loading' && (
-          <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${compact ? 'font-label text-[.58rem] font-bold uppercase tracking-[.08em]' : 'text-sm'}`} role="status">
-            {compact ? 'Loading' : 'Loading preview...'}
-          </div>
+        {status !== 'loaded' && (
+          <ImagePlaceholder
+            label={alt}
+            compact={compact}
+            className="absolute inset-0 z-10 border-0"
+          />
         )}
         <button
           ref={triggerRef}
