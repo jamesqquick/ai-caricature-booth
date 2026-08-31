@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PopupOverlay } from '../ui/popup-overlay';
 
 type ImagePreviewProps = {
@@ -11,6 +11,12 @@ export function ImagePreview({ src, alt, downloadHref }: ImagePreviewProps) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const image = triggerRef.current?.querySelector('img');
+    if (!image || !image.complete) return;
+    setStatus(image.naturalWidth > 0 ? 'loaded' : 'error');
+  }, []);
 
   if (status === 'error') {
     return (
