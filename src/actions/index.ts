@@ -33,12 +33,12 @@ export const server = {
       if (existing) {
         const event = await loadActiveEventById(env.DB, existing.event_id);
         if (!event || event.slug !== eventSlug || existing.scene_id !== sceneId) {
-          throw new ActionError({ code: 'BAD_REQUEST', message: 'That generation session does not match this booth.' });
+          throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session does not match the selected booth. Start over.' });
         }
         const scene = await loadEventScene(env.DB, event.id, existing.scene_id);
         if (!scene) throw new ActionError({ code: 'BAD_REQUEST', message: 'That scene is not available for this booth.' });
         if (existing.selfie_sha256 && existing.selfie_sha256 !== selfieSha256) {
-          throw new ActionError({ code: 'BAD_REQUEST', message: 'That generation session already has a different photo.' });
+          throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session already uses another image. Start over.' });
         }
         if (existing.status === 'pending' || existing.status === 'uploading') {
           await ensureSelfieUploaded(existing.id, existing.selfie_key, bytes);
@@ -55,10 +55,10 @@ export const server = {
 
       const selfieKey = `sessions/${idempotencyKey}/selfie.jpg`;
       const claim = await createPendingSession(env.DB, { id: idempotencyKey, event_id: event.id, scene_id: scene.id, scene_name: scene.name, selfie_key: selfieKey, selfie_sha256: selfieSha256 });
-      if (!claim.session) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not create a generation session.' });
+      if (!claim.session) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
       if (!claim.created) {
         if (claim.session.event_id !== event.id || claim.session.scene_id !== scene.id || claim.session.selfie_sha256 !== selfieSha256) {
-          throw new ActionError({ code: 'BAD_REQUEST', message: 'That generation session does not match this booth.' });
+          throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session does not match the selected booth. Start over.' });
         }
         if (claim.session.status === 'pending' || claim.session.status === 'uploading') {
           await ensureSelfieUploaded(claim.session.id, claim.session.selfie_key, bytes);
@@ -79,7 +79,7 @@ export const server = {
     input: z.object({ sessionId: z.uuid() }),
     handler: async ({ sessionId }) => {
       const session = await loadSession(env.DB, sessionId);
-      if (!session) throw new ActionError({ code: 'NOT_FOUND', message: 'Generation session not found.' });
+      if (!session) throw new ActionError({ code: 'NOT_FOUND', message: 'This postcard session was not found. Start over.' });
       if (!['completed', 'errored'].includes(session.status)) {
         const event = await loadActiveEventById(env.DB, session.event_id);
         const scene = event ? await loadEventScene(env.DB, event.id, session.scene_id) : null;
@@ -135,7 +135,7 @@ async function ensureWorkflow(
       throw createError;
     } catch (recoveryError) {
       console.error(JSON.stringify({ message: 'workflow start failed', sessionId: session.id, error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError) }));
-      throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not start generation.' });
+      throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
     }
   }
 }
@@ -146,7 +146,7 @@ async function ensureSelfieUploaded(sessionId: string, selfieKey: string, bytes:
   try {
     await env.SELFIES.put(selfieKey, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
   } catch {
-    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not upload your photo.' });
+    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't upload your photo. Please try again." });
   }
 }
 

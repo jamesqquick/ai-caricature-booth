@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PopupOverlay } from '../ui/popup-overlay';
 
 type ImagePreviewProps = {
@@ -38,6 +38,12 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    const image = triggerRef.current?.querySelector('img');
+    if (!image || !image.complete) return;
+    setStatus(image.naturalWidth > 0 ? 'loaded' : 'error');
+  }, []);
+
   if (status === 'error') {
     return <ImagePlaceholder label={alt} compact={compact} role="alert" />;
   }
@@ -72,8 +78,8 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
         </button>
       </div>
       {showDownload && downloadHref && (
-        <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} download>
-          Download image
+        <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} aria-label={`Download ${alt}`} download>
+          Download
         </a>
       )}
       <PopupOverlay open={isOpen} label={alt} closeLabel="Close preview" onClose={() => setIsOpen(false)} returnFocusRef={triggerRef}>

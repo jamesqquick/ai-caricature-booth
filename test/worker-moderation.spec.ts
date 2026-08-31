@@ -101,7 +101,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(env.SELFIES.delete).toHaveBeenCalledWith(selfieKey);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: "Your photo didn't pass our content check. Please try again with a different selfie.",
+      error_msg: "We couldn't use this photo after the safety check. Try a different photo.",
     });
   });
 
@@ -115,7 +115,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: 'We could not check your photo. Please try again.',
+      error_msg: "We couldn't check your photo. Please try again.",
     });
   });
 
@@ -129,7 +129,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(moderateImage).toHaveBeenCalledTimes(2);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: 'We could not check your photo. Please try again.',
+      error_msg: "We couldn't check your photo. Please try again.",
     });
   });
 
@@ -165,7 +165,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(buildPostcard).toHaveBeenCalledTimes(2);
     expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: 'We could not finish your postcard. Please try again.',
+      error_msg: "We couldn't finish your postcard. Please try again.",
     });
   });
 });

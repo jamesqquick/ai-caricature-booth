@@ -6,7 +6,7 @@ type Props = {
 };
 
 const { status } = Astro.props;
-const label = status.charAt(0).toUpperCase() + status.slice(1);
+const label = status === 'errored' ? 'Failed' : status.charAt(0).toUpperCase() + status.slice(1);
 const tone = status === 'completed'
   ? 'border-success/35 bg-success/10 text-success'
   : status === 'errored'

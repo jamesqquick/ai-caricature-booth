@@ -77,8 +77,8 @@ export async function POST({ request, params }: RouteContext) {
       return Response.json({ error: error.message, fields: { status: error.message } }, { status: 400 });
     }
     console.error('Admin event update failed', error);
-    if (!json) return redirectWithError(request, currentSlug, 'Event could not be saved.');
-    return Response.json({ error: 'Event could not be saved.' }, { status: 500 });
+     if (!json) return redirectWithError(request, currentSlug, "Couldn't save the event.");
+     return Response.json({ error: "Couldn't save the event." }, { status: 500 });
   }
 }
 
@@ -115,6 +115,6 @@ export async function DELETE({ request, params }: RouteContext) {
     return Response.json({ deleted: true, redirectTo: '/admin/events' });
   } catch (error) {
     console.error('Admin event deletion failed', error);
-    return Response.json({ error: 'Event could not be deleted.' }, { status: 500 });
+     return Response.json({ error: "Couldn't delete the event." }, { status: 500 });
   }
 }

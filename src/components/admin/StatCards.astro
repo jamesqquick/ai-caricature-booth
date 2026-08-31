@@ -9,13 +9,13 @@ const { stats } = Astro.props;
 const cards = [
   { label: 'Total', value: stats.total.toLocaleString('en-US') },
   { label: 'Completed', value: stats.completed.toLocaleString('en-US') },
-  { label: 'Errored', value: stats.errored.toLocaleString('en-US') },
+  { label: 'Failed', value: stats.errored.toLocaleString('en-US') },
   { label: 'Completion rate', value: `${stats.completionRate}%` },
 ];
 ---
 
 <section class="mt-6 grid grid-cols-5 gap-px overflow-hidden rounded-[var(--radius-surface)] border border-border bg-border max-[900px]:grid-cols-2 max-[520px]:grid-cols-1" aria-labelledby="dashboard-stats-heading">
-  <h2 class="sr-only" id="dashboard-stats-heading">Generation statistics</h2>
+  <h2 class="sr-only" id="dashboard-stats-heading">Session statistics</h2>
   {cards.map((card) => (
     <article class="bg-card p-5 last:max-[900px]:col-span-2 last:max-[520px]:col-span-1">
       <p class="m-0 font-label text-[.65rem] font-extrabold uppercase tracking-[.12em] text-muted-foreground">{card.label}</p>

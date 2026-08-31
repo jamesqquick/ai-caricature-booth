@@ -55,7 +55,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
       form.set('idempotencyKey', idempotencyKeyRef.current!);
       form.set('selfie', new File([blob], 'selfie.jpg', { type: 'image/jpeg' }));
       const started = await actions.startGeneration(form);
-      if (started.error || !started.data) throw new Error(started.error?.message ?? 'Could not start generation.');
+      if (started.error || !started.data) throw new Error(started.error?.message ?? "Couldn't start your postcard.");
       const startedPhase = phaseForGenerationStatus(started.data.status);
       if (startedPhase) setActivePhase(startedPhase);
       let pollFailures = 0;
@@ -63,7 +63,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
         const status = await actions.getGeneration({ sessionId: started.data.sessionId });
         if (status.error || !status.data) {
           pollFailures += 1;
-          if (pollFailures >= 3) throw new Error(status.error?.message ?? 'Could not read generation status.');
+          if (pollFailures >= 3) throw new Error(status.error?.message ?? "Couldn't check the postcard's progress.");
           await new Promise((resolve) => window.setTimeout(resolve, pollFailures * 1000));
           continue;
         }
@@ -77,14 +77,14 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
           onComplete(started.data.sessionId);
           return;
         }
-        if (status.data.status === 'errored') throw new Error(status.data.error ?? 'Generation failed.');
+        if (status.data.status === 'errored') throw new Error(status.data.error ?? "Couldn't create your postcard. Please try again.");
         const phase = phaseForGenerationStatus(status.data.status);
         if (phase) setActivePhase(phase);
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
       }
     }
     void start().catch((error) => {
-      if (active) setErrorMessage(error instanceof Error ? error.message : 'Generation failed. Please try again.');
+      if (active) setErrorMessage(error instanceof Error ? error.message : "Couldn't create your postcard. Please try again.");
     });
     return () => { active = false; };
   }, [eventSlug, onComplete, photoDataUrl, scene.id]);
@@ -101,13 +101,13 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
 
       <div>
         <p className="mb-3.5 font-label text-[.72rem] font-extrabold uppercase tracking-[.22em] text-foreground">Creating {scene.name}</p>
-        <h1 className="mb-6 max-w-[13ch] font-display text-[clamp(2.6rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Drawing outside the lines.</h1>
-        <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">Your photo is uploaded privately, checked for safety, then transformed into a print-ready postcard.</p>
+        <h1 className="mb-6 max-w-[13ch] font-display text-[clamp(2.6rem,6vw,5rem)] font-semibold leading-[.92] tracking-[-.06em]" tabIndex={-1}>Creating your caricature.</h1>
+        <p className="m-0 max-w-[38rem] text-[clamp(.95rem,1.5vw,1.12rem)] leading-[1.65] text-muted-foreground">We upload your photo, check it for prohibited content, and use it to create your postcard.</p>
         {errorMessage && (
           <Alert className="mt-6 flex max-w-[38rem] items-start gap-3 border-danger/40 bg-danger/10 text-danger">
             <AlertCircle className="mt-0.5 shrink-0" aria-hidden="true" />
             <div>
-              <AlertTitle>We could not finish that postcard.</AlertTitle>
+              <AlertTitle>We couldn't finish that postcard.</AlertTitle>
               <AlertDescription className="text-foreground/80"><p>{errorMessage}</p></AlertDescription>
               <Button className="mt-3" variant="secondary" type="button" onClick={() => window.location.reload()}>Try again</Button>
             </div>

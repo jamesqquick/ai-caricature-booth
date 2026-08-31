@@ -85,7 +85,7 @@ describe('admin dashboard', () => {
     expect(stats).toContain("label: 'Total'");
     expect(stats).toContain("label: 'Completed'");
     expect(stats).not.toContain("label: 'In progress'");
-    expect(stats).toContain("label: 'Errored'");
+    expect(stats).toContain("label: 'Failed'");
     expect(stats).toContain("label: 'Completion rate'");
   });
 
@@ -101,8 +101,8 @@ describe('admin dashboard', () => {
     expect(source).toContain('/admin/sessions/${encodeURIComponent(session.id)}');
     expect(source).toContain('aria-label={`View details for session ${session.id}`}');
     expect(source).toContain('&rarr;');
-    expect(source).toContain('No generation jobs found');
-    expect(source).toContain('No sessions match the current event and status filters.');
+    expect(source).toContain('No sessions found');
+    expect(source).toContain('No sessions match the selected event, status, or dates.');
     expect(source).not.toMatch(/<img\b/);
   });
 

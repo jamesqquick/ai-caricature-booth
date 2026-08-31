@@ -26,7 +26,7 @@ const stageLabels: Record<(typeof SESSION_STATUSES)[number], string> = {
   generating: 'Generating caricature',
   compositing: 'Compositing postcard',
   completed: 'Completed',
-  errored: 'Errored',
+  errored: 'Failed',
 };
 const completedAt = session.completedAt;
 ---
@@ -34,10 +34,10 @@ const completedAt = session.completedAt;
 <section class="mt-8" aria-labelledby="session-timeline-heading">
   <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Lifecycle evidence</p>
-      <h2 class="mt-2 mb-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="session-timeline-heading">Generation timeline</h2>
+      <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Session status</p>
+      <h2 class="mt-2 mb-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="session-timeline-heading">Status overview</h2>
     </div>
-    <p class="m-0 max-w-sm text-right text-sm leading-[1.5] text-muted-foreground">Only timestamps stored by the current session schema are shown.</p>
+    <p class="m-0 max-w-sm text-right text-sm leading-[1.5] text-muted-foreground">The database stores timestamps for the session, updates, and completion.</p>
   </div>
 
   <ol class="m-0 grid list-none gap-3 p-0">
@@ -55,11 +55,11 @@ const completedAt = session.completedAt;
               {isCurrent && <StatusBadge status={session.status} />}
             </div>
             <p class="mt-1 mb-0 text-sm text-muted-foreground">
-              {isCurrent ? 'Observed current state' : isCompleted ? 'Recorded completion time' : 'No persisted timestamp for this stage'}
+              {isCurrent ? 'Current status' : isCompleted ? 'Completion time recorded' : 'No timestamp stored'}
             </p>
           </div>
           <time class="font-label text-xs text-muted-foreground" datetime={isCompleted ? new Date(completedAt * 1000).toISOString() : undefined}>
-            {status === 'pending' ? formatTimestamp(session.createdAt) : isCompleted ? formatTimestamp(completedAt) : status === session.status ? formatTimestamp(session.updatedAt) : 'Not recorded'}
+            {status === 'pending' ? formatTimestamp(session.createdAt) : isCompleted ? formatTimestamp(completedAt) : status === session.status ? formatTimestamp(session.updatedAt) : 'Not available'}
           </time>
         </li>
       );

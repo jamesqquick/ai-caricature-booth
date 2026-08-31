@@ -49,14 +49,14 @@ function dateValue(timestamp: number | undefined) {
   {[
     ['Generations', stats.total.toLocaleString('en-US')],
     ['Completed', stats.completed.toLocaleString('en-US')],
-    ['Errored', stats.errored.toLocaleString('en-US')],
+    ['Failed', stats.errored.toLocaleString('en-US')],
     ['Completion rate', `${stats.completionRate}%`],
   ].map(([label, value]) => <article class="bg-card p-5"><p class="m-0 font-label text-[.65rem] font-extrabold uppercase tracking-[.12em] text-muted-foreground">{label}</p><p class="mt-3 mb-0 font-display text-3xl font-semibold">{value}</p></article>)}
 </section>
 
 <div class="mt-8 grid grid-cols-[minmax(0,1.35fr)_minmax(16rem,1fr)] items-start gap-6 max-[800px]:grid-cols-1">
   <section class="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="volume-heading">
-    <div><p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Volume over time</p><h2 class="m-0 font-display text-2xl font-semibold" id="volume-heading">Generation activity</h2></div>
+    <div><p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Sessions over time</p><h2 class="m-0 font-display text-2xl font-semibold" id="volume-heading">Sessions by day</h2></div>
     {stats.volume.length > 0 ? <div class="mt-6 overflow-x-auto" role="list" aria-label="Daily generation volume">
       <div class="grid min-w-[34rem] grid-flow-col auto-cols-fr items-end gap-2 border-b border-border pb-2" style="height: 15rem">
         {stats.volume.map((bucket) => <div class="flex h-full flex-col items-center justify-end gap-2 text-sm" role="listitem"><strong>{bucket.count}</strong><div class="w-full max-w-12 rounded-t-lg bg-primary" style={`height: ${Math.max((bucket.count / maxVolume) * 100, 3)}%`}></div><span class="font-label text-[.62rem] text-muted-foreground">{bucket.bucket.slice(5)}</span></div>)}
@@ -65,7 +65,7 @@ function dateValue(timestamp: number | undefined) {
   </section>
 
   <section class="rounded-[var(--radius-surface)] border border-border bg-card p-6" aria-labelledby="scene-heading">
-    <p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Scene usage</p><h2 class="m-0 font-display text-2xl font-semibold" id="scene-heading">Most-used scenes</h2>
+    <p class="mb-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">Scene usage</p><h2 class="m-0 font-display text-2xl font-semibold" id="scene-heading">Sessions by scene</h2>
     {stats.sceneUsage.length > 0 ? <div class="mt-6 grid gap-4" role="list" aria-label="Scene usage counts">
       {stats.sceneUsage.map((scene) => <div role="listitem"><div class="flex justify-between gap-3 text-sm"><span class="font-semibold">{scene.sceneName}</span><strong>{scene.count}</strong></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div class="h-full rounded-full bg-primary" style={`width: ${(scene.count / maxScene) * 100}%`}></div></div></div>)}
     </div> : <p class="mt-6 mb-0 text-sm text-muted-foreground">No scenes have been used in this window.</p>}

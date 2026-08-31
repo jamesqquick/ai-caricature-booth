@@ -72,9 +72,15 @@ export async function createEvent(database: D1Database, input: CreateEventInput,
   if (input.status === 'active') throw new EventActivationError();
   try {
     const result = await database.prepare(`
-      INSERT INTO events (slug, name, status, created_by)
-      VALUES (?, ?, ?, ?)
-    `).bind(input.slug, input.name, input.status, createdBy).run();
+      INSERT INTO events (slug, name, status, tagline, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      input.slug,
+      input.name,
+      input.status,
+      'Take a selfie, choose a scene, and download your caricature postcard.',
+      createdBy,
+    ).run();
 
     const id = Number(result.meta.last_row_id);
     return { id, ...input, createdBy };

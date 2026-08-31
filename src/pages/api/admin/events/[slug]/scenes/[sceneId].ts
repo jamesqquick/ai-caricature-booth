@@ -22,7 +22,7 @@ function errorResponse(error: unknown) {
     return Response.json({ error: error.message }, { status: 409 });
   }
   console.error('Admin scene request failed', error);
-  return Response.json({ error: 'Scene could not be saved.' }, { status: 500 });
+  return Response.json({ error: "Couldn't save the scene." }, { status: 500 });
 }
 
 async function eventForRoute(slug: string) {
