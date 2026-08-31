@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fakeEnv = vi.hoisted(() => ({
   DB: {},
   SELFIES: { get: vi.fn() },
+  IMAGES: { input: vi.fn() },
 }));
 const loadAdminSessionImageKey = vi.hoisted(() => vi.fn());
 
@@ -59,6 +60,26 @@ describe('admin session image proxy', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="postcard-session-with-safe-id.jpg"');
+  });
+
+  it('resizes thumbnail variants while keeping the source proxy protected', async () => {
+    loadAdminSessionImageKey.mockResolvedValue('sessions/session-1/postcard.jpg');
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject('image/jpeg'));
+    const responseBody = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([4, 5, 6])); controller.close(); } });
+    const outputResponse = new Response(responseBody, { status: 200 });
+    const output = { response: vi.fn(() => outputResponse) };
+    const transformed = { output: vi.fn().mockResolvedValue(output) };
+    const input = { transform: vi.fn(() => transformed) };
+    fakeEnv.IMAGES.input.mockReturnValue(input);
+
+    const response = await GET({ params: { sessionId: 'session-1', kind: 'postcard' }, url: requestUrl('?variant=thumbnail') });
+
+    expect(response.status).toBe(200);
+    expect(fakeEnv.IMAGES.input).toHaveBeenCalledWith(expect.any(ReadableStream));
+    expect(input.transform).toHaveBeenCalledWith({ width: 320, height: 213, fit: 'cover' });
+    expect(transformed.output).toHaveBeenCalledWith({ format: 'image/jpeg' });
+    expect(response.headers.get('Content-Type')).toBe('image/jpeg');
+    expect(await response.arrayBuffer()).toEqual(new Uint8Array([4, 5, 6]).buffer);
   });
 
   it.each([

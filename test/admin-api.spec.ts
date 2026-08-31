@@ -57,6 +57,7 @@ describe('admin APIs', () => {
         sceneName: 'Subway Platform',
         status: 'completed',
         updatedAt: 300,
+        hasPostcard: false,
       }],
       page: 1,
       pageSize: 30,
@@ -72,6 +73,7 @@ describe('admin APIs', () => {
       'sceneName',
       'status',
       'updatedAt',
+      'hasPostcard',
     ]);
     expect(loadAdminSessions).toHaveBeenCalledWith(fakeEnv.DB, {
       eventId: 7,
@@ -79,7 +81,7 @@ describe('admin APIs', () => {
       page: 2,
       pageSize: 30,
     });
-    expect(JSON.stringify(body)).not.toMatch(/eventId|createdAt|completedAt|errorMessage|workflowId|hasSelfie|hasCaricature|hasPostcard|(?:selfie|caricature|postcard)Key/);
+    expect(JSON.stringify(body)).not.toMatch(/eventId|createdAt|completedAt|errorMessage|workflowId|hasSelfie|hasCaricature|(?:selfie|caricature|postcard)Key/);
   });
 
   it('returns stats using the same normalized filter contract', async () => {

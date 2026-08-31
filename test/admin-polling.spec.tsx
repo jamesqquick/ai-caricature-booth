@@ -104,6 +104,36 @@ describe('OperationsDashboard polling', () => {
     expect(screen.getByText('100%')).toBeTruthy();
   });
 
+  it('renders a neutral placeholder when a session has no postcard', () => {
+    renderDashboard();
+
+    const row = screen.getByRole('row', { name: /session-1/ });
+    expect(within(row).getByRole('img', { name: 'No postcard preview for session session-1' }).querySelector('svg')).toBeTruthy();
+    expect(within(row).queryByText('Not available')).toBeNull();
+  });
+
+  it('renders a postcard thumbnail and opens the full postcard preview', () => {
+    render(
+      <OperationsDashboard
+        events={[]}
+        statuses={['pending', 'completed']}
+        initialFilters={{ page: 1, pageSize: 30 }}
+        initialSessionResult={{ ...initialSessionResult, sessions: [{ ...initialSession, status: 'completed', hasPostcard: true }] }}
+        initialStats={initialStats}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /session-1/ });
+    const image = row.querySelector<HTMLImageElement>('img');
+    if (!image) throw new Error('Expected a postcard thumbnail image.');
+    expect(image.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard?variant=thumbnail');
+    const trigger = within(row).getByRole('button', { name: 'Expand Final postcard for session session-1' });
+    fireEvent.load(image);
+    expect(within(row).getByAltText('Final postcard for session session-1')).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/api/admin/sessions/session-1/images/postcard');
+  });
+
   it('refreshes immediately on filter changes and replaces the dashboard URL', async () => {
     renderDashboard();
 

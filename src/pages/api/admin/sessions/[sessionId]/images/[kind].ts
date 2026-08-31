@@ -35,15 +35,27 @@ export async function GET({ params, url }: { params: Record<string, string | und
     const contentType = object?.httpMetadata?.contentType;
     if (!object || !contentType || !SAFE_IMAGE_TYPES.has(contentType)) return notFound();
 
+    let body = object.body;
+    let responseContentType = contentType;
+    if (url.searchParams.get('variant') === 'thumbnail') {
+      const thumbnail = await env.IMAGES.input(object.body)
+        .transform({ width: 320, height: 213, fit: 'cover' })
+        .output({ format: 'image/jpeg' })
+        .then((result) => result.response());
+      if (!thumbnail.ok || !thumbnail.body) return notFound();
+      body = thumbnail.body;
+      responseContentType = 'image/jpeg';
+    }
+
     const filename = `${kind}-${safeFilenamePart(sessionId)}.jpg`;
     const headers = new Headers({
       'Cache-Control': 'private, no-store',
-      'Content-Type': contentType,
+      'Content-Type': responseContentType,
       'Content-Disposition': `${url.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`,
       'X-Content-Type-Options': 'nosniff',
     });
 
-    return new Response(object.body, { headers });
+    return new Response(body, { headers });
   } catch {
     return notFound();
   }

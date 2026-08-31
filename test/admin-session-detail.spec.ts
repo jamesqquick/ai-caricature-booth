@@ -103,8 +103,9 @@ describe('admin session detail', () => {
 
   it('opens and closes the expanded preview with keyboard controls', () => {
     document.body.style.overflow = 'auto';
-    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
-    const image = screen.getByAltText('Generated caricature');
+    const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a preview image.');
     fireEvent.load(image);
     const trigger = screen.getByRole('button', { name: 'Expand Generated caricature' });
     fireEvent.click(trigger);
@@ -123,6 +124,23 @@ describe('admin session detail', () => {
     expect(document.body.style.overflow).toBe('auto');
   });
 
+  it('supports a compact preview without a download action', () => {
+    const { container } = render(createElement(ImagePreview, { src: '/postcard-thumb.jpg', fullSrc: '/postcard.jpg', alt: 'Final postcard', compact: true, showDownload: false }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a compact preview image.');
+    expect(screen.getByRole('img', { name: 'Final postcard' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('Loading')).toBeNull();
+    fireEvent.load(image);
+
+    expect(screen.getByAltText('Final postcard')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Expand Final postcard' })).toBeTruthy();
+    expect(screen.queryByText('Download image')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Final postcard' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/postcard.jpg');
+  });
+
   it('recognizes a cached image after the preview island hydrates', async () => {
     Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, value: true });
     Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', { configurable: true, value: 640 });
@@ -133,15 +151,16 @@ describe('admin session detail', () => {
     expect(screen.queryByText('Loading preview...')).toBeNull();
   });
 
-  it('announces image errors and offers a touch-sized retry control', () => {
-    render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
-    fireEvent.error(screen.getByAltText('Generated caricature'));
+  it('renders a neutral image placeholder without a retry action', () => {
+    const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
+    const image = container.querySelector('img');
+    if (!image) throw new Error('Expected a preview image.');
+    fireEvent.error(image);
 
-    expect(screen.getByRole('alert').textContent).toContain("We couldn't load this image.");
-    const retry = screen.getByRole('button', { name: 'Retry preview' });
-    expect(retry.className).toContain('min-h-11');
-    fireEvent.click(retry);
-    expect(screen.getByRole('status').textContent).toContain('Loading image');
+    expect(screen.getByRole('alert', { name: 'Generated caricature' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByText('Loading preview...')).toBeNull();
+    expect(screen.queryByText('The image could not be loaded.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry preview' })).toBeNull();
   });
 
   it('keeps the artifact grid stacked on small screens', async () => {

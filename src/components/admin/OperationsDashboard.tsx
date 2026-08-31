@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Input } from '../ui/input';
 import { Select } from '../ui/select';
+import { ImagePlaceholder, ImagePreview } from './ImagePreview';
 import type { AdminEventOption, AdminStatistics } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
 import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
@@ -57,6 +58,11 @@ function formatPipelineDuration(durationMs: number | null) {
   if (durationMs === null) return 'Not available';
   const seconds = durationMs / 1000;
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function postcardImageUrl(sessionId: string, variant: 'full' | 'thumbnail' = 'full') {
+  const suffix = variant === 'thumbnail' ? '?variant=thumbnail' : '';
+  return `/api/admin/sessions/${encodeURIComponent(sessionId)}/images/postcard${suffix}`;
 }
 
 export function OperationsDashboard({
@@ -355,7 +361,7 @@ export function OperationsDashboard({
                  <caption className="sr-only">Filtered booth sessions</caption>
                 <thead className="border-b border-border bg-muted">
                   <tr>
-                    {['Session', 'Event', 'Scene', 'Status', 'Updated', 'Details'].map((heading) => (
+                    {['Postcard', 'Session', 'Event', 'Scene', 'Status', 'Updated', 'Details'].map((heading) => (
                       <th className="px-4 py-3 font-label text-[.62rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground" key={heading} scope="col">{heading}</th>
                     ))}
                   </tr>
@@ -365,6 +371,21 @@ export function OperationsDashboard({
                     const updatedAt = new Date(session.updatedAt * 1000);
                     return (
                       <tr className="align-top hover:bg-muted/50" key={session.id}>
+                        <td className="px-4 py-4">
+                          {session.hasPostcard ? (
+                            <div className="w-28">
+                              <ImagePreview
+                                src={postcardImageUrl(session.id, 'thumbnail')}
+                                fullSrc={postcardImageUrl(session.id)}
+                                alt={`Final postcard for session ${session.id}`}
+                                compact
+                                showDownload={false}
+                              />
+                            </div>
+                          ) : (
+                            <ImagePlaceholder label={`No postcard preview for session ${session.id}`} compact />
+                          )}
+                        </td>
                         <th className="max-w-44 px-4 py-4 font-label text-xs font-semibold" scope="row">
                           <span className="block overflow-hidden text-ellipsis whitespace-nowrap" title={session.id}>{session.id}</span>
                         </th>
