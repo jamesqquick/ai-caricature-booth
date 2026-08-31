@@ -21,9 +21,6 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
         <div>
           <p className="m-0 font-label text-xs font-bold uppercase tracking-[.1em] text-destructive">{compact ? 'Unavailable' : 'Preview unavailable'}</p>
           {!compact && <p className="mb-0 mt-2 text-sm text-muted-foreground">The image could not be loaded.</p>}
-          <button className={`inline-flex min-h-11 items-center rounded-full border border-destructive/50 text-sm font-bold text-foreground hover:border-destructive ${compact ? 'mt-2 px-3 text-xs' : 'mt-4 px-4'}`} type="button" onClick={() => setStatus('loading')}>
-            {compact ? 'Retry' : 'Retry preview'}
-          </button>
         </div>
       </div>
     );

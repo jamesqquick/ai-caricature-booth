@@ -128,17 +128,14 @@ describe('admin session detail', () => {
     expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe('/postcard.jpg');
   });
 
-  it('announces image errors and offers a touch-sized retry control', () => {
+  it('announces image errors without a retry action', () => {
     const { container } = render(createElement(ImagePreview, { src: '/preview.jpg', alt: 'Generated caricature', downloadHref: '/download.jpg' }));
     const image = container.querySelector('img');
     if (!image) throw new Error('Expected a preview image.');
     fireEvent.error(image);
 
     expect(screen.getByRole('alert').textContent).toContain('The image could not be loaded.');
-    const retry = screen.getByRole('button', { name: 'Retry preview' });
-    expect(retry.className).toContain('min-h-11');
-    fireEvent.click(retry);
-    expect(screen.getByRole('status').textContent).toContain('Loading preview');
+    expect(screen.queryByRole('button', { name: 'Retry preview' })).toBeNull();
   });
 
   it('keeps the artifact grid stacked on small screens', async () => {
