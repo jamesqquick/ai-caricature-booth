@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
+import { actions } from 'astro:actions';
 import type { PublicScene } from '../data/scenes';
 import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
 import { eventAccentForeground } from '../lib/event-accent';
@@ -31,6 +32,7 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
   const accentForeground = eventAccentForeground(accentColor);
   const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}?source=generation`);
+  const chooseAnotherPhoto = () => dispatch({ type: 'retake-photo' });
 
   useEffect(() => {
     if (previousStepRef.current === state.step) return;
@@ -69,6 +71,8 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
             photoDataUrl={state.photoDataUrl}
             eventSlug={eventSlug}
             onComplete={finishGeneration}
+            onChooseAnotherPhoto={chooseAnotherPhoto}
+            generationActions={actions}
           />
         )}
       </section>
