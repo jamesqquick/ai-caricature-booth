@@ -1,0 +1,19 @@
+src/lib/selfie-ownership.ts
+  s_1352646f6cd362::t_8278131ce64292 8-39,41,43,47-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0b8b522ee955ed43fbb19395f64d019527a2e1e6",
+  "prompts": {},
+  "sessions": {
+    "s_1352646f6cd362": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2352375ffeO6dBCW37VmqiwS",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
