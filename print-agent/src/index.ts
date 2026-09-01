@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { handleJob } from "./job-handler.js";
+import { loadOrCreateInstallationId } from "./installation.js";
 import { AgentLock } from "./lock.js";
 import { FileAckOutbox } from "./outbox.js";
 import { resolveAgentDirectories, resolveAgentId } from "./paths.js";
@@ -15,7 +16,6 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 async function main(): Promise<void> {
   const config = loadConfig(process.env, process.argv.slice(2));
-  const agentId = resolveAgentId(config);
   const { outputDir, stateDir } = resolveAgentDirectories(config, packageRoot, homedir());
   const lock = await AgentLock.acquire(stateDir);
   const controller = new AbortController();
@@ -27,6 +27,8 @@ async function main(): Promise<void> {
   process.once("SIGTERM", stop);
 
   try {
+    const installationId = await loadOrCreateInstallationId(stateDir);
+    const agentId = resolveAgentId(config, installationId);
     const printer = createPrinter(config, packageRoot);
     console.info("Caricature Booth Print Agent");
     console.info(`worker=${config.workerUrl} event=${config.eventSlug} printer=${printer.name}`);

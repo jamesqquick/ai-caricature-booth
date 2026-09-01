@@ -62,6 +62,19 @@ type PrintJobRow = {
 
 type AgentPrintJobRow = PrintJobRow & { claim_token: string };
 
+type PrintJobRequestRow = {
+  session_id: string;
+  action: string;
+  target_job_id: string | null;
+  result_job_id: string;
+};
+
+type AdminRequestFingerprint = {
+  sessionId: string;
+  action: 'queue' | 'retry';
+  targetJobId: string | null;
+};
+
 type Acknowledgement =
   | { status: 'printed'; claimToken: string }
   | { status: 'failed'; error: string; claimToken: string };
@@ -354,29 +367,31 @@ export async function releasePrintJob(database: D1Database, jobId: string, claim
 }
 
 export async function queueAdminPrintJob(database: D1Database, sessionId: string, requestKey: string): Promise<AdminPrintJob> {
-  const repeated = await loadAdminRequestJob(database, sessionId, requestKey);
+  const fingerprint = { sessionId, action: 'queue', targetJobId: null } as const;
+  const repeated = await loadAdminRequestJob(database, requestKey, fingerprint);
   if (repeated) return repeated;
 
-  const row = await database.prepare(`
-    INSERT INTO print_jobs (session_id, event_id, postcard_key, postcard_url, scene_name, request_key)
-    SELECT s.id, s.event_id, s.postcard_key,
-           '/api/events/' || s.event_id || '/sessions/' || s.id || '/postcard',
-           COALESCE(NULLIF(s.scene_name, ''), s.scene_id), ?
-    FROM sessions s
-    WHERE s.id = ?
-      AND s.status = 'completed'
-      AND s.postcard_key IS NOT NULL
-      AND s.postcard_key <> ''
-      AND NOT EXISTS (
-        SELECT 1 FROM print_jobs pj
-        WHERE pj.session_id = s.id AND pj.status IN ('pending', 'printing')
-      )
-    ON CONFLICT DO NOTHING
-    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
-  `).bind(requestKey, sessionId).first<PrintJobRow>();
-  if (row) return adminJob(row);
-
-  const raced = await loadAdminRequestJob(database, sessionId, requestKey);
+  const jobId = crypto.randomUUID().replaceAll('-', '');
+  const raced = await executeAdminMutation(database, requestKey, fingerprint, [
+    database.prepare(`
+      INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name)
+      SELECT ?, s.id, s.event_id, s.postcard_key,
+             '/api/events/' || s.event_id || '/sessions/' || s.id || '/postcard',
+             COALESCE(NULLIF(s.scene_name, ''), s.scene_id)
+      FROM sessions s
+      WHERE s.id = ?
+        AND s.status = 'completed'
+        AND s.postcard_key IS NOT NULL
+        AND s.postcard_key <> ''
+        AND NOT EXISTS (
+          SELECT 1 FROM print_jobs pj
+          WHERE pj.session_id = s.id AND pj.status IN ('pending', 'printing')
+        )
+      ON CONFLICT DO NOTHING
+      RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    `).bind(jobId, sessionId),
+    receiptInsert(database, requestKey, fingerprint, jobId),
+  ]);
   if (raced) return raced;
 
   const active = await database.prepare(`
@@ -387,37 +402,81 @@ export async function queueAdminPrintJob(database: D1Database, sessionId: string
 }
 
 export async function retryAdminPrintJob(database: D1Database, sessionId: string, jobId: string, requestKey: string): Promise<AdminPrintJob> {
-  const repeated = await loadAdminRequestJob(database, sessionId, requestKey);
+  const fingerprint = { sessionId, action: 'retry', targetJobId: jobId } as const;
+  const repeated = await loadAdminRequestJob(database, requestKey, fingerprint);
   if (repeated) return repeated;
 
-  const row = await database.prepare(`
-    UPDATE print_jobs
-    SET status = 'pending', printed_at = NULL, error_msg = NULL, claim_token = NULL, claim_owner = NULL, request_key = ?
-    WHERE id = ?
-      AND session_id = ?
-      AND status = 'failed'
-      AND NOT EXISTS (
-        SELECT 1 FROM print_jobs active
-        WHERE active.session_id = print_jobs.session_id
-          AND active.id <> print_jobs.id
-          AND active.status IN ('pending', 'printing')
-      )
-    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
-  `).bind(requestKey, jobId, sessionId).first<PrintJobRow>();
-  if (row) return adminJob(row);
-  const raced = await loadAdminRequestJob(database, sessionId, requestKey);
+  const raced = await executeAdminMutation(database, requestKey, fingerprint, [
+    database.prepare(`
+      UPDATE print_jobs
+      SET status = 'pending', printed_at = NULL, error_msg = NULL, claim_token = NULL, claim_owner = NULL
+      WHERE id = ?
+        AND session_id = ?
+        AND status = 'failed'
+        AND NOT EXISTS (
+          SELECT 1 FROM print_jobs active
+          WHERE active.session_id = print_jobs.session_id
+            AND active.id <> print_jobs.id
+            AND active.status IN ('pending', 'printing')
+        )
+      RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    `).bind(jobId, sessionId),
+    receiptInsert(database, requestKey, fingerprint, jobId),
+  ]);
   if (raced) return raced;
   return await throwMissingOrConflict(database, jobId, 'Only failed print jobs can be retried.', sessionId);
 }
 
-async function loadAdminRequestJob(database: D1Database, sessionId: string, requestKey: string) {
+function receiptInsert(database: D1Database, requestKey: string, fingerprint: AdminRequestFingerprint, resultJobId: string) {
+  return database.prepare(`
+    INSERT INTO print_job_requests (idempotency_key, session_id, action, target_job_id, result_job_id)
+    SELECT ?, ?, ?, ?, ?
+    WHERE changes() = 1
+    RETURNING result_job_id
+  `).bind(requestKey, fingerprint.sessionId, fingerprint.action, fingerprint.targetJobId, resultJobId);
+}
+
+async function executeAdminMutation(
+  database: D1Database,
+  requestKey: string,
+  fingerprint: AdminRequestFingerprint,
+  statements: D1PreparedStatement[],
+) {
+  try {
+    const [mutation, receipt] = await database.batch<PrintJobRow | { result_job_id: string }>(statements);
+    const row = mutation?.results[0] as PrintJobRow | undefined;
+    if (row && receipt?.results.length === 1) return adminJob(row);
+  } catch (cause) {
+    const repeated = await loadAdminRequestJob(database, requestKey, fingerprint);
+    if (repeated) return repeated;
+    throw cause;
+  }
+  return await loadAdminRequestJob(database, requestKey, fingerprint);
+}
+
+async function loadAdminRequestJob(database: D1Database, requestKey: string, fingerprint: AdminRequestFingerprint) {
+  const receipt = await database.prepare(`
+    SELECT session_id, action, target_job_id, result_job_id
+    FROM print_job_requests
+    WHERE idempotency_key = ?
+    LIMIT 1
+  `).bind(requestKey).first<PrintJobRequestRow>();
+  if (!receipt) return null;
+  if (
+    receipt.session_id !== fingerprint.sessionId
+    || receipt.action !== fingerprint.action
+    || receipt.target_job_id !== fingerprint.targetJobId
+  ) {
+    throw new PrintJobConflictError('Idempotency key was already used for a different print operation.');
+  }
   const row = await database.prepare(`
     SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
     FROM print_jobs
-    WHERE request_key = ? AND session_id = ?
+    WHERE id = ? AND session_id = ?
     LIMIT 1
-  `).bind(requestKey, sessionId).first<PrintJobRow>();
-  return row ? adminJob(row) : null;
+  `).bind(receipt.result_job_id, fingerprint.sessionId).first<PrintJobRow>();
+  if (!row) throw new PrintJobNotFoundError();
+  return adminJob(row);
 }
 
 async function throwMissingOrConflict(database: D1Database, jobId: string, message: string, sessionId?: string): Promise<never> {

@@ -3,6 +3,7 @@ import { resolveAgentDirectories, resolveAgentId } from "../src/paths.js";
 import { config } from "./fixtures.js";
 
 describe("resolveAgentDirectories", () => {
+  const installationId = "10000000-0000-4000-8000-000000000001";
   it("uses one machine-level state directory across distinct package roots", () => {
     const first = resolveAgentDirectories(config, "/checkouts/one/print-agent", "/Users/operator");
     const second = resolveAgentDirectories(config, "/checkouts/two/print-agent", "/Users/operator");
@@ -32,10 +33,10 @@ describe("resolveAgentDirectories", () => {
     const first = { ...config, workerUrl: "https://booth.example.com/path/", printerDriver: "dnp" as const, printerName: "DNP DS620" };
     const second = { ...config, workerUrl: "https://booth.example.com/other", printerDriver: "dnp-ds620" as const, printerName: "DNP DS620" };
 
-    expect(resolveAgentId(first)).toMatch(/^[0-9a-f]{64}$/);
-    expect(resolveAgentId(first)).toBe(resolveAgentId(second));
+    expect(resolveAgentId(first, installationId)).toMatch(/^[0-9a-f]{64}$/);
+    expect(resolveAgentId(first, installationId)).toBe(resolveAgentId(second, installationId));
     expect(resolveAgentDirectories(first, "/app", "/home/operator").stateDir)
       .toBe(resolveAgentDirectories(second, "/app", "/home/operator").stateDir);
-    expect(resolveAgentId(first)).not.toContain(config.printAgentToken);
+    expect(resolveAgentId(first, installationId)).not.toContain(config.printAgentToken);
   });
 });

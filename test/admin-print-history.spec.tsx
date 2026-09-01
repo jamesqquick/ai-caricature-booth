@@ -32,6 +32,7 @@ describe('PrintHistory', () => {
 
   afterEach(() => {
     cleanup();
+    sessionStorage.clear();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -145,5 +146,49 @@ describe('PrintHistory', () => {
 
     expect(screen.getByText('Cancelled')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reprint postcard' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('reuses an unresolved operation key after a lost response and remount', async () => {
+    const pending = { ...failedJob, id: '3'.repeat(32), status: 'pending' as const, error: null, createdAt: 300 };
+    const fetchMock = vi.fn()
+      .mockImplementationOnce((_url, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ job: pending })));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue first print' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const firstKey = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).idempotencyKey;
+    first.unmount();
+
+    render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Queue first print' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const secondKey = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string).idempotencyKey;
+
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it('does not reuse a persisted key for a different retry target', async () => {
+    const otherFailedJob = { ...failedJob, id: '4'.repeat(32), createdAt: 400 };
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('network unavailable'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ job: { ...otherFailedJob, status: 'pending', error: null } })));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[failedJob]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry failed print requested/ }));
+    await screen.findByRole('alert');
+    const firstKey = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).idempotencyKey;
+    first.unmount();
+
+    render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[otherFailedJob]} />);
+    fireEvent.click(screen.getByRole('button', { name: /Retry failed print requested/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const secondKey = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string).idempotencyKey;
+
+    expect(secondKey).not.toBe(firstKey);
   });
 });

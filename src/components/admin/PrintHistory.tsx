@@ -20,6 +20,42 @@ class PrintHistoryError extends Error {
 }
 
 type DisplayPrintJob = Omit<AdminPrintJob, 'status'> & { status: string };
+type MutationRequest = { operation: string; key: string };
+
+function mutationStorageKey(sessionId: string) {
+  return `print-history:${sessionId}:mutation`;
+}
+
+function loadMutationRequest(sessionId: string): MutationRequest | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(mutationStorageKey(sessionId)) ?? 'null') as Partial<MutationRequest> | null;
+    if (parsed && typeof parsed.operation === 'string' && typeof parsed.key === 'string') {
+      return { operation: parsed.operation, key: parsed.key };
+    }
+  } catch {
+    // Invalid or unavailable browser storage is treated as no recoverable request.
+  }
+  return null;
+}
+
+function persistMutationRequest(sessionId: string, request: MutationRequest) {
+  try {
+    sessionStorage.setItem(mutationStorageKey(sessionId), JSON.stringify(request));
+  } catch {
+    // The request can still proceed when storage is unavailable.
+  }
+}
+
+function clearMutationRequest(sessionId: string, request: MutationRequest) {
+  try {
+    const persisted = loadMutationRequest(sessionId);
+    if (persisted?.operation === request.operation && persisted.key === request.key) {
+      sessionStorage.removeItem(mutationStorageKey(sessionId));
+    }
+  } catch {
+    // Storage cleanup is best effort.
+  }
+}
 
 function parseJob(value: unknown): DisplayPrintJob {
   if (!value || typeof value !== 'object') throw new PrintHistoryError("Couldn't read the print history response.");
@@ -88,11 +124,15 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
   const [isMutating, setIsMutating] = useState(false);
   const mutationInFlight = useRef(false);
   const mutationController = useRef<AbortController | null>(null);
-  const mutationRequest = useRef<{ operation: string; key: string } | null>(null);
+  const mutationRequest = useRef<MutationRequest | null>(null);
   const endpoint = `/api/admin/sessions/${encodeURIComponent(sessionId)}/print-jobs`;
   const activeJob = jobs.find((job) => ACTIVE_STATUSES.includes(job.status));
 
   useEffect(() => () => mutationController.current?.abort(), []);
+
+  useEffect(() => {
+    mutationRequest.current = loadMutationRequest(sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
     setJobs(initialJobs);
@@ -148,9 +188,14 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
     setIsMutating(true);
     setAlert('');
 
-    const operation = `${action}:${jobId ?? ''}`;
-    if (mutationRequest.current?.operation !== operation) {
-      mutationRequest.current = { operation, key: crypto.randomUUID() };
+    const operation = `${sessionId}:${action}:${jobId ?? ''}`;
+    const persisted = mutationRequest.current ?? loadMutationRequest(sessionId);
+    const requestIdentity = persisted?.operation === operation
+      ? persisted
+      : { operation, key: crypto.randomUUID() };
+    mutationRequest.current = requestIdentity;
+    if (persisted?.operation !== operation) {
+      persistMutationRequest(sessionId, requestIdentity);
     }
 
     try {
@@ -158,8 +203,8 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(action === 'retry'
-          ? { action, jobId, idempotencyKey: mutationRequest.current.key }
-          : { action, idempotencyKey: mutationRequest.current.key }),
+          ? { action, jobId, idempotencyKey: requestIdentity.key }
+          : { action, idempotencyKey: requestIdentity.key }),
         signal: controller.signal,
       });
       const job = await readMutation(response);
@@ -167,11 +212,16 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
         ? current.map((item) => item.id === job.id ? job : item)
         : [job, ...current]
       ).sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id)));
+      clearMutationRequest(sessionId, requestIdentity);
       mutationRequest.current = null;
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       const error = cause instanceof PrintHistoryError ? cause : new PrintHistoryError("Couldn't reach the print queue. Check your connection and try again.");
       setAlert(error.message);
+      if (error.status && error.status >= 400 && error.status < 500) {
+        clearMutationRequest(sessionId, requestIdentity);
+        mutationRequest.current = null;
+      }
       if (error.status === 409) await refreshAfterConflict(controller.signal);
     } finally {
       if (mutationController.current === controller) mutationController.current = null;

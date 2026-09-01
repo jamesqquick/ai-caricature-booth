@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { resolveAgentId } from '../print-agent/src/paths';
 import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, queueAdminPrintJob, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
@@ -17,6 +18,7 @@ const migrationUrls = [
   '0011_print_job_terminal_claim_tokens.sql',
   '0012_print_job_claim_owners.sql',
   '0013_print_job_request_keys.sql',
+  '0014_print_job_requests.sql',
 ].map((name) => new URL(`../drizzle/migrations/${name}`, import.meta.url));
 
 function asD1(sqlite: DatabaseSync) {
@@ -41,6 +43,18 @@ function asD1(sqlite: DatabaseSync) {
       };
       return prepared;
     },
+    async batch<T>(statements: Array<{ all(): Promise<{ results: T[] }> }>) {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.all());
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    },
   } as unknown as D1Database;
   return { database, allResults };
 }
@@ -64,19 +78,24 @@ function insertCompletedSession(sqlite: DatabaseSync) {
 }
 
 describe('print job SQLite integration', () => {
-  it('returns the exact completed admin job when a lost success is retried with the same request key', async () => {
+  it('replays an immutable queue receipt after later retries and status changes', async () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
       const requestKey = '10000000-0000-4000-8000-000000000001';
       const queued = await queueAdminPrintJob(database, sessionId, requestKey);
       const [claimed] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
-      await acknowledgePrintJob(database, queued.id, { status: 'printed', claimToken: claimed.claimToken });
+      await acknowledgePrintJob(database, queued.id, { status: 'failed', error: 'paper jam', claimToken: claimed.claimToken });
+      await retryAdminPrintJob(database, sessionId, queued.id, retryRequestKey);
+      const [retried] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+      await acknowledgePrintJob(database, queued.id, { status: 'printed', claimToken: retried.claimToken });
 
       const repeated = await queueAdminPrintJob(database, sessionId, requestKey);
 
       expect(repeated).toMatchObject({ id: queued.id, status: 'printed' });
       expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_jobs').get()).toEqual({ count: 1 });
+      expect(sqlite.prepare('SELECT request_key FROM print_jobs WHERE id = ?').get(queued.id)).toEqual({ request_key: null });
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_job_requests').get()).toEqual({ count: 2 });
     } finally {
       sqlite.close();
     }
@@ -188,6 +207,58 @@ describe('print job SQLite integration', () => {
     }
   });
 
+  it('replays an old retry receipt without mutating a job changed by a later retry', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
+      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+      await acknowledgePrintJob(database, pending.id, { status: 'failed', error: 'first failure', claimToken: firstClaim.claimToken });
+      const firstRetryKey = '30000000-0000-4000-8000-000000000002';
+      await retryAdminPrintJob(database, sessionId, pending.id, firstRetryKey);
+      const [secondClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+      await acknowledgePrintJob(database, pending.id, { status: 'failed', error: 'second failure', claimToken: secondClaim.claimToken });
+      const secondRetryKey = '30000000-0000-4000-8000-000000000003';
+      await retryAdminPrintJob(database, sessionId, pending.id, secondRetryKey);
+
+      const repeated = await retryAdminPrintJob(database, sessionId, pending.id, firstRetryKey);
+
+      expect(repeated).toMatchObject({ id: pending.id, status: 'pending', error: null });
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_job_requests WHERE result_job_id = ?').get(pending.id)).toEqual({ count: 2 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('rejects idempotency keys reused with a different session, action, or retry target', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const secondSessionId = '00000000-0000-4000-8000-000000000002';
+      sqlite.prepare(`
+        INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, postcard_key)
+        VALUES (?, 1, 'completed', 'subway', 'Subway', 'selfie-2.jpg', 'postcard-2.jpg')
+      `).run(secondSessionId);
+      const queueKey = '10000000-0000-4000-8000-000000000009';
+      const queued = await queueAdminPrintJob(database, sessionId, queueKey);
+
+      await expect(queueAdminPrintJob(database, secondSessionId, queueKey)).rejects.toBeInstanceOf(PrintJobConflictError);
+      await expect(retryAdminPrintJob(database, sessionId, queued.id, queueKey)).rejects.toBeInstanceOf(PrintJobConflictError);
+
+      sqlite.prepare("UPDATE print_jobs SET status = 'failed' WHERE id = ?").run(queued.id);
+      const otherJobId = '9'.repeat(32);
+      sqlite.prepare(`
+        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, status)
+        VALUES (?, ?, 1, 'other.jpg', '/other', 'Other', 'failed')
+      `).run(otherJobId, sessionId);
+      const retryKey = '30000000-0000-4000-8000-000000000009';
+      await retryAdminPrintJob(database, sessionId, queued.id, retryKey);
+      await expect(retryAdminPrintJob(database, sessionId, otherJobId, retryKey)).rejects.toBeInstanceOf(PrintJobConflictError);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it('accepts a repeated terminal acknowledgement after a successful response is lost', async () => {
     const { sqlite, database } = await createDatabase();
     try {
@@ -225,7 +296,7 @@ describe('print job SQLite integration', () => {
     }
   });
 
-  it('releases only unknown active claims owned by the reconciling agent', async () => {
+  it("does not let one agent installation's reconciliation release another installation's claims", async () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
@@ -236,8 +307,16 @@ describe('print job SQLite integration', () => {
       insert.run('1'.repeat(32), sessionId, '/one', 'One', 10);
       insert.run('2'.repeat(32), sessionId, '/two', 'Two', 20);
       insert.run('3'.repeat(32), sessionId, '/three', 'Three', 30);
-      const owner = 'a'.repeat(64);
-      const otherOwner = 'b'.repeat(64);
+      const agentConfig = {
+        workerUrl: 'https://booth.example.com',
+        eventSlug: 'nyc-tech-week-2026',
+        printAgentToken: 'test-token',
+        pollIntervalMs: 5_000,
+        batchSize: 5,
+        printerDriver: 'mock' as const,
+      };
+      const owner = resolveAgentId(agentConfig, '10000000-0000-4000-8000-000000000001');
+      const otherOwner = resolveAgentId(agentConfig, '20000000-0000-4000-8000-000000000002');
       const owned = await claimPrintJobs(database, 'nyc-tech-week-2026', owner, 2);
       const [other] = await claimPrintJobs(database, 'nyc-tech-week-2026', otherOwner, 1);
 
@@ -255,15 +334,15 @@ describe('print job SQLite integration', () => {
     }
   });
 
-  it('adds claim tracking columns without constraining imported statuses', async () => {
+  it('preserves imported statuses and reserves legacy request keys during receipt migration', async () => {
     const sqlite = new DatabaseSync(':memory:');
     try {
       for (const migrationUrl of migrationUrls.slice(0, -1)) sqlite.exec(await readFile(migrationUrl, 'utf8'));
       insertCompletedSession(sqlite);
       sqlite.prepare(`
-        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, status)
-        VALUES ('legacy', ?, 1, 'postcard.jpg', '/legacy', 'Legacy', 'imported')
-      `).run(sessionId);
+        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, status, request_key)
+        VALUES ('legacy', ?, 1, 'postcard.jpg', '/legacy', 'Legacy', 'imported', ?)
+      `).run(sessionId, '40000000-0000-4000-8000-000000000001');
 
       sqlite.exec(await readFile(migrationUrls.at(-1)!, 'utf8'));
 
@@ -273,6 +352,8 @@ describe('print job SQLite integration', () => {
         .toEqual({ name: 'print_jobs_session_status_idx' });
       expect(sqlite.prepare("SELECT name FROM pragma_index_list('print_jobs') WHERE name = 'print_jobs_claim_owner_status_idx'").get())
         .toEqual({ name: 'print_jobs_claim_owner_status_idx' });
+      expect(sqlite.prepare("SELECT action, target_job_id, result_job_id FROM print_job_requests WHERE idempotency_key = '40000000-0000-4000-8000-000000000001'").get())
+        .toEqual({ action: 'legacy', target_job_id: 'legacy', result_job_id: 'legacy' });
     } finally {
       sqlite.close();
     }

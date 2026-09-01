@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { loadAdminPrintJobs, parseAdminMutation, parseSessionId, queueAdminPrintJob, retryAdminPrintJob } from '../../../../../db/print-jobs';
-import { printJobErrorResponse, printJobJson, readPrintJobJson } from '../../../../../lib/print-job-response';
+import { assertPrintJobMutationRequest, printJobErrorResponse, printJobJson, readPrintJobJson } from '../../../../../lib/print-job-response';
 
 export const prerender = false;
 
@@ -15,6 +15,7 @@ export async function GET({ params }: { params: Record<string, string | undefine
 
 export async function POST({ params, request }: { params: Record<string, string | undefined>; request: Request }) {
   try {
+    assertPrintJobMutationRequest(request, 'action');
     const sessionId = parseSessionId(params.sessionId);
     const mutation = parseAdminMutation(await readPrintJobJson(request, 'action'));
     const job = mutation.action === 'queue'

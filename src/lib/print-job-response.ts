@@ -8,6 +8,19 @@ export async function readPrintJobJson(request: Request, field: PrintJobField) {
   }
 }
 
+export function assertPrintJobMutationRequest(request: Request, field: PrintJobField) {
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    throw new PrintJobValidationError(field, 'Content-Type must be application/json.');
+  }
+  const origin = request.headers.get('Origin');
+  const fetchSite = request.headers.get('Sec-Fetch-Site');
+  // Headerless non-browser clients are allowed; supplied browser metadata must be same-origin.
+  if ((origin && origin !== new URL(request.url).origin) || fetchSite?.toLowerCase() === 'cross-site') {
+    throw new PrintJobForbiddenError('Cross-origin print requests are not allowed.');
+  }
+}
+
 export function printJobJson<T>(body: T, status = 200) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }

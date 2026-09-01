@@ -49,6 +49,14 @@ function attendeeRequest(headers: HeadersInit = {}) {
   });
 }
 
+function adminRequest(body: unknown, headers: HeadersInit = {}) {
+  return new Request('https://booth.test/api/admin/sessions/x/print-jobs', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('print job APIs', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -96,6 +104,29 @@ describe('print job APIs', () => {
     expect(sameOrigin.status).toBe(200);
     expect(headerless.status).toBe(200);
     expect(createAttendeePrintJob).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires JSON and blocks cross-origin admin browser posts at the route', async () => {
+    queueAdminPrintJob.mockResolvedValue(publicJob);
+    const params = { sessionId };
+    const body = { action: 'queue', idempotencyKey };
+
+    const wrongType = await mutateAdminJob({
+      params,
+      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify(body) }),
+    });
+    const wrongOrigin = await mutateAdminJob({ params, request: adminRequest(body, { Origin: 'https://evil.test' }) });
+    const crossSite = await mutateAdminJob({ params, request: adminRequest(body, { 'Sec-Fetch-Site': 'cross-site' }) });
+    const sameOrigin = await mutateAdminJob({ params, request: adminRequest(body, { Origin: 'https://booth.test', 'Sec-Fetch-Site': 'same-origin' }) });
+    const headerless = await mutateAdminJob({ params, request: adminRequest(body) });
+
+    expect(wrongType.status).toBe(400);
+    expect(await wrongType.json()).toEqual({ error: 'Content-Type must be application/json.', field: 'action' });
+    expect(wrongOrigin.status).toBe(403);
+    expect(crossSite.status).toBe(403);
+    expect(sameOrigin.status).toBe(200);
+    expect(headerless.status).toBe(200);
+    expect(queueAdminPrintJob).toHaveBeenCalledTimes(2);
   });
 
   it('loads status only for the event/session/job tuple', async () => {
@@ -185,7 +216,7 @@ describe('print job APIs', () => {
   it.each([
     ['claim', () => claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', { method: 'POST', body: '[]' }) }), 'eventSlug'],
     ['ack', () => acknowledgeJob({ params: { jobId }, request: new Request('https://booth.test/api/print-agent/jobs/x/ack', { method: 'POST', body: '[]' }) }), 'status'],
-    ['admin', () => mutateAdminJob({ params: { sessionId }, request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: '[]' }) }), 'action'],
+    ['admin', () => mutateAdminJob({ params: { sessionId }, request: adminRequest([]) }), 'action'],
   ] as const)('reports endpoint-specific fields for non-object %s bodies', async (_name, request, field) => {
     const response = await request();
     expect(response.status).toBe(400);
@@ -287,11 +318,11 @@ describe('print job APIs', () => {
 
     const queueResponse = await mutateAdminJob({
       params: { sessionId },
-      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'queue', idempotencyKey }) }),
+      request: adminRequest({ action: 'queue', idempotencyKey }),
     });
     const retryResponse = await mutateAdminJob({
       params: { sessionId },
-      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'retry', jobId, idempotencyKey }) }),
+      request: adminRequest({ action: 'retry', jobId, idempotencyKey }),
     });
 
     expect(queueResponse.status).toBe(200);
@@ -335,7 +366,7 @@ describe('print job APIs', () => {
     retryAdminPrintJob.mockRejectedValue(new PrintJobConflictError('Only failed or stuck printing jobs can be retried.'));
     const request = (body: object) => mutateAdminJob({
       params: { sessionId },
-      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify(body) }),
+      request: adminRequest(body),
     });
 
     expect((await request({ action: 'queue', idempotencyKey })).status).toBe(409);

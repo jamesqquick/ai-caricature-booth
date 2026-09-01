@@ -8,7 +8,7 @@ export type AgentDirectories = {
 };
 
 export function resolveAgentDirectories(config: AgentConfig, packageRoot: string, homeDir: string): AgentDirectories {
-  const instanceHash = resolveAgentId(config).slice(0, 16);
+  const instanceHash = resolveConfigIdentity(config).slice(0, 16);
 
   return {
     outputDir: join(packageRoot, "output"),
@@ -18,7 +18,13 @@ export function resolveAgentDirectories(config: AgentConfig, packageRoot: string
   };
 }
 
-export function resolveAgentId(config: AgentConfig): string {
+export function resolveAgentId(config: AgentConfig, installationId: string): string {
+  return createHash("sha256")
+    .update(`${resolveConfigIdentity(config)}\0${installationId}`)
+    .digest("hex");
+}
+
+function resolveConfigIdentity(config: AgentConfig): string {
   const workerOrigin = new URL(config.workerUrl).origin;
   const printerDriver = config.printerDriver === "mock" ? "mock" : "dnp-ds620";
   const printerIdentity = config.printerName ?? "default";

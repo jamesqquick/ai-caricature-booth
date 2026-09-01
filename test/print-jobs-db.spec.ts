@@ -163,18 +163,24 @@ describe('print job data layer', () => {
     const statements: ReturnType<typeof statement>[] = [];
     const database = {
       prepare(query: string) {
-        const prepared = statement(query, statements.length === 0 ? null : row);
+        const prepared = statement(query, null);
         statements.push(prepared);
         return prepared;
       },
+      batch: vi.fn().mockResolvedValue([
+        { results: [row] },
+        { results: [{ result_job_id: row.id }] },
+      ]),
     } as unknown as D1Database;
 
     const job = await queueAdminPrintJob(database, row.session_id, requestKey);
 
-    expect(statements[0].query).toContain('request_key = ?');
-    expect(statements[1].query).toContain('request_key');
+    expect(statements[0].query).toContain('FROM print_job_requests');
+    expect(statements[1].query).not.toContain('request_key');
     expect(statements[1].query).toContain("pj.status IN ('pending', 'printing')");
     expect(statements[1].query).not.toContain("'printed')");
+    expect(statements[2].query).toContain('INSERT INTO print_job_requests');
+    expect(statements[2].query).toContain('WHERE changes() = 1');
     expect(job).not.toHaveProperty('claimToken');
   });
 
@@ -292,10 +298,14 @@ describe('print job data layer', () => {
     const statements: ReturnType<typeof statement>[] = [];
     const database = {
       prepare(query: string) {
-        const prepared = statement(query, statements.length === 0 ? null : row);
+        const prepared = statement(query, null);
         statements.push(prepared);
         return prepared;
       },
+      batch: vi.fn().mockResolvedValue([
+        { results: [row] },
+        { results: [{ result_job_id: row.id }] },
+      ]),
     } as unknown as D1Database;
 
     const job = await retryAdminPrintJob(database, row.session_id, row.id, requestKey);
@@ -309,16 +319,17 @@ describe('print job data layer', () => {
     expect(statements[1].query).toContain('printed_at = NULL');
     expect(statements[1].query).toContain('error_msg = NULL');
     expect(statements[1].query).toContain('claim_token = NULL');
+    expect(statements[1].query).not.toContain('request_key');
+    expect(statements[2].query).toContain('INSERT INTO print_job_requests');
     expect(job).not.toHaveProperty('claimToken');
   });
 
   it('reports an admin queue conflict when an active job blocks insertion', async () => {
-    let call = 0;
     const database = {
-      prepare() {
-        call += 1;
-        return statement('', call === 4 ? { id: row.id } : null);
+      prepare(query: string) {
+        return statement(query, query.includes('SELECT id FROM print_jobs WHERE session_id') ? { id: row.id } : null);
       },
+      batch: vi.fn().mockResolvedValue([{ results: [] }, { results: [] }]),
     } as unknown as D1Database;
 
     await expect(queueAdminPrintJob(database, row.session_id, '10000000-0000-4000-8000-000000000001')).rejects.toMatchObject({
@@ -328,12 +339,11 @@ describe('print job data layer', () => {
   });
 
   it('reports an admin retry conflict for an ineligible existing job', async () => {
-    let call = 0;
     const database = {
-      prepare() {
-        call += 1;
-        return statement('', call === 4 ? { id: row.id } : null);
+      prepare(query: string) {
+        return statement(query, query.includes('SELECT id FROM print_jobs WHERE id') ? { id: row.id } : null);
       },
+      batch: vi.fn().mockResolvedValue([{ results: [] }, { results: [] }]),
     } as unknown as D1Database;
 
     await expect(retryAdminPrintJob(database, row.session_id, row.id, requestKey)).rejects.toBeInstanceOf(PrintJobConflictError);
