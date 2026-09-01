@@ -1,0 +1,19 @@
+print-agent/src/poller.ts
+  s_d4e6b520326bd7::t_516bb25f0480dc 57-58,104-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8712ea6e515a0afe9402675a6303d186950a66a2",
+  "prompts": {},
+  "sessions": {
+    "s_d4e6b520326bd7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2955db0ffeUEbKgW5dPuDZRC",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
