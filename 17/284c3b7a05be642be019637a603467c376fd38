@@ -1,0 +1,19 @@
+test/print-jobs-db.spec.ts
+  s_15299d0b9948a9::t_e2b6b00c1f7d53 140-142,152,156-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17284c3b7a05be642be019637a603467c376fd38",
+  "prompts": {},
+  "sessions": {
+    "s_15299d0b9948a9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa568a741ffelsPk4kqB5m9Pyo",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
