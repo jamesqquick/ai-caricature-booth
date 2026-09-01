@@ -1,0 +1,21 @@
+drizzle/migrations/0010_session_error_codes.sql
+  s_8ad957087dc63a::t_c162f79446168f 1-9
+src/db/sessions.ts
+  s_8ad957087dc63a::t_3a6a16ffc5a81d 2,28,42-49,69,92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0fce7e79baa861f49ab0b6ada742902b9f35b5cf",
+  "prompts": {},
+  "sessions": {
+    "s_8ad957087dc63a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa582ed2effe3o2w6I63Ou9vuW",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
