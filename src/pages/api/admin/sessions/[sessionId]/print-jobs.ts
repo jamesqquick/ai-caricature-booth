@@ -18,8 +18,8 @@ export async function POST({ params, request }: { params: Record<string, string 
     const sessionId = parseSessionId(params.sessionId);
     const mutation = parseAdminMutation(await readPrintJobJson(request, 'action'));
     const job = mutation.action === 'queue'
-      ? await queueAdminPrintJob(env.DB, sessionId)
-      : await retryAdminPrintJob(env.DB, sessionId, mutation.jobId);
+      ? await queueAdminPrintJob(env.DB, sessionId, mutation.idempotencyKey)
+      : await retryAdminPrintJob(env.DB, sessionId, mutation.jobId, mutation.idempotencyKey);
     return printJobJson({ job });
   } catch (error) {
     return printJobErrorResponse(error);

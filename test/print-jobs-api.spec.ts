@@ -39,12 +39,21 @@ const jobId = '0123456789abcdef0123456789abcdef';
 const claimToken = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const agentId = 'b'.repeat(64);
 const publicJob = { id: jobId, status: 'pending', printedAt: null };
+const idempotencyKey = '10000000-0000-4000-8000-000000000001';
+
+function attendeeRequest(headers: HeadersInit = {}) {
+  return new Request('https://booth.test/api/events/7/sessions/x/print-jobs', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({ idempotencyKey }),
+  });
+}
 
 describe('print job APIs', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('validates event identifiers and never calls the database for invalid input', async () => {
-    const response = await createJob({ params: { eventId: '7x', sessionId: 'not-a-uuid' } });
+    const response = await createJob({ params: { eventId: '7x', sessionId: 'not-a-uuid' }, request: attendeeRequest() });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid eventId.', field: 'eventId' });
@@ -52,7 +61,7 @@ describe('print job APIs', () => {
   });
 
   it('rejects invalid session and job identifiers', async () => {
-    const invalidSession = await createJob({ params: { eventId: '7', sessionId: 'not-a-uuid' } });
+    const invalidSession = await createJob({ params: { eventId: '7', sessionId: 'not-a-uuid' }, request: attendeeRequest() });
     const invalidJob = await getJob({ params: { eventId: '7', sessionId, jobId: 'not-a-job-id' } });
 
     expect(invalidSession.status).toBe(400);
@@ -66,11 +75,27 @@ describe('print job APIs', () => {
   it('creates an attendee job scoped to its event and session', async () => {
     createAttendeePrintJob.mockResolvedValue(publicJob);
 
-    const response = await createJob({ params: { eventId: '7', sessionId } });
+    const response = await createJob({ params: { eventId: '7', sessionId }, request: attendeeRequest() });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ job: publicJob });
-    expect(createAttendeePrintJob).toHaveBeenCalledWith(fakeEnv.DB, 7, sessionId);
+    expect(createAttendeePrintJob).toHaveBeenCalledWith(fakeEnv.DB, 7, sessionId, idempotencyKey);
+  });
+
+  it('blocks cross-origin browser posts while allowing same-origin and headerless clients', async () => {
+    createAttendeePrintJob.mockResolvedValue(publicJob);
+    const params = { eventId: '7', sessionId };
+
+    const wrongOrigin = await createJob({ params, request: attendeeRequest({ Origin: 'https://evil.test' }) });
+    const crossSite = await createJob({ params, request: attendeeRequest({ 'Sec-Fetch-Site': 'cross-site' }) });
+    const sameOrigin = await createJob({ params, request: attendeeRequest({ Origin: 'https://booth.test', 'Sec-Fetch-Site': 'same-origin' }) });
+    const headerless = await createJob({ params, request: attendeeRequest() });
+
+    expect(wrongOrigin.status).toBe(403);
+    expect(crossSite.status).toBe(403);
+    expect(sameOrigin.status).toBe(200);
+    expect(headerless.status).toBe(200);
+    expect(createAttendeePrintJob).toHaveBeenCalledTimes(2);
   });
 
   it('loads status only for the event/session/job tuple', async () => {
@@ -262,17 +287,17 @@ describe('print job APIs', () => {
 
     const queueResponse = await mutateAdminJob({
       params: { sessionId },
-      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'queue' }) }),
+      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'queue', idempotencyKey }) }),
     });
     const retryResponse = await mutateAdminJob({
       params: { sessionId },
-      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'retry', jobId }) }),
+      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify({ action: 'retry', jobId, idempotencyKey }) }),
     });
 
     expect(queueResponse.status).toBe(200);
     expect(retryResponse.status).toBe(200);
-    expect(queueAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId);
-    expect(retryAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId);
+    expect(queueAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, idempotencyKey);
+    expect(retryAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId, idempotencyKey);
   });
 
   it('returns safe admin print history for the requested session', async () => {
@@ -313,7 +338,7 @@ describe('print job APIs', () => {
       request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify(body) }),
     });
 
-    expect((await request({ action: 'queue' })).status).toBe(409);
-    expect((await request({ action: 'retry', jobId })).status).toBe(409);
+    expect((await request({ action: 'queue', idempotencyKey })).status).toBe(409);
+    expect((await request({ action: 'retry', jobId, idempotencyKey })).status).toBe(409);
   });
 });

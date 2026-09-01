@@ -19,6 +19,8 @@ describe('AttendeePrintControl', () => {
 
   afterEach(() => {
     cleanup();
+    sessionStorage.clear();
+    delete (window as Window & { __printJobActive?: boolean }).__printJobActive;
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -38,7 +40,11 @@ describe('AttendeePrintControl', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Print queued' }).hasAttribute('disabled')).toBe(true));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }));
+    expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({
+      method: 'POST',
+      body: expect.stringMatching(/"idempotencyKey":"[0-9a-f-]{36}"/),
+      signal: expect.any(AbortSignal),
+    }));
 
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
     expect(await screen.findByRole('button', { name: 'Printing postcard' })).toBeTruthy();
@@ -80,7 +86,7 @@ describe('AttendeePrintControl', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
 
-    expect(await screen.findByRole('button', { name: 'Try print again' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Check print request' })).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toMatch(/couldn't (?:request|read)|unavailable/i);
   });
 
@@ -105,7 +111,29 @@ describe('AttendeePrintControl', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check print request' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/connection/i);
+  });
+
+  it('marks printing active before a stalled POST and reuses its request key after the deadline', async () => {
+    let postSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn()
+      .mockImplementationOnce((_url, init) => {
+        postSignal = init?.signal;
+        return new Promise(() => undefined);
+      })
+      .mockResolvedValueOnce(new Response(JSON.stringify(job('pending'))));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    expect((window as Window & { __printJobActive?: boolean }).__printJobActive).toBe(true);
+    const firstBody = fetchMock.mock.calls[0]?.[1]?.body;
+
+    await act(async () => vi.advanceTimersByTimeAsync(8_000));
+    expect(postSignal?.aborted).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Check print request' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(firstBody);
   });
 });

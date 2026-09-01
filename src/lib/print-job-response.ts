@@ -1,4 +1,4 @@
-import { PrintJobConflictError, PrintJobNotFoundError, PrintJobValidationError, type PrintJobField } from '../db/print-jobs';
+import { PrintJobConflictError, PrintJobForbiddenError, PrintJobNotFoundError, PrintJobValidationError, type PrintJobField } from '../db/print-jobs';
 
 export async function readPrintJobJson(request: Request, field: PrintJobField) {
   try {
@@ -17,6 +17,7 @@ export function printJobErrorResponse(error: unknown) {
     return printJobJson({ error: error.message, field: error.field }, 400);
   }
   if (error instanceof PrintJobNotFoundError) return printJobJson({ error: error.message }, 404);
+  if (error instanceof PrintJobForbiddenError) return printJobJson({ error: error.message }, 403);
   if (error instanceof PrintJobConflictError) return printJobJson({ error: error.message }, 409);
   console.error('Print job API request failed', error);
   return printJobJson({ error: "Couldn't process the print job request." }, 500);

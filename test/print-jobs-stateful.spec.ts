@@ -22,6 +22,7 @@ type JobState = {
   error_msg: string | null;
   claim_token?: string | null;
   claim_owner?: string | null;
+  request_key?: string | null;
 };
 
 class StatefulStatement {
@@ -58,11 +59,14 @@ class StatefulD1 {
     const normalized = statement.query.replace(/\s+/g, ' ').trim();
     if (normalized.startsWith('INSERT INTO print_jobs')) return this.insert(statement);
     if (normalized.includes('FROM print_jobs pj') && normalized.includes('INNER JOIN sessions s')) {
-      const [sessionId, eventId] = statement.values as [string, number];
+      const requestLookup = normalized.includes('WHERE pj.request_key = ?');
+      const [requestKey, sessionId, eventId] = requestLookup
+        ? statement.values as [string, string, number]
+        : [statement.values[2], statement.values[0], statement.values[1]] as [string, string, number];
       const session = this.sessions.get(sessionId);
       if (!session || session.eventId !== eventId || session.status !== 'completed' || !session.postcardKey) return null;
       return this.jobs
-        .filter((job) => job.session_id === sessionId && job.event_id === eventId && ['pending', 'printing', 'printed'].includes(job.status))
+        .filter((job) => job.session_id === sessionId && job.event_id === eventId && (job.request_key === requestKey || ['pending', 'printing', 'printed'].includes(job.status)))
         .sort((left, right) => right.created_at - left.created_at || right.id.localeCompare(left.id))[0] ?? null;
     }
     if (normalized.includes('WHERE id = ? AND session_id = ? AND event_id = ?')) {
@@ -91,7 +95,7 @@ class StatefulD1 {
   }
 
   private insert(statement: StatefulStatement) {
-    const [postcardUrl, sessionId, eventId] = statement.values as [string, string, number];
+    const [postcardUrl, requestKey, sessionId, eventId] = statement.values as [string, string, string, number];
     const session = this.sessions.get(sessionId);
     if (!session || session.eventId !== eventId || session.status !== 'completed' || !session.postcardKey) return null;
     const blocked = this.jobs.some((job) => (
@@ -111,6 +115,7 @@ class StatefulD1 {
       created_at: this.nextId,
       printed_at: null,
       error_msg: null,
+      request_key: requestKey,
     };
     this.jobs.push(job);
     return job;
@@ -118,6 +123,7 @@ class StatefulD1 {
 }
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
+const requestKey = '10000000-0000-4000-8000-000000000001';
 
 function databaseWithCompletedSession() {
   const database = new StatefulD1();
@@ -138,8 +144,8 @@ describe('print job conditional behavior', () => {
     const database = databaseWithCompletedSession();
 
     const [first, second] = await Promise.all([
-      createAttendeePrintJob(database as unknown as D1Database, 7, sessionId),
-      createAttendeePrintJob(database as unknown as D1Database, 7, sessionId),
+      createAttendeePrintJob(database as unknown as D1Database, 7, sessionId, requestKey),
+      createAttendeePrintJob(database as unknown as D1Database, 7, sessionId, requestKey),
     ]);
 
     expect(database.jobs).toHaveLength(1);
@@ -158,7 +164,7 @@ describe('print job conditional behavior', () => {
     session.postcardKey = postcardKey;
     const eventId = _name === 'wrong event' ? 8 : 7;
 
-    await expect(createAttendeePrintJob(database as unknown as D1Database, eventId, sessionId))
+    await expect(createAttendeePrintJob(database as unknown as D1Database, eventId, sessionId, requestKey))
       .rejects.toBeInstanceOf(PrintJobNotFoundError);
     expect(database.jobs).toHaveLength(0);
   });
@@ -193,7 +199,7 @@ describe('print job conditional behavior', () => {
 
   it('isolates attendee status by the complete event, session, and job tuple', async () => {
     const database = databaseWithCompletedSession();
-    const created = await createAttendeePrintJob(database as unknown as D1Database, 7, sessionId);
+    const created = await createAttendeePrintJob(database as unknown as D1Database, 7, sessionId, requestKey);
 
     await expect(loadAttendeePrintJob(database as unknown as D1Database, 8, sessionId, created.id))
       .rejects.toBeInstanceOf(PrintJobNotFoundError);

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
+import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, queueAdminPrintJob, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
   '0001_events.sql',
@@ -16,6 +16,7 @@ const migrationUrls = [
   '0010_print_job_claim_tokens.sql',
   '0011_print_job_terminal_claim_tokens.sql',
   '0012_print_job_claim_owners.sql',
+  '0013_print_job_request_keys.sql',
 ].map((name) => new URL(`../drizzle/migrations/${name}`, import.meta.url));
 
 function asD1(sqlite: DatabaseSync) {
@@ -52,6 +53,8 @@ async function createDatabase() {
 }
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
+const attendeeRequestKey = '20000000-0000-4000-8000-000000000001';
+const retryRequestKey = '30000000-0000-4000-8000-000000000001';
 
 function insertCompletedSession(sqlite: DatabaseSync) {
   sqlite.prepare(`
@@ -61,14 +64,32 @@ function insertCompletedSession(sqlite: DatabaseSync) {
 }
 
 describe('print job SQLite integration', () => {
+  it('returns the exact completed admin job when a lost success is retried with the same request key', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const requestKey = '10000000-0000-4000-8000-000000000001';
+      const queued = await queueAdminPrintJob(database, sessionId, requestKey);
+      const [claimed] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+      await acknowledgePrintJob(database, queued.id, { status: 'printed', claimToken: claimed.claimToken });
+
+      const repeated = await queueAdminPrintJob(database, sessionId, requestKey);
+
+      expect(repeated).toMatchObject({ id: queued.id, status: 'printed' });
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_jobs').get()).toEqual({ count: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it('deduplicates concurrent attendee creation through the production insert SQL', async () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
 
       const jobs = await Promise.all([
-        createAttendeePrintJob(database, 1, sessionId),
-        createAttendeePrintJob(database, 1, sessionId),
+        createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey),
+        createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey),
       ]);
 
       expect(jobs[0].id).toBe(jobs[1].id);
@@ -140,9 +161,9 @@ describe('print job SQLite integration', () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
-      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
       const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
-      await expect(retryAdminPrintJob(database, sessionId, pending.id)).rejects.toBeInstanceOf(PrintJobConflictError);
+      await expect(retryAdminPrintJob(database, sessionId, pending.id, retryRequestKey)).rejects.toBeInstanceOf(PrintJobConflictError);
 
       const printing = sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id);
       expect(printing).toEqual({ status: 'printing', claim_token: firstClaim.claimToken });
@@ -155,11 +176,11 @@ describe('print job SQLite integration', () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
-      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
       const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await acknowledgePrintJob(database, pending.id, { status: 'failed', error: 'paper jam', claimToken: claim.claimToken });
 
-      await expect(retryAdminPrintJob(database, sessionId, pending.id)).resolves.toMatchObject({ status: 'pending' });
+      await expect(retryAdminPrintJob(database, sessionId, pending.id, retryRequestKey)).resolves.toMatchObject({ status: 'pending' });
       expect(sqlite.prepare('SELECT status, claim_token, claim_owner, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
         .toEqual({ status: 'pending', claim_token: null, claim_owner: null, error_msg: null });
     } finally {
@@ -171,7 +192,7 @@ describe('print job SQLite integration', () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
-      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
       const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
 
       const first = await acknowledgePrintJob(database, pending.id, { status: 'printed', claimToken: claim.claimToken });
@@ -189,7 +210,7 @@ describe('print job SQLite integration', () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
-      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
       const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await releasePrintJob(database, pending.id, firstClaim.claimToken);
       expect(sqlite.prepare('SELECT status, claim_token, claim_owner FROM print_jobs WHERE id = ?').get(pending.id))

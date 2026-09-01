@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AdminPrintJob, PrintJobStatus } from '../../db/print-jobs';
+import type { AdminPrintJob } from '../../db/print-jobs';
+import { fetchWithDeadline } from '../../lib/fetch-with-deadline';
 import { Button } from '../ui/button';
 
 const POLL_INTERVAL_MS = 2_000;
-const ACTIVE_STATUSES: readonly PrintJobStatus[] = ['pending', 'printing'];
+const MAX_POLL_INTERVAL_MS = 8_000;
+const ACTIVE_STATUSES = ['pending', 'printing'];
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -17,11 +19,9 @@ class PrintHistoryError extends Error {
   }
 }
 
-function isStatus(value: unknown): value is PrintJobStatus {
-  return value === 'pending' || value === 'printing' || value === 'printed' || value === 'failed';
-}
+type DisplayPrintJob = Omit<AdminPrintJob, 'status'> & { status: string };
 
-function parseJob(value: unknown): AdminPrintJob {
+function parseJob(value: unknown): DisplayPrintJob {
   if (!value || typeof value !== 'object') throw new PrintHistoryError("Couldn't read the print history response.");
   const job = value as Partial<AdminPrintJob>;
   if (
@@ -31,13 +31,14 @@ function parseJob(value: unknown): AdminPrintJob {
     || typeof job.sceneName !== 'string'
     || typeof job.postcardUrl !== 'string'
     || typeof job.createdAt !== 'number'
-    || !isStatus(job.status)
+    || typeof job.status !== 'string'
+    || job.status.length === 0
     || (job.printedAt !== null && typeof job.printedAt !== 'number')
     || (job.error !== null && typeof job.error !== 'string')
   ) {
     throw new PrintHistoryError("Couldn't read the print history response.");
   }
-  return job as AdminPrintJob;
+  return job as DisplayPrintJob;
 }
 
 async function readBody(response: Response) {
@@ -61,11 +62,11 @@ async function readMutation(response: Response) {
   return parseJob(body?.job);
 }
 
-function statusLabel(status: PrintJobStatus) {
+function statusLabel(status: string) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function statusTone(status: PrintJobStatus) {
+function statusTone(status: string) {
   if (status === 'printed') return 'border-success/35 bg-success/10 text-success';
   if (status === 'failed') return 'border-destructive/35 bg-destructive/10 text-destructive';
   return 'border-primary/35 bg-primary/10 text-primary';
@@ -82,11 +83,12 @@ type Props = {
 };
 
 export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
-  const [jobs, setJobs] = useState(initialJobs);
+  const [jobs, setJobs] = useState<DisplayPrintJob[]>(initialJobs);
   const [alert, setAlert] = useState('');
   const [isMutating, setIsMutating] = useState(false);
   const mutationInFlight = useRef(false);
   const mutationController = useRef<AbortController | null>(null);
+  const mutationRequest = useRef<{ operation: string; key: string } | null>(null);
   const endpoint = `/api/admin/sessions/${encodeURIComponent(sessionId)}/print-jobs`;
   const activeJob = jobs.find((job) => ACTIVE_STATUSES.includes(job.status));
 
@@ -100,20 +102,23 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
     if (!activeJob) return;
     let disposed = false;
     let timeout: number | undefined;
+    let delay = POLL_INTERVAL_MS;
     const controller = new AbortController();
 
     const poll = async () => {
       try {
-        const response = await fetch(endpoint, { signal: controller.signal });
+        const response = await fetchWithDeadline(endpoint, { signal: controller.signal });
         const nextJobs = await readJobs(response);
         if (disposed) return;
         setJobs(nextJobs);
         setAlert('');
+        delay = POLL_INTERVAL_MS;
       } catch (cause) {
-        if (disposed || (cause instanceof DOMException && cause.name === 'AbortError')) return;
+        if (disposed || controller.signal.aborted) return;
         setAlert("Couldn't refresh print history. Showing the most recent print history.");
+        delay = Math.min(delay * 2, MAX_POLL_INTERVAL_MS);
       } finally {
-        if (!disposed) timeout = window.setTimeout(poll, POLL_INTERVAL_MS);
+        if (!disposed) timeout = window.setTimeout(poll, delay);
       }
     };
 
@@ -127,7 +132,7 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
 
   const refreshAfterConflict = async (signal: AbortSignal) => {
     try {
-      const response = await fetch(endpoint, { signal });
+      const response = await fetchWithDeadline(endpoint, { signal });
       setJobs(await readJobs(response));
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -143,11 +148,18 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
     setIsMutating(true);
     setAlert('');
 
+    const operation = `${action}:${jobId ?? ''}`;
+    if (mutationRequest.current?.operation !== operation) {
+      mutationRequest.current = { operation, key: crypto.randomUUID() };
+    }
+
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithDeadline(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(action === 'retry' ? { action, jobId } : { action }),
+        body: JSON.stringify(action === 'retry'
+          ? { action, jobId, idempotencyKey: mutationRequest.current.key }
+          : { action, idempotencyKey: mutationRequest.current.key }),
         signal: controller.signal,
       });
       const job = await readMutation(response);
@@ -155,6 +167,7 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
         ? current.map((item) => item.id === job.id ? job : item)
         : [job, ...current]
       ).sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id)));
+      mutationRequest.current = null;
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       const error = cause instanceof PrintHistoryError ? cause : new PrintHistoryError("Couldn't reach the print queue. Check your connection and try again.");
@@ -164,6 +177,21 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
       if (mutationController.current === controller) mutationController.current = null;
       mutationInFlight.current = false;
       setIsMutating(false);
+    }
+  };
+
+  const refreshNow = async () => {
+    const controller = new AbortController();
+    mutationController.current?.abort();
+    mutationController.current = controller;
+    try {
+      const response = await fetchWithDeadline(endpoint, { signal: controller.signal });
+      setJobs(await readJobs(response));
+      setAlert('');
+    } catch {
+      if (!controller.signal.aborted) setAlert("Couldn't refresh print history. Showing the most recent print history.");
+    } finally {
+      if (mutationController.current === controller) mutationController.current = null;
     }
   };
 
@@ -185,7 +213,11 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
         )}
       </div>
 
-      {alert && <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground" role="alert">{alert}</div>}
+      {alert && (
+        <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground" role="alert">
+          {alert} <button type="button" className="font-bold underline" onClick={refreshNow}>Check print history</button>
+        </div>
+      )}
       <span className="sr-only" role="status" aria-live="polite">{isMutating ? 'Updating print queue.' : ''}</span>
 
       {jobs.length === 0 ? (
@@ -207,7 +239,7 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
                   {job.error && <p className="mb-0 mt-2 text-sm text-destructive">{job.error}</p>}
                 </div>
                 {job.status === 'failed' && (
-                  <Button type="button" variant="secondary" disabled={actionsDisabled} onClick={() => mutate('retry', job.id)} aria-label="Retry failed print">
+                  <Button type="button" variant="secondary" disabled={actionsDisabled} onClick={() => mutate('retry', job.id)} aria-label={`Retry failed print requested ${formattedTime(job.createdAt)}`}>
                     Retry
                   </Button>
                 )}

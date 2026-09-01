@@ -15,6 +15,8 @@ describe('ReviewTimeoutPrompt', () => {
 
   afterEach(() => {
     cleanup();
+    sessionStorage.clear();
+    delete (window as Window & { __printJobActive?: boolean }).__printJobActive;
     vi.useRealTimers();
   });
 
@@ -86,5 +88,14 @@ describe('ReviewTimeoutPrompt', () => {
     act(() => window.dispatchEvent(new CustomEvent('print-job-active', { detail: { active: false } })));
     act(() => vi.advanceTimersByTime(15_000));
     expect(screen.getByText(/booth is ready for the next person/i)).toBeTruthy();
+  });
+
+  it('hydrates activity that started before this island mounted', () => {
+    (window as Window & { __printJobActive?: boolean }).__printJobActive = true;
+    render(<ReviewTimeoutPrompt eventUrl={eventUrl} navigate={navigate} />);
+
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

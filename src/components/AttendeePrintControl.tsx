@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PrintJobStatus } from '../db/print-jobs';
+import { fetchWithDeadline, RequestDeadlineError } from '../lib/fetch-with-deadline';
+import { setPrintActive } from '../lib/print-activity';
 
 const POLL_INTERVAL_MS = 2_000;
+const MAX_POLL_INTERVAL_MS = 8_000;
 const JOB_ID_PATTERN = /^[0-9a-f]{32}$/i;
 const ACTIVE_STATUSES: readonly PrintJobStatus[] = ['pending', 'printing'];
 
@@ -41,10 +44,6 @@ async function responseJob(response: Response, requireId: boolean) {
   return parseJob(body, requireId);
 }
 
-function announcePrintActive(active: boolean) {
-  window.dispatchEvent(new CustomEvent('print-job-active', { detail: { active } }));
-}
-
 const buttonCopy: Record<PrintState, string> = {
   idle: 'Print postcard',
   submitting: 'Requesting print...',
@@ -74,34 +73,57 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
   const [state, setState] = useState<PrintState>('idle');
   const [jobId, setJobId] = useState('');
   const [error, setError] = useState('');
+  const [recoveryPending, setRecoveryPending] = useState(false);
   const requestInFlight = useRef(false);
   const requestController = useRef<AbortController | null>(null);
+  const requestKey = useRef('');
   const endpoint = `/api/events/${eventId}/sessions/${encodeURIComponent(sessionId)}/print-jobs`;
+  const storageKey = `print-request:${eventId}:${sessionId}`;
 
-  useEffect(() => () => requestController.current?.abort(), []);
+  useEffect(() => {
+    const storedRequestKey = sessionStorage.getItem(storageKey);
+    if (storedRequestKey) {
+      requestKey.current = storedRequestKey;
+      setRecoveryPending(true);
+      setError('A print request may still be active. Check it before creating another.');
+      setState('error');
+      setPrintActive(true);
+    }
+    return () => requestController.current?.abort();
+  }, [storageKey]);
 
   useEffect(() => {
     if (!ACTIVE_STATUSES.includes(state as PrintJobStatus) || !jobId) {
-      announcePrintActive(false);
+      if (state === 'printed' || state === 'failed') {
+        sessionStorage.removeItem(storageKey);
+        requestKey.current = '';
+        setPrintActive(false);
+      }
       return;
     }
 
     let disposed = false;
     let timeout: number | undefined;
+    let delay = POLL_INTERVAL_MS;
     const controller = new AbortController();
-    announcePrintActive(true);
+    setPrintActive(true);
 
     const poll = async () => {
       try {
-        const response = await fetch(`${endpoint}/${jobId}`, { signal: controller.signal });
+        const response = await fetchWithDeadline(`${endpoint}/${jobId}`, { signal: controller.signal });
         const nextJob = await responseJob(response, false);
         if (disposed) return;
         setState(nextJob.status);
-        if (ACTIVE_STATUSES.includes(nextJob.status)) timeout = window.setTimeout(poll, POLL_INTERVAL_MS);
+        setError('');
+        setRecoveryPending(false);
+        delay = POLL_INTERVAL_MS;
+        if (ACTIVE_STATUSES.includes(nextJob.status)) timeout = window.setTimeout(poll, delay);
       } catch (cause) {
-        if (disposed || (cause instanceof DOMException && cause.name === 'AbortError')) return;
-        setError(cause instanceof PrintRequestError ? cause.message : "We lost the printer connection. Try again.");
-        setState('error');
+        if (disposed || controller.signal.aborted) return;
+        setError(cause instanceof PrintRequestError ? cause.message : "We lost the printer connection. Check the print status before trying again.");
+        setRecoveryPending(true);
+        delay = Math.min(delay * 2, MAX_POLL_INTERVAL_MS);
+        timeout = window.setTimeout(poll, delay);
       }
     };
 
@@ -110,9 +132,8 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
       disposed = true;
       window.clearTimeout(timeout);
       controller.abort();
-      announcePrintActive(false);
     };
-  }, [endpoint, jobId, state]);
+  }, [endpoint, jobId, state, storageKey]);
 
   const requestPrint = async () => {
     if (requestInFlight.current || state === 'pending' || state === 'printing' || state === 'printed') return;
@@ -123,15 +144,31 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
     setError('');
     setJobId('');
     setState('submitting');
+    setRecoveryPending(false);
+    setPrintActive(true);
+    if (state === 'failed') requestKey.current = '';
+    requestKey.current ||= sessionStorage.getItem(storageKey) || crypto.randomUUID();
+    sessionStorage.setItem(storageKey, requestKey.current);
 
     try {
-      const response = await fetch(endpoint, { method: 'POST', signal: controller.signal });
+      const response = await fetchWithDeadline(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey: requestKey.current }),
+        signal: controller.signal,
+      });
       const nextJob = await responseJob(response, true);
       setJobId(nextJob.id);
       setState(nextJob.status);
+      if (!ACTIVE_STATUSES.includes(nextJob.status)) {
+        sessionStorage.removeItem(storageKey);
+        requestKey.current = '';
+        setPrintActive(false);
+      }
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setError(cause instanceof PrintRequestError ? cause.message : "We couldn't reach the printer. Check your connection and try again.");
+      if (controller.signal.aborted && !(cause instanceof RequestDeadlineError)) return;
+      setError(cause instanceof PrintRequestError ? cause.message : "We couldn't confirm the print request because the connection was lost. Check it before trying again.");
+      setRecoveryPending(true);
       setState('error');
     } finally {
       if (requestController.current === controller) requestController.current = null;
@@ -140,6 +177,7 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
   };
 
   const disabled = state === 'submitting' || state === 'pending' || state === 'printing' || state === 'printed';
+  const buttonLabel = state === 'error' && recoveryPending ? 'Check print request' : buttonCopy[state];
 
   return (
     <div className="contents">
@@ -148,12 +186,12 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
         type="button"
         disabled={disabled}
         onClick={requestPrint}
-        aria-label={buttonCopy[state]}
+        aria-label={buttonLabel}
       >
         <svg className="size-[1.15rem] fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z" />
         </svg>
-        <span>{buttonCopy[state]}</span>
+        <span>{buttonLabel}</span>
       </button>
       {error ? (
         <span className="order-last m-0 basis-full pt-1 text-center text-[.82rem] text-destructive" role="alert">{error}</span>

@@ -45,7 +45,7 @@ describe('PrintHistory', () => {
     expect(within(rows[0]!).getByText(/Jan 1, 1970/)).toBeTruthy();
     expect(within(rows[1]!).getByText('Failed')).toBeTruthy();
     expect(within(rows[1]!).getByText('Paper jam')).toBeTruthy();
-    expect(within(rows[1]!).getByRole('button', { name: 'Retry failed print' })).toBeTruthy();
+    expect(within(rows[1]!).getByRole('button', { name: /Retry failed print requested Jan 1, 1970.*UTC/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reprint postcard' })).toBeTruthy();
   });
 
@@ -62,7 +62,7 @@ describe('PrintHistory', () => {
 
     rerender(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[pending, failedJob]} />);
     expect(screen.getByRole('button', { name: 'Reprint postcard' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: 'Retry failed print' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: /Retry failed print requested/ }).hasAttribute('disabled')).toBe(true);
     expect(within(screen.getAllByRole('listitem')[0]!).queryByRole('button', { name: /retry/i })).toBeNull();
   });
 
@@ -73,17 +73,17 @@ describe('PrintHistory', () => {
     const { rerender } = render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Queue first print' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: 'POST', body: JSON.stringify({ action: 'queue' }) })));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: 'POST', body: expect.stringMatching(/"action":"queue".*"idempotencyKey":"[0-9a-f-]{36}"/) })));
 
     fetchMock.mockClear();
     rerender(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[failedJob]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry failed print' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ body: JSON.stringify({ action: 'retry', jobId: failedJob.id }) })));
+    fireEvent.click(screen.getByRole('button', { name: /Retry failed print requested/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ body: expect.stringMatching(/"action":"retry".*"jobId":"1{32}".*"idempotencyKey":"[0-9a-f-]{36}"/) })));
 
     fetchMock.mockClear();
     rerender(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[printedJob]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Reprint postcard' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ body: JSON.stringify({ action: 'queue' }) })));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ body: expect.stringMatching(/"action":"queue".*"idempotencyKey":"[0-9a-f-]{36}"/) })));
   });
 
   it('polls only while active, preserves stale rows on errors, and resumes with fresh history', async () => {
@@ -100,7 +100,7 @@ describe('PrintHistory', () => {
     expect(screen.getByText('Pending')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toMatch(/most recent print history/i);
 
-    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
     expect(screen.getByText('Printing')).toBeTruthy();
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
     expect(screen.getAllByText('Printed')).toHaveLength(2);
@@ -137,5 +137,13 @@ describe('PrintHistory', () => {
     expect(signal?.aborted).toBe(false);
     unmount();
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('renders unknown imported statuses as terminal history without blocking actions', () => {
+    const imported = { ...printedJob, id: '4'.repeat(32), status: 'cancelled' } as unknown as AdminPrintJob;
+    render(<PrintHistory sessionId={sessionId} hasPostcard initialJobs={[imported]} />);
+
+    expect(screen.getByText('Cancelled')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reprint postcard' }).hasAttribute('disabled')).toBe(false);
   });
 });

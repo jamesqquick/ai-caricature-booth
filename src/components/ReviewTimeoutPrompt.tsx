@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
+import { isPrintActive } from '../lib/print-activity';
 
 const INACTIVITY_DELAY_MS = 15_000;
 const RESPONSE_WINDOW_MS = 30_000;
@@ -24,10 +25,10 @@ type PromptPhase = 'waiting' | 'prompting' | 'handled';
 export function ReviewTimeoutPrompt({ eventUrl, navigate }: Props) {
   const [phase, setPhase] = useState<PromptPhase>('waiting');
   const [remainingSeconds, setRemainingSeconds] = useState(RESPONSE_WINDOW_MS / 1000);
-  const [printActive, setPrintActive] = useState(false);
+  const [printActive, setPrintActive] = useState(isPrintActive);
   const hasNavigatedRef = useRef(false);
   const hasHandledRef = useRef(false);
-  const printActiveRef = useRef(false);
+  const printActiveRef = useRef(isPrintActive());
 
   const leaveReview = () => {
     if (hasNavigatedRef.current || printActiveRef.current) return;
