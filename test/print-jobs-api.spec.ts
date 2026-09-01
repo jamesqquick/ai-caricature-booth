@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fakeEnv = vi.hoisted(() => ({ DB: {} }));
 const createAttendeePrintJob = vi.hoisted(() => vi.fn());
 const loadAttendeePrintJob = vi.hoisted(() => vi.fn());
+const loadAdminPrintJobs = vi.hoisted(() => vi.fn());
 const claimPrintJobs = vi.hoisted(() => vi.fn());
 const reconcilePrintJobs = vi.hoisted(() => vi.fn());
 const acknowledgePrintJob = vi.hoisted(() => vi.fn());
@@ -15,6 +16,7 @@ vi.mock('../src/db/print-jobs', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/db/print-jobs')>(),
   createAttendeePrintJob,
   loadAttendeePrintJob,
+  loadAdminPrintJobs,
   claimPrintJobs,
   reconcilePrintJobs,
   acknowledgePrintJob,
@@ -29,7 +31,7 @@ import { POST as claimJobs } from '../src/pages/api/print-agent/jobs/claim';
 import { POST as reconcileJobs } from '../src/pages/api/print-agent/jobs/reconcile';
 import { POST as acknowledgeJob } from '../src/pages/api/print-agent/jobs/[jobId]/ack';
 import { POST as releaseJob } from '../src/pages/api/print-agent/jobs/[jobId]/release';
-import { POST as mutateAdminJob } from '../src/pages/api/admin/sessions/[sessionId]/print-jobs';
+import { GET as getAdminJobs, POST as mutateAdminJob } from '../src/pages/api/admin/sessions/[sessionId]/print-jobs';
 import { PrintJobConflictError, PrintJobNotFoundError } from '../src/db/print-jobs';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
@@ -271,6 +273,36 @@ describe('print job APIs', () => {
     expect(retryResponse.status).toBe(200);
     expect(queueAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId);
     expect(retryAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId);
+  });
+
+  it('returns safe admin print history for the requested session', async () => {
+    const adminJob = {
+      ...publicJob,
+      sessionId,
+      eventId: 7,
+      sceneName: 'Brooklyn Bridge',
+      postcardUrl: `/api/events/7/sessions/${sessionId}/postcard`,
+      createdAt: 100,
+      error: null,
+    };
+    loadAdminPrintJobs.mockResolvedValue([adminJob]);
+
+    const response = await getAdminJobs({ params: { sessionId } });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ jobs: [adminJob] });
+    expect(loadAdminPrintJobs).toHaveBeenCalledWith(fakeEnv.DB, sessionId);
+  });
+
+  it('maps invalid admin history input and database failures', async () => {
+    const invalid = await getAdminJobs({ params: { sessionId: 'not-a-uuid' } });
+    expect(invalid.status).toBe(400);
+    expect(loadAdminPrintJobs).not.toHaveBeenCalled();
+
+    loadAdminPrintJobs.mockRejectedValue(new Error('database unavailable'));
+    const failed = await getAdminJobs({ params: { sessionId } });
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ error: "Couldn't process the print job request." });
   });
 
   it('returns typed admin queue and retry conflicts', async () => {

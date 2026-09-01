@@ -229,6 +229,16 @@ export async function loadAttendeePrintJob(database: D1Database, eventId: number
   return publicJob(row);
 }
 
+export async function loadAdminPrintJobs(database: D1Database, sessionId: string): Promise<AdminPrintJob[]> {
+  const rows = await database.prepare(`
+    SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    FROM print_jobs
+    WHERE session_id = ?
+    ORDER BY created_at DESC, id DESC
+  `).bind(sessionId).all<PrintJobRow>();
+  return rows.results.map(adminJob);
+}
+
 export async function claimPrintJobs(database: D1Database, eventSlug: string, agentId: string, limit: number): Promise<AgentPrintJob[]> {
   const claimed = await database.prepare(`
     UPDATE print_jobs

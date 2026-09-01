@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, PrintJobConflictError, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
+import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
   '0001_events.sql',
@@ -73,6 +73,33 @@ describe('print job SQLite integration', () => {
 
       expect(jobs[0].id).toBe(jobs[1].id);
       expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_jobs').get()).toEqual({ count: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('loads only one session print history newest first without private columns', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const secondSessionId = '00000000-0000-4000-8000-000000000002';
+      sqlite.prepare(`
+        INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, postcard_key)
+        VALUES (?, 1, 'completed', 'subway', 'Subway', 'selfie-2.jpg', 'postcard-2.jpg')
+      `).run(secondSessionId);
+      const insert = sqlite.prepare(`
+        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, created_at, claim_token, claim_owner)
+        VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)
+      `);
+      insert.run('1'.repeat(32), sessionId, 'private-one', '/one', 'One', 10, 'a'.repeat(32), 'b'.repeat(64));
+      insert.run('2'.repeat(32), sessionId, 'private-two', '/two', 'Two', 20, null, null);
+      insert.run('3'.repeat(32), secondSessionId, 'private-three', '/three', 'Three', 30, null, null);
+
+      const jobs = await loadAdminPrintJobs(database, sessionId);
+
+      expect(jobs.map((job) => job.id)).toEqual(['2'.repeat(32), '1'.repeat(32)]);
+      expect(jobs.every((job) => job.sessionId === sessionId)).toBe(true);
+      expect(JSON.stringify(jobs)).not.toMatch(/private-|claim/);
     } finally {
       sqlite.close();
     }

@@ -1,8 +1,17 @@
 import { env } from 'cloudflare:workers';
-import { parseAdminMutation, parseSessionId, queueAdminPrintJob, retryAdminPrintJob } from '../../../../../db/print-jobs';
+import { loadAdminPrintJobs, parseAdminMutation, parseSessionId, queueAdminPrintJob, retryAdminPrintJob } from '../../../../../db/print-jobs';
 import { printJobErrorResponse, printJobJson, readPrintJobJson } from '../../../../../lib/print-job-response';
 
 export const prerender = false;
+
+export async function GET({ params }: { params: Record<string, string | undefined> }) {
+  try {
+    const sessionId = parseSessionId(params.sessionId);
+    return printJobJson({ jobs: await loadAdminPrintJobs(env.DB, sessionId) });
+  } catch (error) {
+    return printJobErrorResponse(error);
+  }
+}
 
 export async function POST({ params, request }: { params: Record<string, string | undefined>; request: Request }) {
   try {

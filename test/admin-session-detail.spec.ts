@@ -75,6 +75,16 @@ describe('admin session detail', () => {
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
+  it('loads print history with the session in parallel and places it before the timeline', async () => {
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+
+    expect(source).toContain("import { PrintHistory } from '../../../components/admin/PrintHistory';");
+    expect(source).toMatch(/Promise\.all\(\[\s*loadAdminSession\(env\.DB, sessionId\),\s*loadAdminPrintJobs\(env\.DB, sessionId\),?\s*\]\)/);
+    expect(source).toContain('<PrintHistory client:load');
+    expect(source.indexOf('<PrintHistory client:load')).toBeGreaterThan(source.indexOf('id="final-postcard-heading"'));
+    expect(source.indexOf('<PrintHistory client:load')).toBeLessThan(source.indexOf('<SessionTimeline session={session} />'));
+  });
+
   it('documents observed state and absent persisted stage timestamps', async () => {
     const source = await readFile(fileURLToPath(timelineSource), 'utf8');
     expect(source).toContain('Current status');

@@ -24,11 +24,13 @@ type PromptPhase = 'waiting' | 'prompting' | 'handled';
 export function ReviewTimeoutPrompt({ eventUrl, navigate }: Props) {
   const [phase, setPhase] = useState<PromptPhase>('waiting');
   const [remainingSeconds, setRemainingSeconds] = useState(RESPONSE_WINDOW_MS / 1000);
+  const [printActive, setPrintActive] = useState(false);
   const hasNavigatedRef = useRef(false);
   const hasHandledRef = useRef(false);
+  const printActiveRef = useRef(false);
 
   const leaveReview = () => {
-    if (hasNavigatedRef.current) return;
+    if (hasNavigatedRef.current || printActiveRef.current) return;
     hasHandledRef.current = true;
     setPhase('handled');
     hasNavigatedRef.current = true;
@@ -36,7 +38,18 @@ export function ReviewTimeoutPrompt({ eventUrl, navigate }: Props) {
   };
 
   useEffect(() => {
-    if (phase !== 'waiting' || hasHandledRef.current) return;
+    const handlePrintActivity = (event: Event) => {
+      const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
+      printActiveRef.current = active;
+      setPrintActive(active);
+      if (active) setPhase('waiting');
+    };
+    window.addEventListener('print-job-active', handlePrintActivity);
+    return () => window.removeEventListener('print-job-active', handlePrintActivity);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'waiting' || hasHandledRef.current || printActive) return;
 
     let timeout = window.setTimeout(() => setPhase('prompting'), INACTIVITY_DELAY_MS);
     const resetInactivityTimer = () => {
@@ -54,10 +67,10 @@ export function ReviewTimeoutPrompt({ eventUrl, navigate }: Props) {
         window.removeEventListener(eventName, resetInactivityTimer);
       }
     };
-  }, [phase]);
+  }, [phase, printActive]);
 
   useEffect(() => {
-    if (phase !== 'prompting') return;
+    if (phase !== 'prompting' || printActive) return;
 
     const deadline = Date.now() + RESPONSE_WINDOW_MS;
     setRemainingSeconds(RESPONSE_WINDOW_MS / 1000);
@@ -72,7 +85,7 @@ export function ReviewTimeoutPrompt({ eventUrl, navigate }: Props) {
     return () => {
       window.clearInterval(interval);
     };
-  }, [phase]);
+  }, [phase, printActive]);
 
   const keepReviewing = () => {
     hasHandledRef.current = true;

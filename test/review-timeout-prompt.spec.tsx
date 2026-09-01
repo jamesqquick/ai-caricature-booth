@@ -71,4 +71,20 @@ describe('ReviewTimeoutPrompt', () => {
     expect(navigate).toHaveBeenCalledOnce();
     expect(navigate).toHaveBeenCalledWith(eventUrl);
   });
+
+  it('pauses timeout messaging and navigation while a print is active', () => {
+    render(<ReviewTimeoutPrompt eventUrl={eventUrl} navigate={navigate} />);
+
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+
+    act(() => window.dispatchEvent(new CustomEvent('print-job-active', { detail: { active: true } })));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(navigate).not.toHaveBeenCalled();
+
+    act(() => window.dispatchEvent(new CustomEvent('print-job-active', { detail: { active: false } })));
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(screen.getByText(/booth is ready for the next person/i)).toBeTruthy();
+  });
 });

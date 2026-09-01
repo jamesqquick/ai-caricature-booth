@@ -3,6 +3,7 @@ import {
   acknowledgePrintJob,
   claimPrintJobs,
   createAttendeePrintJob,
+  loadAdminPrintJobs,
   loadAttendeePrintJob,
   PrintJobConflictError,
   PrintJobNotFoundError,
@@ -110,6 +111,39 @@ describe('print job data layer', () => {
     expect(statements[0].query).toContain('id = ? AND session_id = ? AND event_id = ?');
     expect(statements[0].values).toEqual([row.id, row.session_id, 7]);
     expect(JSON.stringify(job)).not.toMatch(/postcard_key|postcardKey|sessions\//);
+  });
+
+  it('lists session-scoped admin jobs newest first without private fields', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    const older = { ...row, id: '00000000000000000000000000000001', created_at: 90 };
+    const newer = { ...row, id: 'ffffffffffffffffffffffffffffffff', created_at: 110 };
+    const database = {
+      prepare(query: string) {
+        const prepared = statement(query, { results: [newer, older] });
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    const jobs = await loadAdminPrintJobs(database, row.session_id);
+
+    expect(statements[0].query).toContain('WHERE session_id = ?');
+    expect(statements[0].query).toContain('ORDER BY created_at DESC, id DESC');
+    expect(statements[0].query).not.toMatch(/claim_token|claim_owner|terminal_claim_token|postcard_key/);
+    expect(statements[0].values).toEqual([row.session_id]);
+    expect(jobs.map((job) => job.id)).toEqual([newer.id, older.id]);
+    expect(jobs[0]).toEqual({
+      id: newer.id,
+      status: 'pending',
+      printedAt: null,
+      sessionId: row.session_id,
+      eventId: 7,
+      sceneName: 'Brooklyn Bridge',
+      postcardUrl: row.postcard_url,
+      createdAt: 110,
+      error: null,
+    });
+    expect(JSON.stringify(jobs)).not.toMatch(/claim|postcard_key|must-not-leak/);
   });
 
   it('does not return a job for an incomplete or postcard-less session', async () => {
