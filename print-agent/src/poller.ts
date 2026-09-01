@@ -2,15 +2,15 @@ import { abortableSleep } from "./job-handler.js";
 import { MemoryAckOutbox, type AckOutbox, type PendingPrintState, type TerminalAckIntent } from "./outbox.js";
 import { PrintOutcomeUncertainError } from "./printer.js";
 import { QueueRequestError } from "./queue.js";
-import type { AgentConfig, Logger, PrintJob, PrintStatus, Sleep } from "./types.js";
+import type { AgentConfig, ClaimIdentity, Logger, PrintJob, PrintStatus, Sleep } from "./types.js";
 
 const OFFLINE_WARNING_THRESHOLD = 3;
 
 type PollerDependencies = {
   claimJobs: () => Promise<PrintJob[]>;
   handleJob: (job: PrintJob, beforeSubmit: () => Promise<void>) => Promise<void>;
-  ackJob: (job: PrintJob, status: PrintStatus, error?: string) => Promise<unknown>;
-  releaseJob: (job: PrintJob) => Promise<unknown>;
+  ackJob: (job: ClaimIdentity, status: PrintStatus, error?: string) => Promise<unknown>;
+  releaseJob: (job: ClaimIdentity) => Promise<unknown>;
   outbox?: AckOutbox;
   sleep?: Sleep;
   logger?: Logger;
@@ -21,7 +21,7 @@ export class FatalPrintStateError extends Error {
   readonly name = "FatalPrintStateError";
 
   constructor(public readonly jobId: string | undefined, message: string, options?: ErrorOptions) {
-    super(`${jobId ? `Print job ${jobId}` : "Print agent"}: ${message} Current claim and local state were retained; operator intervention required.`, options);
+    super(`${jobId ? `Print job ${jobId}` : "Print agent"}: ${message} Automatic processing stopped; operator intervention required.`, options);
   }
 }
 
@@ -61,13 +61,24 @@ export class PrintPoller {
       this.consecutivePollFailures = 0;
 
       if (jobs.length === 0) return;
+      const claims: ClaimIdentity[] = [];
+      for (const job of jobs) {
+        const claim = claimIdentity(job);
+        try {
+          await this.outbox.put({ job: claim, status: "claimed" });
+        } catch (error) {
+          await this.releaseUnpersistedClaim(claim);
+          throw new FatalPrintStateError(job.id, "The claimed job could not be persisted before processing.", { cause: error });
+        }
+        claims.push(claim);
+      }
       if (jobs.length !== 1) {
-        await this.releaseJobs(jobs, "invalid multi-job claim");
+        await this.releaseClaims(claims, "invalid multi-job claim");
         throw new FatalPrintStateError(jobs[0]!.id, `Worker returned ${jobs.length} jobs for a single-job claim.`);
       }
       const job = jobs[0]!;
       if (signal?.aborted) {
-        await this.releaseJobs([job], "shutdown");
+        await this.releaseClaim(claimIdentity(job), "shutdown");
         return;
       }
       if (!await this.processJob(job)) return;
@@ -83,14 +94,15 @@ export class PrintPoller {
   }
 
   private async processJob(job: PrintJob): Promise<boolean> {
+    const claim = claimIdentity(job);
     let intent: TerminalAckIntent;
     let submissionMarked = false;
     try {
       await this.dependencies.handleJob(job, async () => {
-        await this.outbox.put({ job, status: "submitting" });
+        await this.outbox.put({ job: claim, status: "submitting" });
         submissionMarked = true;
       });
-      intent = { job, status: "printed" };
+      intent = { job: claim, status: "printed" };
     } catch (error) {
       if (submissionMarked && hasUncertainPrintOutcome(error)) {
         const fatalError = new FatalPrintStateError(job.id, "Printer submission failed after invocation, so CUPS acceptance cannot be determined.", { cause: error });
@@ -99,7 +111,7 @@ export class PrintPoller {
       }
       const message = sanitizeJobText(errorMessage(error), job).slice(0, 500);
       this.logger.error(`[job ${job.id}] processing failed: ${message}`);
-      intent = { job, status: "failed", error: message };
+      intent = { job: claim, status: "failed", error: message };
     }
 
     try {
@@ -117,18 +129,26 @@ export class PrintPoller {
     try {
       intents = await this.outbox.list();
     } catch (error) {
-      throw new FatalPrintStateError(undefined, `Durable print state could not be loaded safely: ${errorMessage(error)}.`, { cause: error });
+      throw new FatalPrintStateError(undefined, "Durable print state could not be loaded safely.", { cause: error });
+    }
+    const unresolvedSubmission = intents.find((intent) => intent.status === "submitting");
+    if (unresolvedSubmission) {
+      throw new FatalPrintStateError(unresolvedSubmission.job.id, "An unresolved submission marker makes the prior printer outcome uncertain.");
     }
     for (const intent of intents) {
+      if (intent.status === "claimed") {
+        await this.releaseClaim(intent.job, "startup recovery");
+        continue;
+      }
       if (intent.status === "submitting") {
-        throw new FatalPrintStateError(intent.job.id, "An unresolved pre-submission marker makes the prior printer outcome uncertain.");
+        throw new FatalPrintStateError(intent.job.id, "An unresolved submission marker makes the prior printer outcome uncertain.");
       }
       if (!await this.flushIntent(intent, intent.status === "printed" ? this.printedAckAttempts : 1)) return false;
     }
     try {
       return (await this.outbox.list()).length === 0;
     } catch (error) {
-      throw new FatalPrintStateError(undefined, `Durable print state could not be verified safely: ${errorMessage(error)}.`, { cause: error });
+      throw new FatalPrintStateError(undefined, "Durable print state could not be verified safely.", { cause: error });
     }
   }
 
@@ -157,7 +177,7 @@ export class PrintPoller {
     return false;
   }
 
-  private async removeIntent(job: PrintJob): Promise<boolean> {
+  private async removeIntent(job: ClaimIdentity): Promise<boolean> {
     try {
       await this.outbox.remove(job.id);
       return true;
@@ -167,12 +187,34 @@ export class PrintPoller {
     }
   }
 
-  private async releaseJobs(jobs: PrintJob[], reason: string): Promise<void> {
-    for (const job of jobs) {
-      try {
-        await this.dependencies.releaseJob(job);
-      } catch (error) {
-        this.logger.error(`[job ${job.id}] ${reason} release failed: ${safeJobError(error, job)}`);
+  private async releaseClaims(claims: ClaimIdentity[], reason: string): Promise<void> {
+    for (const claim of claims) {
+      await this.releaseClaim(claim, reason);
+    }
+  }
+
+  private async releaseClaim(claim: ClaimIdentity, reason: string): Promise<void> {
+    try {
+      await this.dependencies.releaseJob(claim);
+    } catch (error) {
+      if (!(error instanceof QueueRequestError && error.status === 409)) {
+        this.logger.error(`[job ${claim.id}] ${reason} release failed: ${safeJobError(error, claim)}`);
+        throw new FatalPrintStateError(claim.id, `The durable claimed marker could not be released during ${reason}.`, { cause: error });
+      }
+    }
+    try {
+      await this.outbox.remove(claim.id);
+    } catch (error) {
+      throw new FatalPrintStateError(claim.id, `The released claimed marker could not be removed during ${reason}.`, { cause: error });
+    }
+  }
+
+  private async releaseUnpersistedClaim(claim: ClaimIdentity): Promise<void> {
+    try {
+      await this.dependencies.releaseJob(claim);
+    } catch (error) {
+      if (!(error instanceof QueueRequestError && error.status === 409)) {
+        this.logger.error(`[job ${claim.id}] persistence-failure release failed: ${safeJobError(error, claim)}`);
       }
     }
   }
@@ -182,12 +224,16 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function safeJobError(error: unknown, job: PrintJob): string {
+function safeJobError(error: unknown, job: ClaimIdentity): string {
   return sanitizeJobText(errorMessage(error), job);
 }
 
-function sanitizeJobText(value: string, job: PrintJob): string {
+function sanitizeJobText(value: string, job: ClaimIdentity): string {
   return value.replaceAll(job.claimToken, "[redacted]");
+}
+
+function claimIdentity(job: PrintJob): ClaimIdentity {
+  return { id: job.id, claimToken: job.claimToken };
 }
 
 function hasUncertainPrintOutcome(error: unknown): boolean {

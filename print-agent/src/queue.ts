@@ -1,4 +1,4 @@
-import type { AgentConfig, PrintJob, PrintStatus } from "./types.js";
+import type { AgentConfig, ClaimIdentity, PrintJob, PrintStatus } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_ERROR_BODY_BYTES = 4_096;
@@ -47,7 +47,7 @@ export async function claimJobs(config: AgentConfig, limit: number, dependencies
 
 export async function ackJob(
   config: AgentConfig,
-  job: PrintJob,
+  job: ClaimIdentity,
   status: PrintStatus,
   error?: string,
   dependencies: RequestDependencies = {},
@@ -64,7 +64,7 @@ export async function ackJob(
   await consumeSuccessfulResponse(response, "ack");
 }
 
-export async function releaseJob(config: AgentConfig, job: PrintJob, dependencies: RequestDependencies = {}): Promise<void> {
+export async function releaseJob(config: AgentConfig, job: ClaimIdentity, dependencies: RequestDependencies = {}): Promise<void> {
   const response = await request(
     "release",
     new URL(`/api/print-agent/jobs/${encodeURIComponent(job.id)}/release`, config.workerUrl),

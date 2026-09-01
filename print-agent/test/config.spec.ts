@@ -30,10 +30,18 @@ describe("loadConfig", () => {
     [{ ...validEnv, PRINTER_DRIVER: "dnp", PRINTER_NAME: "  " }, [], "PRINTER_NAME"],
     [{ ...validEnv, EVENT_SLUG: "Invalid Slug" }, [], "EVENT_SLUG"],
     [{ ...validEnv, WORKER_URL: "http://booth.example.com" }, [], "WORKER_URL"],
+    [{ ...validEnv, PRINT_AGENT_STATE_DIR: "  " }, [], "PRINT_AGENT_STATE_DIR"],
+    [{ ...validEnv, PRINT_AGENT_STATE_DIR: "relative/state" }, [], "PRINT_AGENT_STATE_DIR"],
     [validEnv, ["--event-slug"], "--event-slug"],
   ])("throws an actionable typed error for invalid configuration", (env, argv, field) => {
     expect(() => loadConfig(env, argv)).toThrow(ConfigurationError);
     expect(() => loadConfig(env, argv)).toThrow(String(field));
+  });
+
+  it("accepts an absolute custom state directory", () => {
+    expect(loadConfig({ ...validEnv, PRINT_AGENT_STATE_DIR: "/var/lib/caricature-print-agent" }, [])).toMatchObject({
+      stateDir: "/var/lib/caricature-print-agent",
+    });
   });
 
   it("accepts both DNP aliases and strict integer bounds", () => {

@@ -22,7 +22,7 @@ describe("PrintPoller", () => {
       if (_job.id === job.id) throw new Error("printer jam");
       order.push(`end:${_job.id}`);
     });
-    const ackJob = vi.fn(async (_job: typeof job, status: "printed" | "failed") => order.push(`ack:${_job.id}:${status}`));
+    const ackJob = vi.fn(async (_job: { id: string }, status: "printed" | "failed") => order.push(`ack:${_job.id}:${status}`));
     const poller = new PrintPoller(config, { claimJobs, handleJob, ackJob, releaseJob: async () => undefined, sleep: async () => undefined });
     await poller.pollOnce();
     expect(order).toEqual([
@@ -38,7 +38,7 @@ describe("PrintPoller", () => {
   });
 
   it("retries printed ACK and never sends a false failed ACK after printing", async () => {
-    const ackJob = vi.fn(async (_job: typeof job, status: "printed" | "failed") => {
+    const ackJob = vi.fn(async (_job: { id: string }, status: "printed" | "failed") => {
       if (status === "printed") throw new Error("ack offline");
     });
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -66,7 +66,7 @@ describe("PrintPoller", () => {
       releaseJob: async () => undefined,
       outbox: new FileAckOutbox(path), sleep: async () => undefined, printedAckAttempts: 1,
     }).pollOnce();
-    expect(await new FileAckOutbox(path).list()).toEqual([{ job, status: "printed" }]);
+    expect(await new FileAckOutbox(path).list()).toEqual([{ job: { id: job.id, claimToken: job.claimToken }, status: "printed" }]);
 
     const order: string[] = [];
     const recoveredAck = vi.fn(async () => { order.push("ack"); });
@@ -95,7 +95,7 @@ describe("PrintPoller", () => {
       outbox, logger, sleep: async () => undefined,
     });
     await expect(poller.pollOnce()).rejects.toBeInstanceOf(FatalPrintStateError);
-    expect(await outbox.list()).toEqual([{ job, status: "printed" }]);
+    expect(await outbox.list()).toEqual([{ job: { id: job.id, claimToken: job.claimToken }, status: "printed" }]);
     expect(claimJobs).not.toHaveBeenCalled();
     expect(handleJob).not.toHaveBeenCalled();
     const logs = [...logger.info.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls].flat().join("\n");
@@ -135,7 +135,7 @@ describe("PrintPoller", () => {
   it("does not claim another job when shutdown is requested after the active job", async () => {
     const controller = new AbortController();
     const handleJob = vi.fn(async () => { controller.abort(); });
-    const releaseJob = vi.fn(async (_job: typeof job) => undefined);
+    const releaseJob = vi.fn(async (_job: { id: string }) => undefined);
     const claimJobs = vi.fn(async () => [job]);
     const poller = new PrintPoller(config, {
       claimJobs, handleJob,
@@ -147,20 +147,43 @@ describe("PrintPoller", () => {
     expect(releaseJob).not.toHaveBeenCalled();
   });
 
+  it("persists the claimed marker before processing starts", async () => {
+    const outbox = new MemoryAckOutbox();
+    const handleJob = vi.fn(async () => {
+      expect(await outbox.list()).toEqual([{
+        job: { id: job.id, claimToken: job.claimToken },
+        status: "claimed",
+      }]);
+    });
+    const claimJobs = vi.fn().mockResolvedValueOnce([job]).mockResolvedValueOnce([]);
+
+    await new PrintPoller(config, {
+      claimJobs, handleJob, ackJob: async () => undefined,
+      releaseJob: async () => undefined, outbox, sleep: async () => undefined,
+    }).pollOnce();
+
+    expect(handleJob).toHaveBeenCalledOnce();
+    expect(await outbox.list()).toEqual([]);
+  });
+
   it("stops after an outbox write failure and releases only unprocessed claims", async () => {
     let currentStatus = "printing";
     const claimJobs = vi.fn(async () => [job]);
     const handleJob = vi.fn(async () => undefined);
-    const ackJob = vi.fn(async (claimed: typeof job, status: "printed" | "failed") => {
+    const ackJob = vi.fn(async (claimed: { id: string }, status: "printed" | "failed") => {
       if (claimed.id === job.id) currentStatus = status;
     });
-    const releaseJob = vi.fn(async (claimed: typeof job) => {
+    const releaseJob = vi.fn(async (claimed: { id: string }) => {
       if (claimed.id === job.id) currentStatus = "pending";
     });
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    let outboxWrites = 0;
     const outbox = {
       list: async () => [],
-      put: async () => { throw new Error(`disk full ${job.claimToken}`); },
+      put: async () => {
+        outboxWrites += 1;
+        if (outboxWrites === 2) throw new Error(`disk full ${job.claimToken}`);
+      },
       remove: async () => undefined,
     };
     const poller = new PrintPoller(config, {
@@ -183,7 +206,8 @@ describe("PrintPoller", () => {
   it("halts on restart when a pre-submission marker remains", async () => {
     const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
     const outbox = new FileAckOutbox(join(directory, "state.json"));
-    await outbox.put({ job, status: "submitting" });
+    const claim = { id: job.id, claimToken: job.claimToken };
+    await outbox.put({ job: claim, status: "submitting" });
     const claimJobs = vi.fn(async () => [job]);
     const handleJob = vi.fn(async () => undefined);
     const poller = new PrintPoller(config, {
@@ -195,7 +219,75 @@ describe("PrintPoller", () => {
     await expect(poller.pollOnce()).rejects.toMatchObject({ name: "FatalPrintStateError", jobId: job.id });
     expect(claimJobs).not.toHaveBeenCalled();
     expect(handleJob).not.toHaveBeenCalled();
-    expect(await outbox.list()).toEqual([{ job, status: "submitting" }]);
+    expect(await outbox.list()).toEqual([{ job: claim, status: "submitting" }]);
+  });
+
+  it("releases a durable claimed marker before claiming after process recreation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
+    const path = join(directory, "state.json");
+    const claim = { id: job.id, claimToken: job.claimToken };
+    await new FileAckOutbox(path).put({ job: claim, status: "claimed" });
+    const order: string[] = [];
+    const releaseJob = vi.fn(async () => { order.push("release"); });
+    const claimJobs = vi.fn(async () => { order.push("claim"); return []; });
+
+    await new PrintPoller(config, {
+      claimJobs, handleJob: async () => undefined, ackJob: async () => undefined, releaseJob,
+      outbox: new FileAckOutbox(path), logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }).pollOnce();
+
+    expect(order).toEqual(["release", "claim"]);
+    expect(releaseJob).toHaveBeenCalledWith(claim);
+    expect(await new FileAckOutbox(path).list()).toEqual([]);
+  });
+
+  it("retains a recreated claimed marker and fails closed when release fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
+    const path = join(directory, "state.json");
+    const claim = { id: job.id, claimToken: job.claimToken };
+    await new FileAckOutbox(path).put({ job: claim, status: "claimed" });
+    const claimJobs = vi.fn(async () => [job]);
+
+    await expect(new PrintPoller(config, {
+      claimJobs, handleJob: async () => undefined, ackJob: async () => undefined,
+      releaseJob: async () => { throw new Error(`offline ${job.claimToken}`); },
+      outbox: new FileAckOutbox(path), logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }).pollOnce()).rejects.toBeInstanceOf(FatalPrintStateError);
+
+    expect(claimJobs).not.toHaveBeenCalled();
+    expect(await new FileAckOutbox(path).list()).toEqual([{ job: claim, status: "claimed" }]);
+  });
+
+  it("removes a claimed marker when recovery release is already resolved", async () => {
+    const outbox = new MemoryAckOutbox();
+    const claim = { id: job.id, claimToken: job.claimToken };
+    await outbox.put({ job: claim, status: "claimed" });
+    const claimJobs = vi.fn(async () => []);
+
+    await new PrintPoller(config, {
+      claimJobs, handleJob: async () => undefined, ackJob: async () => undefined,
+      releaseJob: async () => { throw new QueueRequestError("release", "HTTP 409", 409); },
+      outbox, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }).pollOnce();
+
+    expect(claimJobs).toHaveBeenCalledOnce();
+    expect(await outbox.list()).toEqual([]);
+  });
+
+  it("retains a claimed marker when graceful-shutdown release fails", async () => {
+    const controller = new AbortController();
+    const outbox = new MemoryAckOutbox();
+    const claim = { id: job.id, claimToken: job.claimToken };
+    const handleJob = vi.fn(async () => undefined);
+
+    await expect(new PrintPoller(config, {
+      claimJobs: async () => { controller.abort(); return [job]; }, handleJob, ackJob: async () => undefined,
+      releaseJob: async () => { throw new Error("offline"); }, outbox,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }).pollOnce(controller.signal)).rejects.toBeInstanceOf(FatalPrintStateError);
+
+    expect(handleJob).not.toHaveBeenCalled();
+    expect(await outbox.list()).toEqual([{ job: claim, status: "claimed" }]);
   });
 
   it("halts instead of polling when durable state cannot be read", async () => {
@@ -230,7 +322,7 @@ describe("PrintPoller", () => {
     expect(claimJobs).toHaveBeenCalledOnce();
     expect(handleJob).toHaveBeenCalledOnce();
     expect(ackJob).not.toHaveBeenCalled();
-    expect(await outbox.list()).toEqual([{ job, status: "submitting" }]);
+    expect(await outbox.list()).toEqual([{ job: { id: job.id, claimToken: job.claimToken }, status: "submitting" }]);
   });
 
   it("redacts claim tokens from persisted failed acknowledgement errors", async () => {

@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import type { AgentConfig, PrinterDriver } from "./types.js";
 
 export class ConfigurationError extends Error {
@@ -17,6 +18,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
   const printAgentToken = required(env.PRINT_AGENT_TOKEN, "PRINT_AGENT_TOKEN", "Set it to the Worker print-agent bearer token.");
   const printerDriver = parsePrinterDriver(env.PRINTER_DRIVER);
   const printerName = env.PRINTER_NAME?.trim() || undefined;
+  const stateDir = parseStateDir(env.PRINT_AGENT_STATE_DIR);
 
   let parsedUrl: URL;
   try {
@@ -45,7 +47,16 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     batchSize: parseInteger(env.BATCH_SIZE, "BATCH_SIZE", 5, 1, 20),
     printerDriver,
     ...(printerName ? { printerName } : {}),
+    ...(stateDir ? { stateDir } : {}),
   };
+}
+
+function parseStateDir(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const stateDir = value.trim();
+  if (!stateDir) throw new ConfigurationError("PRINT_AGENT_STATE_DIR", "Must be a nonempty absolute path when set.");
+  if (!isAbsolute(stateDir)) throw new ConfigurationError("PRINT_AGENT_STATE_DIR", "Must be an absolute path.");
+  return stateDir;
 }
 
 function isLoopback(hostname: string): boolean {

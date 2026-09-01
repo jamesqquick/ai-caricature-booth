@@ -2,20 +2,25 @@ import { randomUUID } from "node:crypto";
 import { open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ensurePrivateDirectory } from "./filesystem.js";
-import type { PrintJob, PrintStatus } from "./types.js";
+import type { ClaimIdentity, PrintStatus } from "./types.js";
 
 export type TerminalAckIntent = {
-  job: PrintJob;
+  job: ClaimIdentity;
   status: PrintStatus;
   error?: string;
 };
 
 export type SubmissionMarker = {
-  job: PrintJob;
+  job: ClaimIdentity;
   status: "submitting";
 };
 
-export type PendingPrintState = TerminalAckIntent | SubmissionMarker;
+export type ClaimMarker = {
+  job: ClaimIdentity;
+  status: "claimed";
+};
+
+export type PendingPrintState = TerminalAckIntent | SubmissionMarker | ClaimMarker;
 
 export interface AckOutbox {
   list(): Promise<PendingPrintState[]>;
@@ -113,16 +118,17 @@ function isOutboxFile(value: unknown): value is { version: 1; intents: PendingPr
 
 function isIntent(value: unknown): value is PendingPrintState {
   if (!value || typeof value !== "object") return false;
-  const intent = value as { job?: Partial<PrintJob>; status?: unknown; error?: unknown };
+  const intent = value as { job?: Partial<ClaimIdentity>; status?: unknown; error?: unknown };
   return typeof intent.job?.id === "string"
     && typeof intent.job.claimToken === "string"
-    && (intent.status === "submitting" || intent.status === "printed" || intent.status === "failed")
-    && (intent.error === undefined || typeof intent.error === "string");
+    && (intent.status === "claimed" || intent.status === "submitting" || intent.status === "printed" || intent.status === "failed")
+    && (intent.status === "failed" ? intent.error === undefined || typeof intent.error === "string" : intent.error === undefined);
 }
 
 function sanitizeState(state: PendingPrintState): PendingPrintState {
-  if (state.status !== "failed" || state.error === undefined) return state;
-  return { ...state, error: state.error.replaceAll(state.job.claimToken, "[redacted]") };
+  const job = { id: state.job.id, claimToken: state.job.claimToken };
+  if (state.status !== "failed" || state.error === undefined) return { job, status: state.status };
+  return { job, status: state.status, error: state.error.replaceAll(state.job.claimToken, "[redacted]") };
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

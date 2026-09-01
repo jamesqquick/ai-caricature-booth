@@ -8,6 +8,7 @@ export type AgentConfig = {
   batchSize: number;
   printerDriver: PrinterDriver;
   printerName?: string;
+  stateDir?: string;
 };
 
 export type PrintJob = {
@@ -20,6 +21,8 @@ export type PrintJob = {
   createdAt: number;
   claimToken: string;
 };
+
+export type ClaimIdentity = Pick<PrintJob, "id" | "claimToken">;
 
 export type PrintStatus = "printed" | "failed";
 

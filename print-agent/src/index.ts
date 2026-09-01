@@ -1,10 +1,12 @@
 import "dotenv/config";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { handleJob } from "./job-handler.js";
 import { AgentLock } from "./lock.js";
 import { FileAckOutbox } from "./outbox.js";
+import { resolveAgentDirectories } from "./paths.js";
 import { PrintPoller } from "./poller.js";
 import { createPrinter } from "./printer.js";
 import { ackJob, claimJobs, releaseJob } from "./queue.js";
@@ -13,8 +15,7 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 async function main(): Promise<void> {
   const config = loadConfig(process.env, process.argv.slice(2));
-  const outputDir = join(packageRoot, "output");
-  const stateDir = join(outputDir, "state");
+  const { outputDir, stateDir } = resolveAgentDirectories(config, packageRoot, homedir());
   const lock = await AgentLock.acquire(stateDir);
   const controller = new AbortController();
   const stop = (signal: NodeJS.Signals) => {
