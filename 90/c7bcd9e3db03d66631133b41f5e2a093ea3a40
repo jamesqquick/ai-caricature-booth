@@ -1,0 +1,29 @@
+test/booth-machine.spec.ts
+  s_a9741ebd9f4489::t_873c7a08cabedf 51-74
+vitest.config.ts
+  s_626f8fa0cfcef7::t_4f08211babc80b 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90c7bcd9e3db03d66631133b41f5e2a093ea3a40",
+  "prompts": {},
+  "sessions": {
+    "s_626f8fa0cfcef7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2c79ba2ffeZyEseLNp6zGZaY",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_a9741ebd9f4489": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa23ee475ffe3d8zkPefr0hbRb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
