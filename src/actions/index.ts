@@ -6,8 +6,20 @@ import { loadEventScene } from '../db/scenes';
 import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord } from '../db/sessions';
 import { toGenerationFailureCode } from '../lib/generation-errors';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
-import { hasExactSelfieOwnership, workflowSessionAssetKey } from '../lib/selfie-ownership';
+import {
+  hasExactSelfieOwnership,
+  legacySessionAssetKey,
+  readOwnedSelfieBytes,
+  workflowSessionAssetKey,
+} from '../lib/selfie-ownership';
 import type { Scene } from '../data/scenes';
+
+const START_GENERATION_ERROR = "Couldn't start your postcard. Please try again.";
+
+type GenerationClaim = Pick<
+  SessionRecord,
+  'id' | 'event_id' | 'scene_id' | 'selfie_key' | 'selfie_sha256' | 'workflow_instance_id'
+>;
 
 const startInput = z.object({
   eventSlug: z.string().min(1).max(120),
@@ -61,14 +73,14 @@ export const server = {
           const ownedSession = ['completed', 'errored'].includes(existing.status)
             ? existing
             : await ensureWorkflowIdentity(existing);
-          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
           if (ownedSession.status === 'pending' || ownedSession.status === 'uploading') {
-            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
             await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
-          const current = await loadSession(env.DB, ownedSession.id);
-          if (current) await ensureWorkflow(current, scene, event);
-          return { sessionId: existing.id, status: current?.status ?? existing.status };
+          const current = await loadClaimedSession(generationClaim(ownedSession));
+          await ensureWorkflow(current, scene, event);
+          return { sessionId: existing.id, status: current.status };
         }
 
         const event = await loadActiveEventBySlug(env.DB, eventSlug);
@@ -87,7 +99,7 @@ export const server = {
           selfie_sha256: selfieSha256,
           workflow_instance_id: workflowInstanceId,
         });
-        if (!claim.session) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+        if (!claim.session) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
         if (!claim.created) {
           if (claim.session.event_id !== event.id || claim.session.scene_id !== scene.id || claim.session.selfie_sha256 !== selfieSha256) {
             throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session does not match the selected booth. Start over.' });
@@ -95,20 +107,27 @@ export const server = {
           const ownedSession = ['completed', 'errored'].includes(claim.session.status)
             ? claim.session
             : await ensureWorkflowIdentity(claim.session);
-          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
           if (ownedSession.status === 'pending' || ownedSession.status === 'uploading') {
-            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
             await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
-          const current = await loadSession(env.DB, ownedSession.id);
-          if (current) await ensureWorkflow(current, scene, event);
-          return { sessionId: claim.session.id, status: current?.status ?? claim.session.status };
+          const current = await loadClaimedSession(generationClaim(ownedSession));
+          await ensureWorkflow(current, scene, event);
+          return { sessionId: claim.session.id, status: current.status };
         }
 
         await ensureSelfieUploaded(idempotencyKey, event.id, workflowInstanceId, selfieKey, selfieSha256, bytes);
-        const current = await loadSession(env.DB, idempotencyKey);
-        if (current) await ensureWorkflow(current, scene, event);
-        return { sessionId: idempotencyKey, status: current?.status ?? claim.session.status };
+        const current = await loadClaimedSession({
+          id: idempotencyKey,
+          event_id: event.id,
+          scene_id: scene.id,
+          selfie_key: selfieKey,
+          selfie_sha256: selfieSha256,
+          workflow_instance_id: workflowInstanceId,
+        });
+        await ensureWorkflow(current, scene, event);
+        return { sessionId: idempotencyKey, status: current.status };
       } catch (error) {
         throwPublicActionError('startGeneration', sessionId, error, "Couldn't start your postcard. Please try again.");
       }
@@ -151,29 +170,42 @@ async function ensureWorkflow(
   if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return;
   const ownedSession = await ensureWorkflowIdentity(session);
   const workflowInstanceId = ownedSession?.workflow_instance_id;
-  if (!ownedSession || !workflowInstanceId) return;
-  const selfie = await env.SELFIES.head(ownedSession.selfie_key);
-  if (!hasExactSelfieOwnership(selfie, {
+  if (!ownedSession || !workflowInstanceId) {
+    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
+  }
+  const claim = generationClaim(ownedSession);
+  const ownership = {
     sessionId: ownedSession.id,
     eventId: ownedSession.event_id,
     workflowInstanceId,
     selfieSha256: ownedSession.selfie_sha256,
-  })) return;
+  };
+  const selfie = await env.SELFIES.head(ownedSession.selfie_key);
+  if (!hasExactSelfieOwnership(selfie, ownership)) {
+    if (ownedSession.selfie_key !== legacySessionAssetKey(ownedSession.id, 'selfie')) return;
+    const legacyObject = await env.SELFIES.get(ownedSession.selfie_key);
+    const legacySelfie = legacyObject
+      ? await readOwnedSelfieBytes(legacyObject, ownedSession.selfie_key, ownership)
+      : null;
+    if (!legacySelfie) return;
+  }
+  let current = await loadClaimedSession(claim);
+  if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return;
   try {
     await env.CARICATURE_WORKFLOW.create({
       id: workflowInstanceId,
       params: {
-        sessionId: ownedSession.id,
+        sessionId: current.id,
         workflowInstanceId,
-        eventId: ownedSession.event_id,
+        eventId: current.event_id,
         sceneId: scene.id,
         sceneName: scene.name,
         sceneDescription: scene.description,
         scenePrompt: scene.prompt,
         eventPromptPreamble: event.scene_style_preamble,
         eventConstraints: event.scene_constraints,
-        selfieKey: ownedSession.selfie_key,
-        selfieSha256: ownedSession.selfie_sha256,
+        selfieKey: current.selfie_key,
+        selfieSha256: current.selfie_sha256,
         watermarkKey: event.watermark_image_key,
         watermarkWidth: event.watermark_w,
       },
@@ -181,21 +213,26 @@ async function ensureWorkflow(
     return;
   } catch (createError) {
     try {
+      current = await loadClaimedSession(claim);
+      if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return;
       const instance = await env.CARICATURE_WORKFLOW.get(workflowInstanceId);
       const { status } = await instance.status();
       if (['queued', 'running', 'waiting', 'waitingForPause', 'complete'].includes(status)) return;
       if (status === 'errored' || status === 'terminated') {
+        await loadClaimedSession(claim);
         await instance.restart();
         return;
       }
       if (status === 'paused') {
+        await loadClaimedSession(claim);
         await instance.resume();
         return;
       }
       throw createError;
     } catch (recoveryError) {
+      if (recoveryError instanceof ActionError) throw recoveryError;
       console.error(JSON.stringify({ message: 'workflow start failed', sessionId: ownedSession.id, ...errorDiagnostic(recoveryError) }));
-      throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+      throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
     }
   }
 }
@@ -206,12 +243,37 @@ async function ensureWorkflowIdentity(session: SessionRecord): Promise<(SessionR
   return claimed?.workflow_instance_id === session.id ? { ...claimed, workflow_instance_id: claimed.workflow_instance_id } : null;
 }
 
+function generationClaim(session: SessionRecord): GenerationClaim {
+  return {
+    id: session.id,
+    event_id: session.event_id,
+    scene_id: session.scene_id,
+    selfie_key: session.selfie_key,
+    selfie_sha256: session.selfie_sha256,
+    workflow_instance_id: session.workflow_instance_id,
+  };
+}
+
+async function loadClaimedSession(claim: GenerationClaim) {
+  const session = await loadSession(env.DB, claim.id);
+  if (!session
+    || session.id !== claim.id
+    || session.event_id !== claim.event_id
+    || session.scene_id !== claim.scene_id
+    || session.selfie_key !== claim.selfie_key
+    || session.selfie_sha256 !== claim.selfie_sha256
+    || session.workflow_instance_id !== claim.workflow_instance_id) {
+    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
+  }
+  return session;
+}
+
 async function ensureSelfieUploaded(sessionId: string, eventId: number, workflowInstanceId: string, selfieKey: string, selfieSha256: string, bytes: Uint8Array) {
   const existing = await env.SELFIES.head(selfieKey);
   if (hasExactSelfieOwnership(existing, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return;
   const uploadingSession = await transitionSession(env.DB, sessionId, 'uploading', {}, workflowInstanceId);
   if (uploadingSession?.workflow_instance_id !== workflowInstanceId || uploadingSession.status !== 'uploading') {
-    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
   }
   await env.SELFIES.put(selfieKey, bytes, {
     httpMetadata: { contentType: 'image/jpeg' },

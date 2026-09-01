@@ -4,6 +4,7 @@ const fakeEnv = vi.hoisted(() => ({
   DB: {},
   SELFIES: {
     head: vi.fn(),
+    get: vi.fn(),
     put: vi.fn(),
   },
   CARICATURE_WORKFLOW: {
@@ -118,17 +119,20 @@ describe('public action error boundaries', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    let currentSession: Record<string, unknown> = session;
     loadActiveEventById.mockResolvedValue(event);
     loadActiveEventBySlug.mockResolvedValue(event);
     loadEventScene.mockResolvedValue(scene);
     createPendingSession.mockResolvedValue({ session, created: false });
-    loadSession.mockResolvedValue(session);
-    claimWorkflowInstanceId.mockResolvedValue({ ...session, workflow_instance_id: sessionId });
-    transitionSession.mockImplementation(async (_database, _sessionId, status, _fields, expectedWorkflowInstanceId) => ({
-      ...session,
-      status,
-      workflow_instance_id: expectedWorkflowInstanceId,
-    }));
+    loadSession.mockImplementation(async () => currentSession);
+    claimWorkflowInstanceId.mockImplementation(async () => {
+      currentSession = { ...currentSession, workflow_instance_id: sessionId };
+      return currentSession;
+    });
+    transitionSession.mockImplementation(async (_database, _sessionId, status, _fields, expectedWorkflowInstanceId) => {
+      currentSession = { ...currentSession, status, workflow_instance_id: expectedWorkflowInstanceId };
+      return currentSession;
+    });
     fakeEnv.SELFIES.head.mockResolvedValue({
       httpMetadata: { contentType: 'image/jpeg' },
       customMetadata: {
@@ -140,6 +144,7 @@ describe('public action error boundaries', () => {
       },
     });
     fakeEnv.SELFIES.put.mockResolvedValue(undefined);
+    fakeEnv.SELFIES.get.mockResolvedValue(null);
     fakeEnv.CARICATURE_WORKFLOW.create.mockResolvedValue(undefined);
   });
 
@@ -198,6 +203,7 @@ describe('public action error boundaries', () => {
       id: sessionId,
       params: expect.objectContaining({ workflowInstanceId: sessionId, selfieSha256 }),
     }));
+    expect(fakeEnv.SELFIES.get).not.toHaveBeenCalled();
   });
 
   it('does not adopt a workflow identity claimed by another request', async () => {
@@ -303,6 +309,177 @@ describe('public action error boundaries', () => {
     expect(oldInstance.resume).not.toHaveBeenCalled();
   });
 
+  it('rejects a row recreated between a new selfie upload and session reload', async () => {
+    const oldPrompt = 'old-prompt-sentinel';
+    const oldWatermark = 'events/7/watermarks/old-watermark.png';
+    const scopedSelfieKey = `sessions/${sessionId}/${workflowInstanceId}/selfie.jpg`;
+    const claimedSession = {
+      ...session,
+      status: 'uploading',
+      selfie_key: scopedSelfieKey,
+      workflow_instance_id: workflowInstanceId,
+    };
+    const replacementSession = {
+      ...claimedSession,
+      event_id: 8,
+      scene_id: 'replacement-scene',
+      selfie_key: `sessions/${sessionId}/replacement/selfie.jpg`,
+      selfie_sha256: 'replacement-hash',
+      workflow_instance_id: 'replacement',
+    };
+    const oldInstance = {
+      status: vi.fn(),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(workflowInstanceId);
+    loadSession.mockResolvedValueOnce(null).mockResolvedValue(replacementSession);
+    createPendingSession.mockResolvedValue({ session: { ...claimedSession, status: 'pending' }, created: true });
+    transitionSession.mockResolvedValue(claimedSession);
+    loadEventScene.mockResolvedValue({ ...scene, prompt: oldPrompt });
+    loadActiveEventBySlug.mockResolvedValue({ ...event, watermark_image_key: oldWatermark });
+    fakeEnv.SELFIES.head.mockResolvedValue(null);
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(oldInstance);
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(fakeEnv.SELFIES.put).toHaveBeenCalledWith(scopedSelfieKey, validJpeg, expect.anything());
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+    expect(oldInstance.restart).not.toHaveBeenCalled();
+    expect(oldInstance.resume).not.toHaveBeenCalled();
+    expect(JSON.stringify(fakeEnv.CARICATURE_WORKFLOW.create.mock.calls)).not.toContain(oldPrompt);
+    expect(JSON.stringify(fakeEnv.CARICATURE_WORKFLOW.create.mock.calls)).not.toContain(oldWatermark);
+  });
+
+  it('revalidates the claim inside ensureWorkflow before creating or recovering an instance', async () => {
+    const ownedSession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+    const replacementSession = {
+      ...ownedSession,
+      scene_id: 'replacement-scene',
+      workflow_instance_id: 'replacement-instance',
+    };
+    const instance = {
+      status: vi.fn(),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadSession
+      .mockResolvedValueOnce(ownedSession)
+      .mockResolvedValueOnce(ownedSession)
+      .mockResolvedValue(replacementSession);
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+    expect(instance.restart).not.toHaveBeenCalled();
+    expect(instance.resume).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['get', 3, 'errored'],
+    ['restart', 4, 'errored'],
+    ['resume', 4, 'paused'],
+  ])('revalidates the claim immediately before workflow %s', async (operation, validReads, workflowStatus) => {
+    const ownedSession = { ...session, status: 'generating', workflow_instance_id: sessionId };
+    const replacementSession = { ...ownedSession, workflow_instance_id: 'replacement-instance' };
+    const instance = {
+      status: vi.fn().mockResolvedValue({ status: workflowStatus }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    for (let index = 0; index < validReads; index += 1) {
+      loadSession.mockResolvedValueOnce(ownedSession);
+    }
+    loadSession.mockResolvedValue(replacementSession);
+    fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledTimes(1);
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).toHaveBeenCalledTimes(operation === 'get' ? 0 : 1);
+    expect(instance.restart).not.toHaveBeenCalled();
+    expect(instance.resume).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['moderating', 'create'],
+    ['generating', 'restart'],
+    ['compositing', 'resume'],
+  ])('recovers a metadata-less legacy selfie in %s after its bytes match D1', async (status, recovery) => {
+    const legacySession = { ...session, status, workflow_instance_id: sessionId };
+    const instance = {
+      status: vi.fn().mockResolvedValue({ status: recovery === 'restart' ? 'errored' : 'paused' }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadSession.mockResolvedValue(legacySession);
+    fakeEnv.SELFIES.head.mockResolvedValue({ httpMetadata: { contentType: 'image/jpeg' }, customMetadata: {} });
+    fakeEnv.SELFIES.get.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {},
+      arrayBuffer: vi.fn().mockResolvedValue(validJpeg.slice().buffer),
+    });
+    if (recovery !== 'create') {
+      fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+      fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+    }
+
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status });
+
+    expect(fakeEnv.SELFIES.get).toHaveBeenCalledWith(session.selfie_key);
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId }));
+    if (recovery === 'restart') expect(instance.restart).toHaveBeenCalledTimes(1);
+    if (recovery === 'resume') expect(instance.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects metadata-less legacy recovery when object bytes do not match D1', async () => {
+    const legacySession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+    loadSession.mockResolvedValue(legacySession);
+    fakeEnv.SELFIES.head.mockResolvedValue({ httpMetadata: { contentType: 'image/jpeg' }, customMetadata: {} });
+    fakeEnv.SELFIES.get.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {},
+      arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
+    });
+
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'moderating' });
+
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+  });
+
+  it('rejects conflicting legacy selfie metadata without reading its bytes', async () => {
+    const legacySession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+    const arrayBuffer = vi.fn();
+    const conflictingObject = {
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: { workflowInstanceId: 'replacement-instance' },
+      arrayBuffer,
+    };
+    loadSession.mockResolvedValue(legacySession);
+    fakeEnv.SELFIES.head.mockResolvedValue(conflictingObject);
+    fakeEnv.SELFIES.get.mockResolvedValue(conflictingObject);
+
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'moderating' });
+
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+  });
+
   it('does not recover a workflow after a stale selfie replacement upload fails', async () => {
     const uploadError = new Error('R2 replacement failed');
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -360,7 +537,7 @@ describe('public action error boundaries', () => {
     const diagnostic = 'workflow-sentinel-028ced';
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const workflowError = new Error(diagnostic);
-    loadSession.mockResolvedValue({ ...session, status: 'moderating' });
+    loadSession.mockResolvedValue({ ...session, status: 'moderating', workflow_instance_id: sessionId });
     fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(workflowError);
     fakeEnv.CARICATURE_WORKFLOW.get.mockRejectedValue(workflowError);
 
