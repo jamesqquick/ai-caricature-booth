@@ -303,7 +303,7 @@ export async function retryAdminPrintJob(database: D1Database, sessionId: string
     SET status = 'pending', printed_at = NULL, error_msg = NULL, claim_token = NULL
     WHERE id = ?
       AND session_id = ?
-      AND status IN ('failed', 'printing')
+      AND status = 'failed'
       AND NOT EXISTS (
         SELECT 1 FROM print_jobs active
         WHERE active.session_id = print_jobs.session_id
@@ -313,7 +313,7 @@ export async function retryAdminPrintJob(database: D1Database, sessionId: string
     RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
   `).bind(jobId, sessionId).first<PrintJobRow>();
   if (row) return adminJob(row);
-  return await throwMissingOrConflict(database, jobId, 'Only failed or stuck printing jobs can be retried.', sessionId);
+  return await throwMissingOrConflict(database, jobId, 'Only failed print jobs can be retried.', sessionId);
 }
 
 async function throwMissingOrConflict(database: D1Database, jobId: string, message: string, sessionId?: string): Promise<never> {

@@ -1,9 +1,10 @@
 import { execFile as nodeExecFile } from "node:child_process";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { ConfigurationError } from "./config.js";
+import { ensurePrivateDirectory, writePrivateFile } from "./filesystem.js";
 import type { AgentConfig } from "./types.js";
 
 export type PrintResult = {
@@ -32,6 +33,14 @@ export class PrintSubmissionError extends Error {
   }
 }
 
+export class PrintOutcomeUncertainError extends Error {
+  readonly name = "PrintOutcomeUncertainError";
+
+  constructor(public readonly jobId: string, message: string, options?: ErrorOptions) {
+    super(`Print job ${jobId}: submission outcome is uncertain: ${message}`, options);
+  }
+}
+
 export class MockPrinter implements Printer {
   readonly name = "MockPrinter";
 
@@ -39,10 +48,10 @@ export class MockPrinter implements Printer {
 
   async print(pdfBytes: Uint8Array, jobId: string): Promise<PrintResult> {
     const startedAt = Date.now();
-    const path = join(this.spoolDir, `${safeFilePart(jobId)}.pdf`);
+    const path = join(this.spoolDir, `print-${randomUUID()}.pdf`);
     try {
-      await mkdir(this.spoolDir, { recursive: true });
-      await writeFile(path, pdfBytes);
+      await ensurePrivateDirectory(this.spoolDir);
+      await writePrivateFile(path, pdfBytes);
       return { message: `${this.name}: wrote spool file ${path}`, durationMs: Date.now() - startedAt, path };
     } catch (cause) {
       throw new PrintSubmissionError(jobId, `could not write mock spool file ${path}`, { cause });
@@ -63,21 +72,22 @@ export class CupsPrinter implements Printer {
     }
     this.name = `CUPS(${this.printerName})`;
     this.execFile = dependencies.execFile ?? (nodeExecFile as ExecFile);
-    this.temporaryDirectory = dependencies.temporaryDirectory ?? tmpdir();
+    this.temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "ai-caricature-booth-print-agent");
   }
 
   async print(pdfBytes: Uint8Array, jobId: string): Promise<PrintResult> {
     const startedAt = Date.now();
-    const path = join(this.temporaryDirectory, `print-${safeFilePart(jobId)}-${randomUUID()}.pdf`);
+    const path = join(this.temporaryDirectory, `print-${randomUUID()}.pdf`);
     try {
-      await writeFile(path, pdfBytes);
+      await ensurePrivateDirectory(this.temporaryDirectory);
+      await writePrivateFile(path, pdfBytes);
       const stdout = await this.submit(path, jobId);
       return {
         message: `${this.name}: CUPS accepted the job${stdout ? ` (${stdout})` : ""}`,
         durationMs: Date.now() - startedAt,
       };
     } catch (cause) {
-      if (cause instanceof PrintSubmissionError) throw cause;
+      if (cause instanceof PrintSubmissionError || cause instanceof PrintOutcomeUncertainError) throw cause;
       throw new PrintSubmissionError(jobId, `could not create or submit temporary PDF ${path}`, { cause });
     } finally {
       await unlink(path).catch(() => undefined);
@@ -96,7 +106,7 @@ export class CupsPrinter implements Printer {
             return;
           }
           const detail = stderr.toString().trim();
-          reject(new PrintSubmissionError(jobId, `lp submission failed${detail ? `: ${detail}` : `: ${error.message}`}`, { cause: error }));
+          reject(new PrintOutcomeUncertainError(jobId, `lp failed or timed out after invocation${detail ? `: ${detail}` : `: ${error.message}`}`, { cause: error }));
         },
       );
     });
@@ -106,8 +116,4 @@ export class CupsPrinter implements Printer {
 export function createPrinter(config: AgentConfig, packageRoot: string): Printer {
   if (config.printerDriver === "mock") return new MockPrinter(join(packageRoot, "spool"));
   return new CupsPrinter(config.printerName ?? "");
-}
-
-function safeFilePart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }

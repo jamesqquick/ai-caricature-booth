@@ -2,29 +2,38 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { FileAckOutbox } from "../src/outbox.js";
+import { FileAckOutbox, MemoryAckOutbox } from "../src/outbox.js";
+import { JobProcessingError } from "../src/job-handler.js";
 import { FatalPrintStateError, PrintPoller } from "../src/poller.js";
+import { PrintOutcomeUncertainError } from "../src/printer.js";
 import { QueueRequestError } from "../src/queue.js";
 import { config, job } from "./fixtures.js";
 
 describe("PrintPoller", () => {
-  it("processes claimed jobs serially and continues after processing failures", async () => {
+  it("claims and processes one job at a time up to the poll-cycle batch limit", async () => {
     const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
     const order: string[] = [];
+    const claimJobs = vi.fn()
+      .mockImplementationOnce(async () => { order.push("claim:1"); return [job]; })
+      .mockImplementationOnce(async () => { order.push("claim:2"); return [secondJob]; })
+      .mockImplementationOnce(async () => { order.push("claim:3"); return []; });
     const handleJob = vi.fn(async (_job: typeof job) => {
       order.push(`start:${_job.id}`);
       if (_job.id === job.id) throw new Error("printer jam");
       order.push(`end:${_job.id}`);
     });
     const ackJob = vi.fn(async (_job: typeof job, status: "printed" | "failed") => order.push(`ack:${_job.id}:${status}`));
-    const poller = new PrintPoller(config, { claimJobs: async () => [job, secondJob], handleJob, ackJob, releaseJob: async () => undefined, sleep: async () => undefined });
+    const poller = new PrintPoller(config, { claimJobs, handleJob, ackJob, releaseJob: async () => undefined, sleep: async () => undefined });
     await poller.pollOnce();
     expect(order).toEqual([
+      "claim:1",
       `start:${job.id}`,
       `ack:${job.id}:failed`,
+      "claim:2",
       `start:${secondJob.id}`,
       `end:${secondJob.id}`,
       `ack:${secondJob.id}:printed`,
+      "claim:3",
     ]);
   });
 
@@ -72,18 +81,23 @@ describe("PrintPoller", () => {
     expect(await new FileAckOutbox(path).list()).toEqual([]);
   });
 
-  it("drops a stale outbox acknowledgement on conflict without logging its token", async () => {
+  it("halts on a stale printed acknowledgement without dropping it or printing more", async () => {
     const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
     const outbox = new FileAckOutbox(join(directory, "acks.json"));
     await outbox.put({ job, status: "printed" });
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    await new PrintPoller(config, {
-      claimJobs: async () => [], handleJob: async () => undefined,
+    const claimJobs = vi.fn(async () => [job]);
+    const handleJob = vi.fn(async () => undefined);
+    const poller = new PrintPoller(config, {
+      claimJobs, handleJob,
       ackJob: async () => { throw new QueueRequestError("ack", "HTTP 409", 409); },
       releaseJob: async () => undefined,
       outbox, logger, sleep: async () => undefined,
-    }).pollOnce();
-    expect(await outbox.list()).toEqual([]);
+    });
+    await expect(poller.pollOnce()).rejects.toBeInstanceOf(FatalPrintStateError);
+    expect(await outbox.list()).toEqual([{ job, status: "printed" }]);
+    expect(claimJobs).not.toHaveBeenCalled();
+    expect(handleJob).not.toHaveBeenCalled();
     const logs = [...logger.info.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls].flat().join("\n");
     expect(logs).not.toContain(job.claimToken);
   });
@@ -118,33 +132,30 @@ describe("PrintPoller", () => {
     expect(logs).toContain("[redacted]");
   });
 
-  it("releases every unprocessed claim when shutdown is requested between jobs", async () => {
+  it("does not claim another job when shutdown is requested after the active job", async () => {
     const controller = new AbortController();
-    const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
-    const thirdJob = { ...job, id: "e".repeat(32), claimToken: "f".repeat(32) };
     const handleJob = vi.fn(async () => { controller.abort(); });
     const releaseJob = vi.fn(async (_job: typeof job) => undefined);
+    const claimJobs = vi.fn(async () => [job]);
     const poller = new PrintPoller(config, {
-      claimJobs: async () => [job, secondJob, thirdJob], handleJob,
+      claimJobs, handleJob,
       ackJob: async () => undefined, releaseJob, sleep: async () => undefined,
     });
     await poller.pollOnce(controller.signal);
     expect(handleJob).toHaveBeenCalledOnce();
-    expect(releaseJob.mock.calls.map(([claimed]) => claimed.id)).toEqual([secondJob.id, thirdJob.id]);
+    expect(claimJobs).toHaveBeenCalledOnce();
+    expect(releaseJob).not.toHaveBeenCalled();
   });
 
   it("stops after an outbox write failure and releases only unprocessed claims", async () => {
-    const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
-    const thirdJob = { ...job, id: "e".repeat(32), claimToken: "f".repeat(32) };
     let currentStatus = "printing";
-    const claimJobs = vi.fn(async () => [job, secondJob, thirdJob]);
+    const claimJobs = vi.fn(async () => [job]);
     const handleJob = vi.fn(async () => undefined);
     const ackJob = vi.fn(async (claimed: typeof job, status: "printed" | "failed") => {
       if (claimed.id === job.id) currentStatus = status;
     });
     const releaseJob = vi.fn(async (claimed: typeof job) => {
       if (claimed.id === job.id) currentStatus = "pending";
-      if (claimed.id === secondJob.id) throw new Error(`release failed ${claimed.claimToken}`);
     });
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const outbox = {
@@ -160,15 +171,83 @@ describe("PrintPoller", () => {
     await expect(poller.run(new AbortController().signal)).rejects.toBeInstanceOf(FatalPrintStateError);
     expect(claimJobs).toHaveBeenCalledOnce();
     expect(handleJob).toHaveBeenCalledOnce();
-    expect(handleJob).toHaveBeenCalledWith(job);
+    expect(handleJob).toHaveBeenCalledWith(job, expect.any(Function));
     expect(ackJob).not.toHaveBeenCalled();
     expect(currentStatus).toBe("printing");
-    expect(releaseJob.mock.calls.map(([claimed]) => claimed.id)).toEqual([secondJob.id, thirdJob.id]);
+    expect(releaseJob).not.toHaveBeenCalled();
     const logs = [...logger.info.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls].flat().join("\n");
     expect(logs).toContain("operator intervention required");
     expect(logs).not.toContain(job.claimToken);
-    expect(logs).not.toContain(secondJob.claimToken);
-    expect(logs).not.toContain(thirdJob.claimToken);
+  });
+
+  it("halts on restart when a pre-submission marker remains", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
+    const outbox = new FileAckOutbox(join(directory, "state.json"));
+    await outbox.put({ job, status: "submitting" });
+    const claimJobs = vi.fn(async () => [job]);
+    const handleJob = vi.fn(async () => undefined);
+    const poller = new PrintPoller(config, {
+      claimJobs, handleJob, ackJob: async () => undefined,
+      releaseJob: async () => undefined, outbox,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await expect(poller.pollOnce()).rejects.toMatchObject({ name: "FatalPrintStateError", jobId: job.id });
+    expect(claimJobs).not.toHaveBeenCalled();
+    expect(handleJob).not.toHaveBeenCalled();
+    expect(await outbox.list()).toEqual([{ job, status: "submitting" }]);
+  });
+
+  it("halts instead of polling when durable state cannot be read", async () => {
+    const claimJobs = vi.fn(async () => [job]);
+    const poller = new PrintPoller(config, {
+      claimJobs,
+      handleJob: async () => undefined,
+      ackJob: async () => undefined,
+      releaseJob: async () => undefined,
+      outbox: { list: async () => { throw new Error("corrupt state"); }, put: async () => undefined, remove: async () => undefined },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await expect(poller.pollOnce()).rejects.toBeInstanceOf(FatalPrintStateError);
+    expect(claimJobs).not.toHaveBeenCalled();
+  });
+
+  it("retains the submission marker and halts when lp outcome is uncertain", async () => {
+    const outbox = new MemoryAckOutbox();
+    const claimJobs = vi.fn().mockResolvedValueOnce([job]).mockResolvedValueOnce([]);
+    const handleJob = vi.fn(async (_job: typeof job, beforeSubmit: () => Promise<void>) => {
+      await beforeSubmit();
+      throw new JobProcessingError(job.id, "print", new PrintOutcomeUncertainError(job.id, "lp timed out"));
+    });
+    const ackJob = vi.fn(async () => undefined);
+    const poller = new PrintPoller(config, {
+      claimJobs, handleJob, ackJob, releaseJob: async () => undefined,
+      outbox, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await expect(poller.run(new AbortController().signal)).rejects.toBeInstanceOf(FatalPrintStateError);
+    expect(claimJobs).toHaveBeenCalledOnce();
+    expect(handleJob).toHaveBeenCalledOnce();
+    expect(ackJob).not.toHaveBeenCalled();
+    expect(await outbox.list()).toEqual([{ job, status: "submitting" }]);
+  });
+
+  it("redacts claim tokens from persisted failed acknowledgement errors", async () => {
+    const outbox = new MemoryAckOutbox();
+    const poller = new PrintPoller(config, {
+      claimJobs: vi.fn().mockResolvedValueOnce([job]).mockResolvedValueOnce([]),
+      handleJob: async () => { throw new Error(`prepare failed ${job.claimToken}`); },
+      ackJob: async () => { throw new Error("offline"); },
+      releaseJob: async () => undefined, outbox,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await poller.pollOnce();
+    const [intent] = await outbox.list();
+    expect(intent).toMatchObject({ status: "failed", error: expect.stringContaining("[redacted]") });
+    expect(intent?.status).toBe("failed");
+    if (intent?.status === "failed") expect(intent.error).not.toContain(job.claimToken);
   });
 
   it("never overlaps polls and stops through AbortSignal without arbitrary waits", async () => {

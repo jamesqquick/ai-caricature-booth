@@ -239,7 +239,7 @@ describe('print job data layer', () => {
     expect(statements[0].values).toEqual([row.id, row.claim_token]);
   });
 
-  it('retries only failed or explicitly selected printing jobs for the requested session', async () => {
+  it('retries only failed jobs for the requested session', async () => {
     const statements: ReturnType<typeof statement>[] = [];
     const database = {
       prepare(query: string) {
@@ -252,7 +252,8 @@ describe('print job data layer', () => {
     const job = await retryAdminPrintJob(database, row.session_id, row.id);
 
     expect(statements[0].query).toContain('session_id = ?');
-    expect(statements[0].query).toContain("status IN ('failed', 'printing')");
+    expect(statements[0].query).toContain("status = 'failed'");
+    expect(statements[0].query).not.toContain("status IN ('failed', 'printing')");
     expect(statements[0].query).toContain("active.status IN ('pending', 'printing')");
     expect(statements[0].query).toContain('active.id <> print_jobs.id');
     expect(statements[0].query).toContain("status = 'pending'");

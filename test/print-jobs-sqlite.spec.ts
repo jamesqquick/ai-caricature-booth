@@ -107,27 +107,32 @@ describe('print job SQLite integration', () => {
     }
   });
 
-  it('rejects a stale acknowledgement after an admin retry and reclaim', async () => {
+  it('rejects admin retry for an active printing job', async () => {
     const { sqlite, database } = await createDatabase();
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId);
       const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
-      await retryAdminPrintJob(database, sessionId, pending.id);
-      const [secondClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
-
-      expect(secondClaim.claimToken).not.toBe(firstClaim.claimToken);
-      await expect(acknowledgePrintJob(database, pending.id, {
-        status: 'printed',
-        claimToken: firstClaim.claimToken,
-      })).rejects.toBeInstanceOf(PrintJobConflictError);
+      await expect(retryAdminPrintJob(database, sessionId, pending.id)).rejects.toBeInstanceOf(PrintJobConflictError);
 
       const printing = sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id);
-      expect(printing).toEqual({ status: 'printing', claim_token: secondClaim.claimToken });
+      expect(printing).toEqual({ status: 'printing', claim_token: firstClaim.claimToken });
+    } finally {
+      sqlite.close();
+    }
+  });
 
-      await acknowledgePrintJob(database, pending.id, { status: 'printed', claimToken: secondClaim.claimToken });
-      expect(sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id))
-        .toEqual({ status: 'printed', claim_token: null });
+  it('retries failed jobs back to pending', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      await acknowledgePrintJob(database, pending.id, { status: 'failed', error: 'paper jam', claimToken: claim.claimToken });
+
+      await expect(retryAdminPrintJob(database, sessionId, pending.id)).resolves.toMatchObject({ status: 'pending' });
+      expect(sqlite.prepare('SELECT status, claim_token, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'pending', claim_token: null, error_msg: null });
     } finally {
       sqlite.close();
     }

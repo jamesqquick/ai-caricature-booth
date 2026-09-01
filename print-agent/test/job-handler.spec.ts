@@ -1,4 +1,4 @@
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -86,16 +86,44 @@ describe("downloadPostcard", () => {
 });
 
 describe("handleJob", () => {
-  it("downloads, builds, archives with session and job IDs, then prints", async () => {
+  it("downloads, builds, archives privately, marks submission, then prints", async () => {
     const outputDir = await mkdtemp(join(tmpdir(), "print-agent-output-"));
     const printer = { name: "test", print: vi.fn(async () => ({ message: "submitted", durationMs: 1 })) };
+    const beforeSubmit = vi.fn(async () => undefined);
     await handleJob(config, job, printer, {
       outputDir,
       download: vi.fn(async () => Uint8Array.of(1)),
       buildPdf: vi.fn(async () => Uint8Array.of(2)),
+      beforeSubmit,
     });
-    expect(await readdir(outputDir)).toEqual([`${job.sessionId}-${job.id}.pdf`]);
+    const files = await readdir(outputDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^print-[0-9a-f-]{36}\.pdf$/);
+    expect(beforeSubmit).toHaveBeenCalledOnce();
+    expect(beforeSubmit.mock.invocationCallOrder[0]).toBeLessThan(printer.print.mock.invocationCallOrder[0]!);
     expect(printer.print).toHaveBeenCalledWith(Uint8Array.of(2), job.id);
+    if (process.platform !== "win32") {
+      expect((await stat(outputDir)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(outputDir, files[0]!))).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it("creates a unique archive for repeated handling and does not print when the submission marker fails", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "print-agent-output-"));
+    const printer = { name: "test", print: vi.fn(async () => ({ message: "submitted", durationMs: 1 })) };
+    const dependencies = {
+      outputDir,
+      download: vi.fn(async () => Uint8Array.of(1)),
+      buildPdf: vi.fn(async () => Uint8Array.of(2)),
+      beforeSubmit: vi.fn(async () => undefined),
+    };
+    await handleJob(config, job, printer, dependencies);
+    await handleJob(config, job, printer, dependencies);
+    expect(await readdir(outputDir)).toHaveLength(2);
+
+    dependencies.beforeSubmit.mockRejectedValueOnce(new Error("state unavailable"));
+    await expect(handleJob(config, job, printer, dependencies)).rejects.toMatchObject({ stage: "print" });
+    expect(printer.print).toHaveBeenCalledTimes(2);
   });
 
   it("adds job and stage context to processing failures", async () => {

@@ -27,14 +27,14 @@ export class QueueRequestError extends Error {
   }
 }
 
-export async function claimJobs(config: AgentConfig, dependencies: RequestDependencies = {}): Promise<PrintJob[]> {
+export async function claimJobs(config: AgentConfig, limit: number, dependencies: RequestDependencies = {}): Promise<PrintJob[]> {
   const response = await request(
     "claim",
     new URL("/api/print-agent/jobs/claim", config.workerUrl),
     {
       method: "POST",
       headers: headers(config),
-      body: JSON.stringify({ eventSlug: config.eventSlug, limit: config.batchSize }),
+      body: JSON.stringify({ eventSlug: config.eventSlug, limit }),
     },
     dependencies,
   );
