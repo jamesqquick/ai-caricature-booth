@@ -46,7 +46,6 @@ type PrintJobRow = {
   id: string;
   session_id: string;
   event_id: number;
-  event_slug?: string;
   postcard_url: string;
   scene_name: string;
   status: PrintJobStatus;
@@ -189,37 +188,30 @@ export async function loadAttendeePrintJob(database: D1Database, eventId: number
 }
 
 export async function claimPrintJobs(database: D1Database, eventSlug: string, limit: number): Promise<AgentPrintJob[]> {
-  const candidates = await database.prepare(`
-    SELECT pj.id, pj.session_id, pj.event_id, e.slug AS event_slug, pj.postcard_url,
-           pj.scene_name, pj.status, pj.created_at, pj.printed_at, pj.error_msg
-    FROM print_jobs pj
-    INNER JOIN events e ON e.id = pj.event_id
-    WHERE pj.status = 'pending' AND e.slug = ?
-    ORDER BY pj.created_at ASC, pj.id ASC
-    LIMIT ?
-  `).bind(eventSlug, limit).all<PrintJobRow>();
-  if (candidates.results.length === 0) return [];
-
-  const updates = candidates.results.map((candidate) => database.prepare(`
+  const claimed = await database.prepare(`
     UPDATE print_jobs
     SET status = 'printing', printed_at = NULL, error_msg = NULL
-    WHERE id = ? AND status = 'pending'
-    RETURNING id
-  `).bind(candidate.id));
-  const results = await database.batch<{ id: string }>(updates);
+    WHERE id IN (
+        SELECT pj.id
+        FROM print_jobs pj
+        INNER JOIN events e ON e.id = pj.event_id
+        WHERE pj.status = 'pending' AND e.slug = ?
+        ORDER BY pj.created_at ASC, pj.id ASC
+        LIMIT ?
+      )
+      AND status = 'pending'
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(eventSlug, limit).all<PrintJobRow>();
 
-  return candidates.results.flatMap((candidate, index) => {
-    if (!results[index]?.results.some((result) => result.id === candidate.id)) return [];
-    return [{
-      id: candidate.id,
-      sessionId: candidate.session_id,
-      eventId: candidate.event_id,
-      eventSlug: candidate.event_slug ?? eventSlug,
-      sceneName: candidate.scene_name,
-      postcardUrl: candidate.postcard_url,
-      createdAt: candidate.created_at,
-    }];
-  });
+  return claimed.results.map((job) => ({
+    id: job.id,
+    sessionId: job.session_id,
+    eventId: job.event_id,
+    eventSlug,
+    sceneName: job.scene_name,
+    postcardUrl: job.postcard_url,
+    createdAt: job.created_at,
+  }));
 }
 
 export async function acknowledgePrintJob(database: D1Database, jobId: string, acknowledgement: Acknowledgement): Promise<AdminPrintJob> {

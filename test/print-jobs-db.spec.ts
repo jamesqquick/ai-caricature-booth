@@ -136,32 +136,24 @@ describe('print job data layer', () => {
     expect(statements[0].query).not.toContain("'printed')");
   });
 
-  it('claims only rows won by conditional pending updates in one D1 batch', async () => {
-    const candidates = [row, { ...row, id: 'fedcba9876543210fedcba9876543210', created_at: 101 }];
+  it('selects and transitions event-scoped pending jobs in one update statement', async () => {
+    const claimed = [row, { ...row, id: 'fedcba9876543210fedcba9876543210', created_at: 101 }];
     const prepared: Array<ReturnType<typeof statement>> = [];
     const database = {
       prepare(query: string) {
-        const result = query.includes('FROM print_jobs pj') ? { results: candidates } : { results: [] };
-        const value = statement(query, result);
+        const value = statement(query, { results: claimed });
         prepared.push(value);
         return value;
       },
-      batch: vi.fn().mockResolvedValue([
-        { results: [{ id: candidates[0].id }] },
-        { results: [] },
-      ]),
     } as unknown as D1Database;
 
     const jobs = await claimPrintJobs(database, 'demo-event', 2);
 
-    expect(database.batch).toHaveBeenCalledOnce();
-    expect(prepared[0].query).toContain("WHERE pj.status = 'pending' AND e.slug = ?");
-    expect(prepared[0].query).toContain('ORDER BY pj.created_at ASC, pj.id ASC');
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].query).toMatch(/UPDATE print_jobs[\s\S]*WHERE id IN \([\s\S]*SELECT pj\.id[\s\S]*INNER JOIN events e ON e\.id = pj\.event_id[\s\S]*pj\.status = 'pending'[\s\S]*e\.slug = \?[\s\S]*ORDER BY pj\.created_at ASC, pj\.id ASC[\s\S]*LIMIT \?[\s\S]*\)[\s\S]*AND status = 'pending'[\s\S]*RETURNING/);
     expect(prepared[0].values).toEqual(['demo-event', 2]);
-    expect(prepared.slice(1).every((item) => item.query.includes("WHERE id = ? AND status = 'pending'"))).toBe(true);
-    expect(prepared.slice(1).every((item) => item.query.includes('RETURNING id'))).toBe(true);
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({ id: candidates[0].id, eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge' });
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0]).toMatchObject({ id: claimed[0].id, eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge' });
   });
 
   it('only acknowledges printing jobs and applies terminal fields safely', async () => {

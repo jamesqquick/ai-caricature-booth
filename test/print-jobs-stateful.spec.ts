@@ -51,18 +51,6 @@ class StatefulD1 {
     return new StatefulStatement(this, query);
   }
 
-  async batch<T>(statements: StatefulStatement[]) {
-    return statements.map((statement) => {
-      const id = statement.values[0] as string;
-      const job = this.jobs.find((candidate) => candidate.id === id && candidate.status === 'pending');
-      if (!job) return { results: [], success: true, meta: {} };
-      job.status = 'printing';
-      job.printed_at = null;
-      job.error_msg = null;
-      return { results: [{ id }] as T[], success: true, meta: {} };
-    });
-  }
-
   first(statement: StatefulStatement) {
     const normalized = statement.query.replace(/\s+/g, ' ').trim();
     if (normalized.startsWith('INSERT INTO print_jobs')) return this.insert(statement);
@@ -83,13 +71,18 @@ class StatefulD1 {
 
   all(statement: StatefulStatement) {
     const normalized = statement.query.replace(/\s+/g, ' ').trim();
-    if (!normalized.includes('FROM print_jobs pj') || !normalized.includes('INNER JOIN events e')) return [];
+    if (!normalized.startsWith('UPDATE print_jobs') || !normalized.includes('INNER JOIN events e')) return [];
     const [eventSlug, limit] = statement.values as [string, number];
-    return this.jobs
+    const claimed = this.jobs
       .filter((job) => job.status === 'pending' && this.eventSlugs.get(job.event_id) === eventSlug)
       .sort((left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id))
-      .slice(0, limit)
-      .map((job) => ({ ...job, event_slug: eventSlug }));
+      .slice(0, limit);
+    for (const job of claimed) {
+      job.status = 'printing';
+      job.printed_at = null;
+      job.error_msg = null;
+    }
+    return claimed.map((job) => ({ ...job }));
   }
 
   private insert(statement: StatefulStatement) {
@@ -165,12 +158,14 @@ describe('print job conditional behavior', () => {
     expect(database.jobs).toHaveLength(0);
   });
 
-  it('gives competing agents only conditionally claimed, oldest, event-scoped jobs', async () => {
+  it('fills competing claims with disjoint, oldest, event-scoped jobs', async () => {
     const database = databaseWithCompletedSession();
     database.jobs.push(
       { id: '00000000000000000000000000000002', session_id: sessionId, event_id: 7, postcard_key: 'private-2', postcard_url: '/two', scene_name: 'Two', status: 'pending', created_at: 20, printed_at: null, error_msg: null },
       { id: '00000000000000000000000000000001', session_id: sessionId, event_id: 7, postcard_key: 'private-1', postcard_url: '/one', scene_name: 'One', status: 'pending', created_at: 10, printed_at: null, error_msg: null },
       { id: '00000000000000000000000000000003', session_id: sessionId, event_id: 8, postcard_key: 'private-3', postcard_url: '/three', scene_name: 'Three', status: 'pending', created_at: 5, printed_at: null, error_msg: null },
+      { id: '00000000000000000000000000000004', session_id: sessionId, event_id: 7, postcard_key: 'private-4', postcard_url: '/four', scene_name: 'Four', status: 'pending', created_at: 30, printed_at: null, error_msg: null },
+      { id: '00000000000000000000000000000005', session_id: sessionId, event_id: 7, postcard_key: 'private-5', postcard_url: '/five', scene_name: 'Five', status: 'pending', created_at: 40, printed_at: null, error_msg: null },
     );
 
     const claims = await Promise.all([
@@ -179,8 +174,14 @@ describe('print job conditional behavior', () => {
     ]);
     const claimed = claims.flat();
 
-    expect(claimed.map((job) => job.id)).toEqual(['00000000000000000000000000000001', '00000000000000000000000000000002']);
-    expect(new Set(claimed.map((job) => job.id))).toHaveProperty('size', 2);
+    expect(claims.map((claim) => claim.length)).toEqual([2, 2]);
+    expect(claims[0].some((job) => claims[1].some((other) => other.id === job.id))).toBe(false);
+    expect(new Set(claimed.map((job) => job.id))).toEqual(new Set([
+      '00000000000000000000000000000001',
+      '00000000000000000000000000000002',
+      '00000000000000000000000000000004',
+      '00000000000000000000000000000005',
+    ]));
     expect(database.jobs.find((job) => job.event_id === 8)?.status).toBe('pending');
     expect(JSON.stringify(claimed)).not.toMatch(/postcard_key|private-/);
   });
