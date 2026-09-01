@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { FileAckOutbox } from "../src/outbox.js";
-import { PrintPoller } from "../src/poller.js";
+import { FatalPrintStateError, PrintPoller } from "../src/poller.js";
 import { QueueRequestError } from "../src/queue.js";
 import { config, job } from "./fixtures.js";
 
@@ -131,6 +131,44 @@ describe("PrintPoller", () => {
     await poller.pollOnce(controller.signal);
     expect(handleJob).toHaveBeenCalledOnce();
     expect(releaseJob.mock.calls.map(([claimed]) => claimed.id)).toEqual([secondJob.id, thirdJob.id]);
+  });
+
+  it("stops after an outbox write failure and releases only unprocessed claims", async () => {
+    const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
+    const thirdJob = { ...job, id: "e".repeat(32), claimToken: "f".repeat(32) };
+    let currentStatus = "printing";
+    const claimJobs = vi.fn(async () => [job, secondJob, thirdJob]);
+    const handleJob = vi.fn(async () => undefined);
+    const ackJob = vi.fn(async (claimed: typeof job, status: "printed" | "failed") => {
+      if (claimed.id === job.id) currentStatus = status;
+    });
+    const releaseJob = vi.fn(async (claimed: typeof job) => {
+      if (claimed.id === job.id) currentStatus = "pending";
+      if (claimed.id === secondJob.id) throw new Error(`release failed ${claimed.claimToken}`);
+    });
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const outbox = {
+      list: async () => [],
+      put: async () => { throw new Error(`disk full ${job.claimToken}`); },
+      remove: async () => undefined,
+    };
+    const poller = new PrintPoller(config, {
+      claimJobs, handleJob, ackJob, releaseJob, outbox,
+      sleep: async () => undefined, logger,
+    });
+
+    await expect(poller.run(new AbortController().signal)).rejects.toBeInstanceOf(FatalPrintStateError);
+    expect(claimJobs).toHaveBeenCalledOnce();
+    expect(handleJob).toHaveBeenCalledOnce();
+    expect(handleJob).toHaveBeenCalledWith(job);
+    expect(ackJob).not.toHaveBeenCalled();
+    expect(currentStatus).toBe("printing");
+    expect(releaseJob.mock.calls.map(([claimed]) => claimed.id)).toEqual([secondJob.id, thirdJob.id]);
+    const logs = [...logger.info.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls].flat().join("\n");
+    expect(logs).toContain("operator intervention required");
+    expect(logs).not.toContain(job.claimToken);
+    expect(logs).not.toContain(secondJob.claimToken);
+    expect(logs).not.toContain(thirdJob.claimToken);
   });
 
   it("never overlaps polls and stops through AbortSignal without arbitrary waits", async () => {

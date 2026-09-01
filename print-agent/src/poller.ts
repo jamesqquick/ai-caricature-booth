@@ -16,6 +16,14 @@ type PollerDependencies = {
   printedAckAttempts?: number;
 };
 
+export class FatalPrintStateError extends Error {
+  readonly name = "FatalPrintStateError";
+
+  constructor(public readonly jobId: string, options?: ErrorOptions) {
+    super(`Cannot safely continue after processing print job ${jobId}: terminal acknowledgement could not be persisted; current claim retained and operator intervention required.`, options);
+  }
+}
+
 export class PrintPoller {
   private consecutivePollFailures = 0;
   private readonly sleep: Sleep;
@@ -54,7 +62,14 @@ export class PrintPoller {
         await this.releaseRemaining(jobs.slice(index));
         return;
       }
-      await this.processJob(jobs[index]!);
+      try {
+        await this.processJob(jobs[index]!);
+      } catch (error) {
+        if (error instanceof FatalPrintStateError) {
+          await this.releaseRemaining(jobs.slice(index + 1), "fatal cleanup");
+        }
+        throw error;
+      }
     }
   }
 
@@ -80,8 +95,9 @@ export class PrintPoller {
     try {
       await this.outbox.put(intent);
     } catch (error) {
-      this.logger.error(`[job ${job.id}] terminal acknowledgement could not be persisted: ${safeJobError(error, job)}`);
-      return;
+      const fatalError = new FatalPrintStateError(job.id, { cause: error });
+      this.logger.error(`[job ${job.id}] ${fatalError.message} Cause: ${safeJobError(error, job)}`);
+      throw fatalError;
     }
     await this.flushIntent(intent, intent.status === "printed" ? this.printedAckAttempts : 1);
   }
@@ -135,12 +151,12 @@ export class PrintPoller {
     }
   }
 
-  private async releaseRemaining(jobs: PrintJob[]): Promise<void> {
+  private async releaseRemaining(jobs: PrintJob[], reason = "shutdown"): Promise<void> {
     for (const job of jobs) {
       try {
         await this.dependencies.releaseJob(job);
       } catch (error) {
-        this.logger.error(`[job ${job.id}] shutdown release failed: ${safeJobError(error, job)}`);
+        this.logger.error(`[job ${job.id}] ${reason} release failed: ${safeJobError(error, job)}`);
       }
     }
   }
