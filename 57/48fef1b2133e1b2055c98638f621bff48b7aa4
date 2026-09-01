@@ -1,0 +1,19 @@
+test/worker-moderation.spec.ts
+  s_15299d0b9948a9::t_3cb633b8138ee4 47,135,144,153,189,197,207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5748fef1b2133e1b2055c98638f621bff48b7aa4",
+  "prompts": {},
+  "sessions": {
+    "s_15299d0b9948a9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa568a741ffelsPk4kqB5m9Pyo",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
