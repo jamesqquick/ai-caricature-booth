@@ -182,6 +182,28 @@ describe('GeneratingStep error recovery', () => {
     expect(screen.getByRole('button', { name: 'Choose another photo' })).toBeTruthy();
   });
 
+  it.each([
+    ['BAD_REQUEST', 'BAD_REQUEST_POLL_SECRET: invalid session details'],
+    ['NOT_FOUND', 'NOT_FOUND_POLL_SECRET: missing session details'],
+  ] as const)('treats Astro %s poll errors as permanent without disclosing details', async (code, sentinel) => {
+    actionMocks.startGeneration.mockResolvedValue(startResult());
+    actionMocks.getGeneration.mockResolvedValue({
+      data: undefined,
+      error: astroActionError(code, sentinel),
+    });
+
+    renderGenerating();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain("This photo request can't continue.");
+    expect(alert.textContent).toContain('Choose another photo to start a fresh request.');
+    expect(alert.textContent).not.toContain(sentinel);
+    expect(actionMocks.getGeneration).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Choose another photo' })).toBeTruthy();
+  });
+
   it('times out a never-resolving start and retries with the same key', async () => {
     actionMocks.startGeneration.mockImplementation(() => new Promise(() => {}));
 
@@ -275,8 +297,10 @@ describe('GeneratingStep error recovery', () => {
     expect(progress.getAttribute('aria-valuenow')).toBe('72');
     expect(progress.getAttribute('aria-valuetext')).toBe('Checking status');
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('listitem', { name: 'Creating your caricature, checking status', current: 'step' })).toBeTruthy();
+    expect(screen.getByText('Checking', { selector: 'span' })).toBeTruthy();
     const statusHeading = screen.getByRole('heading', { name: 'Checking status.' });
-    expect(document.activeElement).toBe(statusHeading);
+    await waitFor(() => expect(document.activeElement).toBe(statusHeading));
     await act(async () => checkedStatus.resolve(statusResult('completed')));
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
     expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey);
@@ -323,6 +347,24 @@ describe('GeneratingStep error recovery', () => {
     expect(onComplete).toHaveBeenCalledWith(secondIdempotencyKey);
   });
 
+  it('starts only one replacement generation after rapid repeated retries', async () => {
+    actionMocks.startGeneration
+      .mockResolvedValueOnce(startResult())
+      .mockImplementation(() => new Promise(() => {}));
+    actionMocks.getGeneration.mockResolvedValueOnce(statusResult('errored', 'generation_failed'));
+
+    renderGenerating();
+    await screen.findByRole('alert');
+    const tryAgain = screen.getByRole('button', { name: 'Try again' });
+
+    act(() => {
+      tryAgain.click();
+      tryAgain.click();
+    });
+
+    await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledTimes(2));
+  });
+
   it('reuses the same key when retrying an ambiguous start failure', async () => {
     actionMocks.startGeneration
       .mockResolvedValueOnce({ data: undefined, error: { message: 'START_SENTINEL' } })
@@ -335,7 +377,8 @@ describe('GeneratingStep error recovery', () => {
 
     await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Creating your caricature.' }));
+    const statusHeading = screen.getByRole('heading', { name: 'Creating your caricature.' });
+    await waitFor(() => expect(document.activeElement).toBe(statusHeading));
     const keys = actionMocks.startGeneration.mock.calls.map(([form]) => (form as FormData).get('idempotencyKey'));
     expect(keys).toEqual([firstIdempotencyKey, firstIdempotencyKey]);
   });

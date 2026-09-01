@@ -35,8 +35,10 @@ export type GenerationActions = {
 type GenerationIssue =
   | { kind: 'terminal'; code: GenerationFailureCode }
   | { kind: 'connection_lost'; sessionId: string }
-  | { kind: 'start_permanent' }
+  | { kind: 'request_permanent' }
   | { kind: 'start_failure'; idempotencyKey: string };
+
+type RecoveryStatus = 'idle' | 'running' | 'checking';
 
 type GenerationRun =
   | { kind: 'start'; idempotencyKey: string; nonce: number }
@@ -54,7 +56,7 @@ const issueContent = {
     title: "We couldn't start your postcard.",
     message: "We couldn't confirm whether your photo was submitted. Try again to safely continue the same request.",
   },
-  start_permanent: {
+  request_permanent: {
     title: "This photo request can't continue.",
     message: 'Choose another photo to start a fresh request.',
   },
@@ -96,7 +98,7 @@ function waitForAction<T>(action: Promise<T>, signal: AbortSignal): Promise<T | 
   });
 }
 
-function isPermanentStartError(error: unknown) {
+function isPermanentActionError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
   const { type, code } = error as { type?: unknown; code?: unknown };
   return type === 'AstroActionError' && (code === 'BAD_REQUEST' || code === 'NOT_FOUND');
@@ -119,7 +121,7 @@ function waitForDelay(delayMs: number, signal: AbortSignal) {
 export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onChooseAnotherPhoto, generationActions }: Props) {
   const [activePhase, setActivePhase] = useState<GenerationPhase>('uploading');
   const [isComplete, setIsComplete] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>('idle');
   const [progress, setProgress] = useState(0);
   const [issue, setIssue] = useState<GenerationIssue | null>(null);
   const [run, setRun] = useState<GenerationRun>(() => ({
@@ -131,6 +133,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
   const statusHeadingRef = useRef<HTMLHeadingElement>(null);
   const recoveryPendingRef = useRef(false);
   const completeGeneration = useEffectEvent(onComplete);
+  const isChecking = recoveryStatus === 'checking' && !issue;
 
   useEffect(() => {
     if (isComplete || isChecking || issue) return;
@@ -162,15 +165,23 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
         let status: Awaited<ReturnType<GenerationActions['getGeneration']>> | typeof actionTimedOut | null = null;
         try {
           status = await waitForAction(generationActions.getGeneration({ sessionId }), controller.signal);
-        } catch {
-          // A poll exception is treated the same as an action-level poll failure.
+        } catch (error) {
+          if (isPermanentActionError(error)) {
+            recoveryPendingRef.current = false;
+            setIssue({ kind: 'request_permanent' });
+            return;
+          }
         }
         if (controller.signal.aborted) return;
+        if (status !== actionTimedOut && status?.error && isPermanentActionError(status.error)) {
+          recoveryPendingRef.current = false;
+          setIssue({ kind: 'request_permanent' });
+          return;
+        }
         if (!status || status === actionTimedOut || status.error || !status.data) {
           pollFailures += 1;
           if (pollFailures >= 3) {
             recoveryPendingRef.current = false;
-            setIsChecking(false);
             setIssue({ kind: 'connection_lost', sessionId });
             return;
           }
@@ -179,7 +190,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
         }
         pollFailures = 0;
         recoveryPendingRef.current = false;
-        setIsChecking(false);
+        setRecoveryStatus('idle');
         if (status.data.status === 'completed') {
           setActivePhase('compositing');
           setProgress(100);
@@ -222,20 +233,21 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
         }
         if (started.error || !started.data) {
           recoveryPendingRef.current = false;
-          setIssue(isPermanentStartError(started.error)
-            ? { kind: 'start_permanent' }
+          setIssue(isPermanentActionError(started.error)
+            ? { kind: 'request_permanent' }
             : { kind: 'start_failure', idempotencyKey: run.idempotencyKey });
           return;
         }
         recoveryPendingRef.current = false;
+        setRecoveryStatus('idle');
         const startedPhase = phaseForGenerationStatus(started.data.status);
         if (startedPhase) setActivePhase(startedPhase);
         await poll(started.data.sessionId);
       } catch (error) {
         if (!controller.signal.aborted) {
           recoveryPendingRef.current = false;
-          setIssue(isPermanentStartError(error)
-            ? { kind: 'start_permanent' }
+          setIssue(isPermanentActionError(error)
+            ? { kind: 'request_permanent' }
             : { kind: 'start_failure', idempotencyKey: run.idempotencyKey });
         }
       }
@@ -249,21 +261,25 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
     if (issue) issueHeadingRef.current?.focus();
   }, [issue]);
 
+  useEffect(() => {
+    if (recoveryStatus !== 'idle' && !issue) statusHeadingRef.current?.focus();
+  }, [issue, recoveryStatus]);
+
   const resetProgress = () => {
     setActivePhase('uploading');
     setProgress(0);
     setIsComplete(false);
-    setIsChecking(false);
+    setRecoveryStatus('idle');
     setIssue(null);
   };
 
   const retryGeneration = () => {
-    if (!issue || recoveryPendingRef.current || issue.kind === 'connection_lost' || issue.kind === 'start_permanent' || (issue.kind === 'terminal' && issue.code === 'photo_rejected')) return;
+    if (!issue || recoveryPendingRef.current || issue.kind === 'connection_lost' || issue.kind === 'request_permanent' || (issue.kind === 'terminal' && issue.code === 'photo_rejected')) return;
     recoveryPendingRef.current = true;
     const idempotencyKey = issue.kind === 'start_failure' ? issue.idempotencyKey : crypto.randomUUID();
     resetProgress();
+    setRecoveryStatus('running');
     setRun((current) => ({ kind: 'start', idempotencyKey, nonce: current.nonce + 1 }));
-    statusHeadingRef.current?.focus();
   };
 
   const checkGeneration = () => {
@@ -271,9 +287,8 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
     recoveryPendingRef.current = true;
     const { sessionId } = issue;
     setIssue(null);
-    setIsChecking(true);
+    setRecoveryStatus('checking');
     setRun((current) => ({ kind: 'poll', sessionId, nonce: current.nonce + 1 }));
-    statusHeadingRef.current?.focus();
   };
 
   const activeIndex = generationPhases.findIndex(({ id }) => id === activePhase);
@@ -286,7 +301,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
       <Card className="generation-preview relative aspect-[4/5] w-full rotate-[-2deg] overflow-hidden rounded-[1.2rem] border-border bg-card" data-phase={issue ? undefined : activePhase}>
         <img className="size-full object-cover grayscale-[.65] contrast-[1.15]" src={photoDataUrl} alt="Your photo being prepared" />
         {!issue && !isComplete && <div className="ink-scan" aria-hidden="true" />}
-        <Badge className="absolute bottom-4 right-4 rotate-[-3deg] border-current bg-[oklch(15%_.018_55)] font-label text-[.58rem] font-extrabold uppercase tracking-[.15em] text-foreground">{issue ? pausedGenerationContent.badge : generationPhases[activeIndex].label}</Badge>
+        <Badge className="absolute bottom-4 right-4 rotate-[-3deg] border-current bg-[oklch(15%_.018_55)] font-label text-[.58rem] font-extrabold uppercase tracking-[.15em] text-foreground">{issue ? pausedGenerationContent.badge : isChecking ? 'Checking status' : generationPhases[activeIndex].label}</Badge>
       </Card>
 
       <div>
@@ -303,7 +318,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
                 {issue.kind === 'connection_lost' && (
                   <Button className="max-[480px]:w-full" type="button" onClick={checkGeneration}>{issueActionLabels.check}</Button>
                 )}
-                {issue.kind !== 'connection_lost' && issue.kind !== 'start_permanent' && !(issue.kind === 'terminal' && issue.code === 'photo_rejected') && (
+                {issue.kind !== 'connection_lost' && issue.kind !== 'request_permanent' && !(issue.kind === 'terminal' && issue.code === 'photo_rejected') && (
                   <Button className="max-[480px]:w-full" type="button" onClick={retryGeneration}>{issueActionLabels.retry}</Button>
                 )}
                 <Button className="max-[480px]:w-full" variant={issue.kind === 'terminal' && issue.code === 'photo_rejected' ? 'default' : 'secondary'} type="button" onClick={onChooseAnotherPhoto}>{issueActionLabels.anotherPhoto}</Button>
@@ -316,12 +331,14 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
           {generationPhases.map(({ id, label }, index) => {
             const completed = isComplete || index < activeIndex;
             const paused = !isComplete && Boolean(issue) && index === activeIndex;
+            const checking = !isComplete && isChecking && index === activeIndex;
             const active = !isComplete && !issue && !isChecking && index === activeIndex;
+            const current = active || checking;
             return (
               <li
-                className={`flex items-center gap-3 border-b border-border py-3 text-muted-foreground transition-colors ${active ? 'font-bold text-foreground' : completed ? 'text-success' : ''}`}
-                aria-current={active ? 'step' : undefined}
-                aria-label={`${label}, ${active ? 'in progress' : paused ? 'paused' : completed ? 'completed' : 'upcoming'}`}
+                className={`flex items-center gap-3 border-b border-border py-3 text-muted-foreground transition-colors ${current ? 'font-bold text-foreground' : completed ? 'text-success' : ''}`}
+                aria-current={current ? 'step' : undefined}
+                aria-label={`${label}, ${active ? 'in progress' : checking ? 'checking status' : paused ? 'paused' : completed ? 'completed' : 'upcoming'}`}
                 key={id}
               >
                 <span className="grid size-6 place-items-center rounded-full border border-current text-[.63rem]">{completed ? <Check size={13} strokeWidth={3} aria-hidden="true" /> : index + 1}</span>
@@ -329,6 +346,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
                   {label}
                   {active && <span className="sr-only"> (in progress)</span>}
                 </strong>
+                {checking && <span className="ml-auto font-label text-[.63rem] font-extrabold uppercase tracking-[.15em]">Checking</span>}
               </li>
             );
           })}

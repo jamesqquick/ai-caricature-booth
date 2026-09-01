@@ -76,8 +76,7 @@ describe('Photobooth recovery focus', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose another photo' }));
 
     expect(screen.queryByRole('alert')).toBeNull();
-    const cameraFocusTarget = document.querySelector<HTMLElement>('[data-step-focus]');
-    expect(cameraFocusTarget).toBeTruthy();
+    const cameraFocusTarget = screen.getByRole('heading', { name: 'Take your photo.' });
     await waitFor(() => expect(document.activeElement).toBe(cameraFocusTarget));
   });
 });
