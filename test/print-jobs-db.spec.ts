@@ -3,6 +3,9 @@ import {
   acknowledgePrintJob,
   claimPrintJobs,
   createAttendeePrintJob,
+  loadAttendeePrintJob,
+  PrintJobConflictError,
+  PrintJobNotFoundError,
   queueAdminPrintJob,
   retryAdminPrintJob,
 } from '../src/db/print-jobs';
@@ -71,6 +74,52 @@ describe('print job data layer', () => {
     });
   });
 
+  it('reasserts session ownership and postcard eligibility before returning a deduplicated job', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    const database = {
+      prepare(query: string) {
+        const prepared = statement(query, statements.length === 0 ? null : row);
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    await createAttendeePrintJob(database, 7, row.session_id);
+
+    expect(statements[1].query).toContain('INNER JOIN sessions s ON s.id = pj.session_id');
+    expect(statements[1].query).toContain('s.event_id = ?');
+    expect(statements[1].query).toContain("s.status = 'completed'");
+    expect(statements[1].query).toContain('s.postcard_key IS NOT NULL');
+    expect(statements[1].query).toContain("s.postcard_key <> ''");
+  });
+
+  it('scopes attendee status reads to the event, session, and job without exposing raw keys', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    const database = {
+      prepare(query: string) {
+        const prepared = statement(query, row);
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    const job = await loadAttendeePrintJob(database, 7, row.session_id, row.id);
+
+    expect(statements[0].query).toContain('id = ? AND session_id = ? AND event_id = ?');
+    expect(statements[0].values).toEqual([row.id, row.session_id, 7]);
+    expect(JSON.stringify(job)).not.toMatch(/postcard_key|postcardKey|sessions\//);
+  });
+
+  it('does not return a job for an incomplete or postcard-less session', async () => {
+    const database = {
+      prepare() {
+        return statement('', null);
+      },
+    } as unknown as D1Database;
+
+    await expect(createAttendeePrintJob(database, 7, row.session_id)).rejects.toBeInstanceOf(PrintJobNotFoundError);
+  });
+
   it('queues reprints while preserving printed and failed history', async () => {
     const statements: ReturnType<typeof statement>[] = [];
     const database = {
@@ -106,6 +155,9 @@ describe('print job data layer', () => {
     const jobs = await claimPrintJobs(database, 'demo-event', 2);
 
     expect(database.batch).toHaveBeenCalledOnce();
+    expect(prepared[0].query).toContain("WHERE pj.status = 'pending' AND e.slug = ?");
+    expect(prepared[0].query).toContain('ORDER BY pj.created_at ASC, pj.id ASC');
+    expect(prepared[0].values).toEqual(['demo-event', 2]);
     expect(prepared.slice(1).every((item) => item.query.includes("WHERE id = ? AND status = 'pending'"))).toBe(true);
     expect(prepared.slice(1).every((item) => item.query.includes('RETURNING id'))).toBe(true);
     expect(jobs).toHaveLength(1);
@@ -122,11 +174,31 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    await acknowledgePrintJob(database, row.id, { status: 'printed' });
+    const job = await acknowledgePrintJob(database, row.id, { status: 'printed' });
 
     expect(statements[0].query).toContain("WHERE id = ? AND status = 'printing'");
     expect(statements[0].query).toContain('printed_at = unixepoch()');
     expect(statements[0].query).toContain('error_msg = NULL');
+    expect(job).toMatchObject({ status: 'printed', printedAt: 200, error: null });
+    expect(job).not.toHaveProperty('postcardKey');
+  });
+
+  it('records failed acknowledgement errors and clears printed timestamps', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    const database = {
+      prepare(query: string) {
+        const prepared = statement(query, { ...row, status: 'failed', error_msg: 'Paper jam' });
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    const job = await acknowledgePrintJob(database, row.id, { status: 'failed', error: 'Paper jam' });
+
+    expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?");
+    expect(statements[0].values).toEqual(['Paper jam', row.id]);
+    expect(job).toMatchObject({ status: 'failed', printedAt: null, error: 'Paper jam' });
+    expect(job).not.toHaveProperty('postcardKey');
   });
 
   it('retries only failed or explicitly selected printing jobs for the requested session', async () => {
@@ -148,5 +220,32 @@ describe('print job data layer', () => {
     expect(statements[0].query).toContain("status = 'pending'");
     expect(statements[0].query).toContain('printed_at = NULL');
     expect(statements[0].query).toContain('error_msg = NULL');
+  });
+
+  it('reports an admin queue conflict when an active job blocks insertion', async () => {
+    let call = 0;
+    const database = {
+      prepare() {
+        call += 1;
+        return statement('', call === 1 ? null : { id: row.id });
+      },
+    } as unknown as D1Database;
+
+    await expect(queueAdminPrintJob(database, row.session_id)).rejects.toMatchObject({
+      name: 'PrintJobConflictError',
+      message: 'This session already has an active print job.',
+    });
+  });
+
+  it('reports an admin retry conflict for an ineligible existing job', async () => {
+    let call = 0;
+    const database = {
+      prepare() {
+        call += 1;
+        return statement('', call === 1 ? null : { id: row.id });
+      },
+    } as unknown as D1Database;
+
+    await expect(retryAdminPrintJob(database, row.session_id, row.id)).rejects.toBeInstanceOf(PrintJobConflictError);
   });
 });

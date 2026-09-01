@@ -33,12 +33,24 @@ const publicJob = { id: jobId, status: 'pending', printedAt: null };
 describe('print job APIs', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('validates attendee identifiers and never calls the database for invalid input', async () => {
+  it('validates event identifiers and never calls the database for invalid input', async () => {
     const response = await createJob({ params: { eventId: '7x', sessionId: 'not-a-uuid' } });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid eventId.', field: 'eventId' });
     expect(createAttendeePrintJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid session and job identifiers', async () => {
+    const invalidSession = await createJob({ params: { eventId: '7', sessionId: 'not-a-uuid' } });
+    const invalidJob = await getJob({ params: { eventId: '7', sessionId, jobId: 'not-a-job-id' } });
+
+    expect(invalidSession.status).toBe(400);
+    expect(await invalidSession.json()).toEqual({ error: 'Invalid sessionId.', field: 'sessionId' });
+    expect(invalidJob.status).toBe(400);
+    expect(await invalidJob.json()).toEqual({ error: 'Invalid jobId.', field: 'jobId' });
+    expect(createAttendeePrintJob).not.toHaveBeenCalled();
+    expect(loadAttendeePrintJob).not.toHaveBeenCalled();
   });
 
   it('creates an attendee job scoped to its event and session', async () => {
@@ -60,16 +72,26 @@ describe('print job APIs', () => {
     expect(loadAttendeePrintJob).toHaveBeenCalledWith(fakeEnv.DB, 7, sessionId, jobId);
   });
 
-  it('validates and clamps claim input', async () => {
+  it('accepts claim limits within the inclusive range', async () => {
     claimPrintJobs.mockResolvedValue([]);
     const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ eventSlug: 'demo-event', limit: 999 }),
+      body: JSON.stringify({ eventSlug: 'demo-event', limit: 20 }),
     }) });
 
     expect(response.status).toBe(200);
     expect(claimPrintJobs).toHaveBeenCalledWith(fakeEnv.DB, 'demo-event', 20);
+  });
+
+  it.each([0, -1, 1.5, 21, '2'])('rejects invalid claim limit %j', async (limit) => {
+    const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
+      method: 'POST', body: JSON.stringify({ eventSlug: 'demo-event', limit }),
+    }) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'limit must be an integer between 1 and 20.', field: 'limit' });
+    expect(claimPrintJobs).not.toHaveBeenCalled();
   });
 
   it('returns a typed 400 for malformed JSON', async () => {
@@ -80,6 +102,16 @@ describe('print job APIs', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Request body must be valid JSON.', field: 'eventSlug' });
     expect(claimPrintJobs).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['claim', () => claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', { method: 'POST', body: '[]' }) }), 'eventSlug'],
+    ['ack', () => acknowledgeJob({ params: { jobId }, request: new Request('https://booth.test/api/print-agent/jobs/x/ack', { method: 'POST', body: '[]' }) }), 'status'],
+    ['admin', () => mutateAdminJob({ params: { sessionId }, request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: '[]' }) }), 'action'],
+  ] as const)('reports endpoint-specific fields for non-object %s bodies', async (_name, request, field) => {
+    const response = await request();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Request body must be a JSON object.', field });
   });
 
   it('requires a bounded failure message and supports printed acknowledgements', async () => {
@@ -101,6 +133,20 @@ describe('print job APIs', () => {
     });
     expect(valid.status).toBe(200);
     expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'printed' });
+  });
+
+  it('accepts a 500-character failure message and rejects 501 characters', async () => {
+    acknowledgePrintJob.mockResolvedValue({ ...publicJob, status: 'failed', error: 'x'.repeat(500) });
+    const request = (error: string) => acknowledgeJob({
+      params: { jobId },
+      request: new Request('https://booth.test/api/print-agent/jobs/x/ack', {
+        method: 'POST', body: JSON.stringify({ status: 'failed', error }),
+      }),
+    });
+
+    expect((await request('x'.repeat(500))).status).toBe(200);
+    expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'failed', error: 'x'.repeat(500) });
+    expect((await request('x'.repeat(501))).status).toBe(400);
   });
 
   it('maps missing and invalid transitions without exposing database failures', async () => {
@@ -132,5 +178,17 @@ describe('print job APIs', () => {
     expect(retryResponse.status).toBe(200);
     expect(queueAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId);
     expect(retryAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId);
+  });
+
+  it('returns typed admin queue and retry conflicts', async () => {
+    queueAdminPrintJob.mockRejectedValue(new PrintJobConflictError('This session already has an active print job.'));
+    retryAdminPrintJob.mockRejectedValue(new PrintJobConflictError('Only failed or stuck printing jobs can be retried.'));
+    const request = (body: object) => mutateAdminJob({
+      params: { sessionId },
+      request: new Request('https://booth.test/api/admin/sessions/x/print-jobs', { method: 'POST', body: JSON.stringify(body) }),
+    });
+
+    expect((await request({ action: 'queue' })).status).toBe(409);
+    expect((await request({ action: 'retry', jobId })).status).toBe(409);
   });
 });

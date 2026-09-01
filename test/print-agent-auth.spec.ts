@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { timingSafeEqual } from 'node:crypto';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('jose', () => ({ createRemoteJWKSet: vi.fn(), jwtVerify: vi.fn() }));
 vi.mock('cloudflare:workers', () => ({ WorkflowEntrypoint: class {} }));
@@ -13,6 +14,21 @@ import worker from '../src/worker';
 import { authenticatePrintAgent, isPrintAgentPath } from '../src/lib/print-agent-auth';
 
 describe('print agent authentication', () => {
+  const platformTimingSafeEqual = vi.fn((left: ArrayBuffer, right: ArrayBuffer) => (
+    timingSafeEqual(new Uint8Array(left), new Uint8Array(right))
+  ));
+
+  beforeAll(() => {
+    Object.defineProperty(crypto.subtle, 'timingSafeEqual', {
+      configurable: true,
+      value: platformTimingSafeEqual,
+    });
+  });
+
+  afterAll(() => {
+    Reflect.deleteProperty(crypto.subtle, 'timingSafeEqual');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(handle).mockResolvedValue(new Response('Astro response'));
@@ -25,6 +41,7 @@ describe('print agent authentication', () => {
   });
 
   it('distinguishes missing configuration from invalid credentials', async () => {
+    const digest = vi.spyOn(crypto.subtle, 'digest');
     const request = new Request('https://booth.test/api/print-agent/jobs/claim', {
       headers: { authorization: 'Bearer machine-token' },
     });
@@ -32,6 +49,13 @@ describe('print agent authentication', () => {
     expect((await authenticatePrintAgent(request, undefined))?.status).toBe(500);
     expect((await authenticatePrintAgent(request, 'expected-token'))?.status).toBe(401);
     expect(await authenticatePrintAgent(request, 'machine-token')).toBeNull();
+    expect(platformTimingSafeEqual).toHaveBeenCalledTimes(2);
+    expect(platformTimingSafeEqual).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.any(ArrayBuffer));
+    expect((platformTimingSafeEqual.mock.calls[0]?.[0] as ArrayBuffer).byteLength).toBe(32);
+    expect((platformTimingSafeEqual.mock.calls[0]?.[1] as ArrayBuffer).byteLength).toBe(32);
+    expect(digest).toHaveBeenCalledTimes(4);
+    expect(digest.mock.calls.every(([algorithm]) => algorithm === 'SHA-256')).toBe(true);
+    digest.mockRestore();
   });
 
   it('authenticates print-agent routes before Astro without Access or origin checks', async () => {

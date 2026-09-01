@@ -80,20 +80,20 @@ export function parseJobId(value: string | undefined) {
 }
 
 export function parseClaimInput(input: unknown) {
-  const body = asObject(input);
+  const body = asObject(input, 'eventSlug');
   const eventSlug = typeof body.eventSlug === 'string' ? body.eventSlug.trim() : '';
   if (!EVENT_SLUG_PATTERN.test(eventSlug) || eventSlug.length > 120) {
     throw new PrintJobValidationError('eventSlug', 'Invalid eventSlug.');
   }
-  const requestedLimit = body.limit === undefined ? 1 : body.limit;
-  if (typeof requestedLimit !== 'number' || !Number.isInteger(requestedLimit)) {
-    throw new PrintJobValidationError('limit', 'limit must be an integer.');
+  const requestedLimit = body.limit;
+  if (typeof requestedLimit !== 'number' || !Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 20) {
+    throw new PrintJobValidationError('limit', 'limit must be an integer between 1 and 20.');
   }
-  return { eventSlug, limit: Math.min(20, Math.max(1, requestedLimit)) };
+  return { eventSlug, limit: requestedLimit };
 }
 
 export function parseAcknowledgement(input: unknown): Acknowledgement {
-  const body = asObject(input);
+  const body = asObject(input, 'status');
   if (body.status === 'printed') return { status: 'printed' };
   if (body.status !== 'failed') throw new PrintJobValidationError('status', 'status must be printed or failed.');
   const error = typeof body.error === 'string' ? body.error.trim() : '';
@@ -104,15 +104,15 @@ export function parseAcknowledgement(input: unknown): Acknowledgement {
 }
 
 export function parseAdminMutation(input: unknown) {
-  const body = asObject(input);
+  const body = asObject(input, 'action');
   if (body.action === 'queue') return { action: 'queue' } as const;
   if (body.action === 'retry') return { action: 'retry', jobId: parseJobId(typeof body.jobId === 'string' ? body.jobId : undefined) } as const;
   throw new PrintJobValidationError('action', 'action must be queue or retry.');
 }
 
-function asObject(input: unknown): Record<string, unknown> {
+function asObject(input: unknown, field: PrintJobField): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw new PrintJobValidationError('action', 'Request body must be a JSON object.');
+    throw new PrintJobValidationError(field, 'Request body must be a JSON object.');
   }
   return input as Record<string, unknown>;
 }
@@ -159,10 +159,18 @@ export async function createAttendeePrintJob(database: D1Database, eventId: numb
   if (inserted) return publicJob(inserted);
 
   const existing = await database.prepare(`
-    SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
-    FROM print_jobs
-    WHERE session_id = ? AND event_id = ? AND status IN ('pending', 'printing', 'printed')
-    ORDER BY created_at DESC, id DESC
+    SELECT pj.id, pj.session_id, pj.event_id, pj.postcard_url, pj.scene_name,
+           pj.status, pj.created_at, pj.printed_at, pj.error_msg
+    FROM print_jobs pj
+    INNER JOIN sessions s ON s.id = pj.session_id
+    WHERE pj.session_id = ?
+      AND s.event_id = ?
+      AND pj.event_id = s.event_id
+      AND s.status = 'completed'
+      AND s.postcard_key IS NOT NULL
+      AND s.postcard_key <> ''
+      AND pj.status IN ('pending', 'printing', 'printed')
+    ORDER BY pj.created_at DESC, pj.id DESC
     LIMIT 1
   `).bind(sessionId, eventId).first<PrintJobRow>();
   if (existing) return publicJob(existing);
