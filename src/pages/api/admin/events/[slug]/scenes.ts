@@ -32,9 +32,15 @@ function errorResponse(error: unknown) {
 export async function GET({ request, params }: RouteContext) {
   const denied = forbidden(request);
   if (denied) return denied;
-  const event = await requireEvent(params.slug ?? '');
-  if (!event) return Response.json({ error: 'Event not found.' }, { status: 404 });
-  return Response.json({ scenes: await loadAdminScenesByEvent(env.DB, event.id) });
+
+  try {
+    const event = await requireEvent(params.slug ?? '');
+    if (!event) return Response.json({ error: 'Event not found.' }, { status: 404 });
+    return Response.json({ scenes: await loadAdminScenesByEvent(env.DB, event.id) });
+  } catch (error) {
+    console.error('Admin scene read failed', error);
+    return Response.json({ error: "Couldn't load scenes." }, { status: 500 });
+  }
 }
 
 export async function POST({ request, params }: RouteContext) {

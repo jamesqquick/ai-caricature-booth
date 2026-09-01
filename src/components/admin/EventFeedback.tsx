@@ -1,16 +1,19 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { eventFeedbackMessages, type EventFeedbackCode } from '../../lib/admin-event-feedback';
 
 type Props = {
   saved: boolean;
-  errorMessage: string | null;
+  feedbackCode: EventFeedbackCode | null;
 };
 
-export function EventFeedback({ saved, errorMessage }: Props) {
+export function EventFeedback({ saved, feedbackCode }: Props) {
   useEffect(() => {
     if (saved) toast.success('Event saved.');
-    if (errorMessage) toast.error(errorMessage);
-  }, [saved, errorMessage]);
+    if (feedbackCode && Object.hasOwn(eventFeedbackMessages, feedbackCode)) {
+      toast.error(eventFeedbackMessages[feedbackCode]);
+    }
+  }, [saved, feedbackCode]);
 
   return null;
 }

@@ -7,6 +7,7 @@ import { Select } from '../../../components/ui/select';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
 import { loadAdminScenesByEvent } from '../../../db/scenes';
+import { parseEventFeedbackCode } from '../../../lib/admin-event-feedback';
 
 export const prerender = false;
 
@@ -22,7 +23,7 @@ try {
   loadFailed = true;
 }
 const saved = Astro.url.searchParams.get('saved') === '1';
-const errorMessage = Astro.url.searchParams.get('error');
+const feedbackCode = parseEventFeedbackCode(Astro.url.searchParams.get('error'));
 const tabs = [
   { id: 'details', label: 'Event details' },
   { id: 'watermark', label: 'Watermark' },
@@ -48,7 +49,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           />
         </PageHeader>
       </div>
-      <EventFeedback client:load saved={saved} errorMessage={errorMessage} />
+      <EventFeedback client:load saved={saved} feedbackCode={feedbackCode} />
 
       <nav class="mt-8 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-border bg-card/60 p-1" aria-label="Event settings">
         {tabs.map((tab) => (

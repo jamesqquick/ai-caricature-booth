@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { deleteEventWithSessions, EventActivationError, loadEventBySlug, updateEvent, updateEventPrompts } from '../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../lib/admin-access';
+import type { EventFeedbackCode } from '../../../../lib/admin-event-feedback';
 import { EventSlugConflictError, EventValidationError, validateEventPrompts, validateEventUpdate } from '../../../../lib/event-validation';
 
 export const prerender = false;
@@ -20,9 +21,9 @@ function isJsonRequest(request: Request) {
   return request.headers.get('content-type')?.includes('application/json') ?? false;
 }
 
-function redirectWithError(request: Request, slug: string, message: string) {
+function redirectWithError(request: Request, slug: string, code: EventFeedbackCode) {
   const url = new URL(`/admin/events/${encodeURIComponent(slug)}`, request.url);
-  url.searchParams.set('error', message);
+  url.searchParams.set('error', code);
   return Response.redirect(url, 303);
 }
 
@@ -65,20 +66,20 @@ export async function POST({ request, params }: RouteContext) {
     return Response.redirect(url, 303);
   } catch (error) {
     if (error instanceof EventValidationError) {
-      if (!json) return redirectWithError(request, currentSlug, error.message);
+      if (!json) return redirectWithError(request, currentSlug, 'validation');
       return Response.json({ error: error.message, fields: error.fields }, { status: 400 });
     }
     if (error instanceof EventSlugConflictError) {
-      if (!json) return redirectWithError(request, currentSlug, error.message);
+      if (!json) return redirectWithError(request, currentSlug, 'slug-conflict');
       return Response.json({ error: error.message, field: 'slug' }, { status: 409 });
     }
     if (error instanceof EventActivationError) {
-      if (!json) return redirectWithError(request, currentSlug, error.message);
+      if (!json) return redirectWithError(request, currentSlug, 'activation');
       return Response.json({ error: error.message, fields: { status: error.message } }, { status: 400 });
     }
     console.error('Admin event update failed', error);
-     if (!json) return redirectWithError(request, currentSlug, "Couldn't save the event.");
-     return Response.json({ error: "Couldn't save the event." }, { status: 500 });
+    if (!json) return redirectWithError(request, currentSlug, 'save-failed');
+    return Response.json({ error: "Couldn't save the event." }, { status: 500 });
   }
 }
 
