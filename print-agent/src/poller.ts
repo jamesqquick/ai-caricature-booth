@@ -54,7 +54,8 @@ export class PrintPoller {
         if (this.consecutivePollFailures === OFFLINE_WARNING_THRESHOLD) {
           this.logger.error(`[poll] OFFLINE after ${OFFLINE_WARNING_THRESHOLD} consecutive failed polls; check network connectivity.`);
         }
-        this.logger.error(`[poll] claim failed (#${this.consecutivePollFailures}): ${errorMessage(error)}`);
+        this.logger.error(`[poll] claim result was ambiguous (#${this.consecutivePollFailures}); reconciling owner state before polling again.`);
+        await this.reconcileAmbiguousClaim();
         return;
       }
 
@@ -98,6 +99,21 @@ export class PrintPoller {
       throw new FatalPrintStateError(undefined, "Worker claim ownership could not be reconciled safely at startup.", { cause: error });
     }
     this.startupReconciled = true;
+  }
+
+  private async reconcileAmbiguousClaim(): Promise<void> {
+    try {
+      if (!this.dependencies.reconcileClaims) throw new Error("Claim reconciliation is not configured.");
+      const intents = await this.outbox.list();
+      const knownClaims = intents
+        .filter((intent) => intent.status === "claimed" || intent.status === "submitting")
+        .map((intent) => intent.job);
+      await this.dependencies.reconcileClaims(knownClaims);
+    } catch (error) {
+      throw new FatalPrintStateError(undefined, "An ambiguous claim request could not be reconciled safely.", {
+        cause: error,
+      });
+    }
   }
 
   async run(signal: AbortSignal): Promise<void> {

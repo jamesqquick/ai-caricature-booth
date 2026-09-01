@@ -40,7 +40,7 @@ export async function claimJobs(config: AgentConfig, agentId: string, limit: num
   );
   const body = await parseJson(response, "claim");
   if (!isRecord(body) || !Array.isArray(body.jobs) || !body.jobs.every(isPrintJob)) {
-    throw new QueueRequestError("claim", "Worker returned an invalid jobs payload.");
+    throw new QueueRequestError("claim", "Worker returned an invalid jobs payload.", response.status);
   }
   return body.jobs;
 }

@@ -48,6 +48,58 @@ describe("PrintPoller", () => {
     expect(await outbox.list()).toEqual([{ job: { id: job.id, claimToken: job.claimToken }, status: "claimed" }]);
   });
 
+  it("releases an unknown backend claim after response loss before the next claim", async () => {
+    const backendClaims = new Map<string, { id: string; claimToken: string }>();
+    const order: string[] = [];
+    let loseResponse = true;
+    const claimJobs = vi.fn(async () => {
+      order.push("claim");
+      if (loseResponse) {
+        loseResponse = false;
+        backendClaims.set(job.id, { id: job.id, claimToken: job.claimToken });
+        throw new QueueRequestError("claim", "network or timeout error (response lost)");
+      }
+      expect(backendClaims.size).toBe(0);
+      return [];
+    });
+    const reconcileClaims = vi.fn(async (knownClaims: Array<{ id: string; claimToken: string }>) => {
+      order.push("reconcile");
+      for (const [id, claim] of backendClaims) {
+        if (!knownClaims.some((known) => known.id === id && known.claimToken === claim.claimToken)) backendClaims.delete(id);
+      }
+    });
+    const poller = new PrintPoller(config, {
+      reconcileClaims, claimJobs, handleJob: async () => undefined,
+      ackJob: async () => undefined, releaseJob: async () => undefined,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await poller.pollOnce();
+    expect(backendClaims.size).toBe(0);
+    await poller.pollOnce();
+
+    expect(order).toEqual(["reconcile", "claim", "reconcile", "claim"]);
+    expect(reconcileClaims).toHaveBeenNthCalledWith(2, []);
+  });
+
+  it("reconciles malformed successful claim responses and halts when reconciliation fails", async () => {
+    const claimJobs = vi.fn(async () => {
+      throw new QueueRequestError("claim", "Worker returned an invalid jobs payload.", 200);
+    });
+    const reconcileClaims = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("reconciliation offline"));
+    const poller = new PrintPoller(config, {
+      reconcileClaims, claimJobs, handleJob: async () => undefined,
+      ackJob: async () => undefined, releaseJob: async () => undefined,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    await expect(poller.run(new AbortController().signal)).rejects.toBeInstanceOf(FatalPrintStateError);
+    expect(claimJobs).toHaveBeenCalledOnce();
+    expect(reconcileClaims).toHaveBeenCalledTimes(2);
+  });
+
   it("claims and processes one job at a time up to the poll-cycle batch limit", async () => {
     const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
     const order: string[] = [];
@@ -415,7 +467,11 @@ describe("PrintPoller", () => {
       .mockRejectedValueOnce(new Error("offline 3"))
       .mockResolvedValueOnce([]);
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const poller = new PrintPoller(config, { claimJobs, handleJob: async () => undefined, ackJob: async () => undefined, releaseJob: async () => undefined, sleep: async () => undefined, logger });
+    const poller = new PrintPoller(config, {
+      reconcileClaims: async () => undefined,
+      claimJobs, handleJob: async () => undefined, ackJob: async () => undefined,
+      releaseJob: async () => undefined, sleep: async () => undefined, logger,
+    });
     await poller.pollOnce();
     await poller.pollOnce();
     await poller.pollOnce();

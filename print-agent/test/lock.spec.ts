@@ -1,4 +1,4 @@
-import { mkdtemp, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -53,5 +53,44 @@ describe("AgentLock", () => {
     await writeFile(join(directory, "agent.lock"), "unknown\n", { mode: 0o600 });
 
     await expect(AgentLock.acquire(directory)).rejects.toBeInstanceOf(AgentLockError);
+  });
+
+  it("reclaims an acquisition guard owned by a dead PID", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    const guardPath = join(directory, "agent.lock.acquire");
+    await writeFile(guardPath, `${JSON.stringify({ pid: 2147483647, identity: "00000000-0000-4000-8000-000000000001" })}\n`, { mode: 0o600 });
+
+    const lock = await AgentLock.acquire(directory);
+    await lock.release();
+  });
+
+  it("allows only one contender to reclaim a stale acquisition guard", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    const guardPath = join(directory, "agent.lock.acquire");
+    await writeFile(guardPath, `${JSON.stringify({ pid: 2147483647, identity: "00000000-0000-4000-8000-000000000002" })}\n`, { mode: 0o600 });
+
+    const attempts = await Promise.allSettled([AgentLock.acquire(directory), AgentLock.acquire(directory)]);
+    const acquired = attempts.filter((result): result is PromiseFulfilledResult<AgentLock> => result.status === "fulfilled");
+    expect(acquired).toHaveLength(1);
+    await acquired[0]!.value.release();
+  });
+
+  it("never removes a live acquisition guard", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    const guardPath = join(directory, "agent.lock.acquire");
+    const owner = `${JSON.stringify({ pid: process.pid, identity: "00000000-0000-4000-8000-000000000003" })}\n`;
+    await writeFile(guardPath, owner, { mode: 0o600 });
+
+    await expect(AgentLock.acquire(directory)).rejects.toBeInstanceOf(AgentLockError);
+    expect(await readFile(guardPath, "utf8")).toBe(owner);
+  });
+
+  it("never removes an ambiguous acquisition guard", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    const guardPath = join(directory, "agent.lock.acquire");
+    await writeFile(guardPath, "unknown\n", { mode: 0o600 });
+
+    await expect(AgentLock.acquire(directory)).rejects.toBeInstanceOf(AgentLockError);
+    expect(await readFile(guardPath, "utf8")).toBe("unknown\n");
   });
 });

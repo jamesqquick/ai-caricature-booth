@@ -29,6 +29,16 @@ describe("queue client", () => {
     );
   });
 
+  it("rejects a malformed successful claim response as an ambiguous claim failure", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ jobs: [{ id: job.id }] }));
+
+    await expect(claimJobs(config, agentId, 1, { fetch })).rejects.toMatchObject({
+      name: "QueueRequestError",
+      operation: "claim",
+      status: 200,
+    });
+  });
+
   it("acks with status, claim token, and optional error", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ job: { id: job.id } }));
     await ackJob(config, job, "failed", "paper jam", { fetch });
