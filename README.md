@@ -57,7 +57,7 @@ Use `PRINTER_DRIVER=dnp` or `dnp-ds620` with `PRINTER_NAME` set to the exact CUP
 pnpm print-agent:start
 ```
 
-Mock mode writes generated PDFs to `print-agent/spool/`. Every processed job also creates an archive in `print-agent/output/`. Production services should use a stable checkout/install path and an absolute `PRINT_AGENT_STATE_DIR` owned only by the service account.
+Mock mode writes generated PDFs to `print-agent/spool/print-<job-id>-<uuid>.pdf`. Every processed job also creates `print-agent/output/print-<job-id>-<uuid>.pdf` before submission. The application job ID supports incident correlation while the UUID preserves a unique artifact for each attempt. Production services should use a stable checkout/install path and an absolute `PRINT_AGENT_STATE_DIR` owned only by the service account.
 
 `PRINT_CAPABILITY_SECRET` belongs only in the Worker environment. Do not add it to `print-agent/.env`; the print agent authenticates with `PRINT_AGENT_TOKEN`, which is a separate credential.
 

@@ -2,10 +2,10 @@ import { execFile as nodeExecFile } from "node:child_process";
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { ConfigurationError } from "./config.js";
 import { ensurePrivateDirectory, writePrivateFile } from "./filesystem.js";
-import type { AgentConfig } from "./types.js";
+import { cupsPrintTitle, printArtifactFilename } from "./print-artifact.js";
+import type { AgentConfig, PrintJob } from "./types.js";
 
 export type PrintResult = {
   message: string;
@@ -13,9 +13,11 @@ export type PrintResult = {
   path?: string;
 };
 
+export type PrintJobMetadata = Pick<PrintJob, "id">;
+
 export interface Printer {
   readonly name: string;
-  print(pdfBytes: Uint8Array, jobId: string): Promise<PrintResult>;
+  print(pdfBytes: Uint8Array, job: PrintJobMetadata): Promise<PrintResult>;
 }
 
 type ExecFile = (
@@ -46,15 +48,15 @@ export class MockPrinter implements Printer {
 
   constructor(private readonly spoolDir: string) {}
 
-  async print(pdfBytes: Uint8Array, jobId: string): Promise<PrintResult> {
+  async print(pdfBytes: Uint8Array, job: PrintJobMetadata): Promise<PrintResult> {
     const startedAt = Date.now();
-    const path = join(this.spoolDir, `print-${randomUUID()}.pdf`);
     try {
+      const path = join(this.spoolDir, printArtifactFilename(job.id));
       await ensurePrivateDirectory(this.spoolDir);
       await writePrivateFile(path, pdfBytes);
       return { message: `${this.name}: wrote spool file ${path}`, durationMs: Date.now() - startedAt, path };
     } catch (cause) {
-      throw new PrintSubmissionError(jobId, `could not write mock spool file ${path}`, { cause });
+      throw new PrintSubmissionError(job.id, "could not write mock spool file", { cause });
     }
   }
 }
@@ -75,30 +77,31 @@ export class CupsPrinter implements Printer {
     this.temporaryDirectory = dependencies.temporaryDirectory ?? join(tmpdir(), "ai-caricature-booth-print-agent");
   }
 
-  async print(pdfBytes: Uint8Array, jobId: string): Promise<PrintResult> {
+  async print(pdfBytes: Uint8Array, job: PrintJobMetadata): Promise<PrintResult> {
     const startedAt = Date.now();
-    const path = join(this.temporaryDirectory, `print-${randomUUID()}.pdf`);
+    let path: string | undefined;
     try {
+      path = join(this.temporaryDirectory, printArtifactFilename(job.id));
       await ensurePrivateDirectory(this.temporaryDirectory);
       await writePrivateFile(path, pdfBytes);
-      const stdout = await this.submit(path, jobId);
+      const stdout = await this.submit(path, job);
       return {
         message: `${this.name}: CUPS accepted the job${stdout ? ` (${stdout})` : ""}`,
         durationMs: Date.now() - startedAt,
       };
     } catch (cause) {
       if (cause instanceof PrintSubmissionError || cause instanceof PrintOutcomeUncertainError) throw cause;
-      throw new PrintSubmissionError(jobId, `could not create or submit temporary PDF ${path}`, { cause });
+      throw new PrintSubmissionError(job.id, "could not create or submit temporary PDF", { cause });
     } finally {
-      await unlink(path).catch(() => undefined);
+      if (path) await unlink(path).catch(() => undefined);
     }
   }
 
-  private submit(path: string, jobId: string): Promise<string> {
+  private submit(path: string, job: PrintJobMetadata): Promise<string> {
     return new Promise((resolve, reject) => {
       this.execFile(
         "lp",
-        ["-d", this.printerName, "-o", "media=4x6", "-o", "fit-to-page", path],
+        ["-d", this.printerName, "-t", cupsPrintTitle(job.id), "-o", "media=4x6", "-o", "fit-to-page", path],
         { timeout: 30_000 },
         (error, stdout, stderr) => {
           if (!error) {
@@ -106,7 +109,7 @@ export class CupsPrinter implements Printer {
             return;
           }
           const detail = stderr.toString().trim();
-          reject(new PrintOutcomeUncertainError(jobId, `lp failed or timed out after invocation${detail ? `: ${detail}` : `: ${error.message}`}`, { cause: error }));
+          reject(new PrintOutcomeUncertainError(job.id, `lp failed or timed out after invocation${detail ? `: ${detail}` : `: ${error.message}`}`, { cause: error }));
         },
       );
     });

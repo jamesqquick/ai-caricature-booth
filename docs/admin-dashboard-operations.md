@@ -84,8 +84,8 @@ The dashboard polls every 15 seconds while the tab is visible. A failed refresh 
 
 Start the agent from a stable installation directory with `pnpm print-agent:start`. Run only 1 process for the same state directory. The singleton lock rejects a second process.
 
-- `mock` validates the full download, PDF, archive, and acknowledgement path without CUPS. It writes the submitted PDF to `print-agent/spool/`.
-- `dnp` and `dnp-ds620` submit through `lp` with 4x6 media and fit-to-page options. Confirm the queue first with `lpstat -p` and run a controlled test print before an event.
+- `mock` validates the full download, PDF, archive, and acknowledgement path without CUPS. It writes the submitted PDF to `print-agent/spool/print-<job-id>-<uuid>.pdf`.
+- `dnp` and `dnp-ds620` submit through `lp` with 4x6 media and fit-to-page options. Each request uses the safe CUPS title `AI Caricature Booth <job-id>`. Confirm the queue first with `lpstat -p` and run a controlled test print before an event.
 - `pending` means the Worker has queued the request but no agent owns it.
 - `printing` means an agent claimed the request. It includes download, PDF creation, archive creation, CUPS submission, and pending acknowledgement time.
 - `printed` means CUPS accepted the submission and the agent acknowledged that result. It does not guarantee paper exited the printer.
@@ -104,7 +104,7 @@ Use **Reprint postcard** to create an intentional new print job after the previo
 This procedure is mandatory when a job remains `printing` but the owning agent's local claim state is unavailable. Do not use Retry or Reprint first.
 
 1. Stop the affected print agent and preserve its state directory, archives, and logs.
-2. Inspect CUPS queue/history, printer logs, physical output, and the matching archived PDF. If the local `submitting` marker still exists, use the submitting-marker recovery procedure instead of the admin action.
+2. Inspect CUPS queue/history, printer logs, physical output, and `print-agent/output/print-<job-id>-<uuid>.pdf`. Match the CUPS title `AI Caricature Booth <job-id>`. If the local `submitting` marker still exists, use the submitting-marker recovery procedure instead of the admin action.
 3. Choose `printed` only when CUPS accepted the job or the physical copy exists. Choose `not-submitted` only when evidence proves CUPS did not accept it. If uncertain, preserve the job as `printing` and escalate.
 4. From the authenticated `/admin` origin, use browser developer tools to run the same-origin request below with the exact job and session IDs. Set `outcome` to the investigated result. The confirmation phrase is deliberately derived from the exact job ID and outcome.
 
@@ -138,8 +138,8 @@ Keep the installation and state paths stable across restarts and deployments:
 | `$PRINT_AGENT_STATE_DIR/installation-id` | Stable local installation UUID | Mode `0600`; do not copy between installations or delete during recovery. |
 | `$PRINT_AGENT_STATE_DIR/pending-acks.json` | Claims, `submitting` markers, and terminal ACK intents | Mode `0600`; contains claim credentials. Never edit, print, or upload it. |
 | `$PRINT_AGENT_STATE_DIR/agent.lock` | Active process PID | Mode `0600`; let the process release it. Stale locks are reclaimed conservatively. |
-| `print-agent/output/` | Archived PDFs created before submission | Private operational data. Apply the event's approved retention policy. |
-| `print-agent/spool/` | Mock-mode submitted PDFs | Private test output. Clear it under the approved retention policy when the mock agent is stopped. |
+| `print-agent/output/print-<job-id>-<uuid>.pdf` | Archived PDF created before each submission attempt | Match `<job-id>` to application history; UUID keeps repeated attempts unique. Private operational data. Apply the event's approved retention policy. |
+| `print-agent/spool/print-<job-id>-<uuid>.pdf` | Mock-mode submitted PDF | Match `<job-id>` to application history; UUID keeps repeated attempts unique. Private test output. Clear it under the approved retention policy when the mock agent is stopped. |
 | OS temp `ai-caricature-booth-print-agent/` | CUPS submission PDF | The agent removes each temporary file after `lp` returns or times out. |
 
 Without `PRINT_AGENT_STATE_DIR`, the state directory is `~/.ai-caricature-booth/print-agent/<event-slug>-<config-hash>/`. The hash changes when the Worker origin, event, printer driver, or printer name changes. Set an absolute service path such as `/var/lib/ai-caricature-booth/print-agent/<event-slug>` to avoid accidental identity changes during production reconfiguration.
@@ -161,7 +161,7 @@ Use this procedure only for the exact job named in the fatal startup message. Th
 
 1. Stop the print-agent service. Do not delete its lock or state files. The recovery command takes the same singleton lock and fails if the agent is running.
 2. Identify the 32-character job ID from the fatal log. To list marker status without displaying claim tokens, run `jq '.intents[] | {jobId: .job.id, status}' "$PRINT_AGENT_STATE_DIR/pending-acks.json"` as the service account.
-3. Inspect CUPS with `lpstat -W all -o "$PRINTER_NAME"`, the printer queue/history, printer logs, and the physical output. Match timestamps and the archived PDF. CUPS history availability depends on the host configuration.
+3. Inspect CUPS with `lpstat -l -W all -o "$PRINTER_NAME"`, the printer queue/history, printer logs, and the physical output. Match the `AI Caricature Booth <job-id>` title to `print-agent/output/print-<job-id>-<uuid>.pdf`, then confirm timestamps. CUPS history availability depends on the host configuration.
 4. Choose `printed` if CUPS accepted the job or the physical copy exists. This means "CUPS accepted," not "paper delivery guaranteed."
 5. Choose `not-submitted` only when evidence proves CUPS did not accept the job. The command releases the exact persisted claim so normal polling can claim it again.
 6. If the result remains uncertain, do not run recovery, Retry, or Reprint. Preserve the marker and escalate for manual queue/log investigation.
@@ -217,7 +217,7 @@ Treat downloaded images as private attendee data. Store them only where the even
 
 ### CUPS submission fails or times out
 
-- Run `lpstat -p` and `lpstat -W all -o "$PRINTER_NAME"` as the service account.
+- Run `lpstat -p` and `lpstat -l -W all -o "$PRINTER_NAME"` as the service account. Match the `AI Caricature Booth <job-id>` title to `print-agent/output/print-<job-id>-<uuid>.pdf`.
 - Confirm `PRINTER_NAME` exactly matches the queue and the account can run `lp`.
 - Treat a failure after `lp` invocation as uncertain. Do not Retry or Reprint until you determine whether CUPS accepted it.
 - Check media, paper, printer status, and CUPS logs. A Worker `printed` status records CUPS acceptance, not paper completion.

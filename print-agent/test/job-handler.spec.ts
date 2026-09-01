@@ -2,7 +2,7 @@ import { mkdtemp, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { DownloadError, MAX_POSTCARD_BYTES, downloadPostcard, handleJob, JobProcessingError } from "../src/job-handler.js";
+import { archivePdf, DownloadError, MAX_POSTCARD_BYTES, downloadPostcard, handleJob, JobProcessingError } from "../src/job-handler.js";
 import type { Sleep } from "../src/types.js";
 import { config, job } from "./fixtures.js";
 
@@ -86,6 +86,15 @@ describe("downloadPostcard", () => {
 });
 
 describe("handleJob", () => {
+  it("rejects unsafe application job IDs before generating archive paths", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "print-agent-output-"));
+    const outputDir = join(parent, "output");
+
+    await expect(archivePdf(outputDir, { ...job, id: "../../job-123" }, Uint8Array.of(1)))
+      .rejects.toMatchObject({ name: "ArchiveError" });
+    await expect(stat(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("downloads, builds, archives privately, marks submission, then prints", async () => {
     const outputDir = await mkdtemp(join(tmpdir(), "print-agent-output-"));
     const printer = { name: "test", print: vi.fn(async () => ({ message: "submitted", durationMs: 1 })) };
@@ -98,10 +107,10 @@ describe("handleJob", () => {
     });
     const files = await readdir(outputDir);
     expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(/^print-[0-9a-f-]{36}\.pdf$/);
+    expect(files[0]).toMatch(new RegExp(`^print-${job.id}-[0-9a-f-]{36}\\.pdf$`));
     expect(beforeSubmit).toHaveBeenCalledOnce();
     expect(beforeSubmit.mock.invocationCallOrder[0]).toBeLessThan(printer.print.mock.invocationCallOrder[0]!);
-    expect(printer.print).toHaveBeenCalledWith(Uint8Array.of(2), job.id);
+    expect(printer.print).toHaveBeenCalledWith(Uint8Array.of(2), { id: job.id });
     if (process.platform !== "win32") {
       expect((await stat(outputDir)).mode & 0o777).toBe(0o700);
       expect((await stat(join(outputDir, files[0]!))).mode & 0o777).toBe(0o600);

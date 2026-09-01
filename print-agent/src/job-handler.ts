@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ensurePrivateDirectory, writePrivateFile } from "./filesystem.js";
 import { buildPrintPdf } from "./pdf.js";
 import { readBoundedText } from "./queue.js";
 import type { Printer } from "./printer.js";
+import { printArtifactFilename } from "./print-artifact.js";
 import type { AgentConfig, PrintJob, Sleep } from "./types.js";
 
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 15_000;
@@ -169,19 +169,18 @@ export async function handleJob(
   await runStage(job.id, "archive", () => archivePdf(dependencies.outputDir, job, pdfBytes));
   await runStage(job.id, "print", async () => {
     await dependencies.beforeSubmit?.();
-    await printer.print(pdfBytes, job.id);
+    await printer.print(pdfBytes, { id: job.id });
   });
 }
 
 export async function archivePdf(outputDir: string, job: PrintJob, pdfBytes: Uint8Array): Promise<string> {
-  const filename = `print-${randomUUID()}.pdf`;
-  const path = join(outputDir, filename);
   try {
+    const path = join(outputDir, printArtifactFilename(job.id));
     await ensurePrivateDirectory(outputDir);
     await writePrivateFile(path, pdfBytes);
     return path;
   } catch (cause) {
-    throw new ArchiveError(job.id, `could not archive PDF at ${path}`, { cause });
+    throw new ArchiveError(job.id, "could not archive PDF", { cause });
   }
 }
 
