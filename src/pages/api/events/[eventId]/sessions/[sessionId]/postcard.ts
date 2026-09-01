@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { loadSession } from '../../../../../../db/sessions';
+import { hasOwnedPostcard, isOwnedSessionAssetKey, legacySessionAssetKey } from '../../../../../../lib/selfie-ownership';
 
 export const prerender = false;
 
@@ -26,24 +27,23 @@ export async function GET({ params, url }: { params: Record<string, string | und
 
   try {
     const session = await loadSession(env.DB, sessionId);
-    const postcardKey = `sessions/${sessionId}/postcard.jpg`;
     if (
       !session
       || session.id !== sessionId
       || String(session.event_id) !== eventId
       || session.status !== 'completed'
-      || session.postcard_key !== postcardKey
+      || !session.postcard_key
+      || !isOwnedSessionAssetKey(sessionId, 'postcard', session.postcard_key)
+      || (!session.workflow_instance_id && session.postcard_key !== legacySessionAssetKey(sessionId, 'postcard'))
     ) return notFound();
 
+    const postcardKey = session.postcard_key;
     const object = await env.SELFIES.get(postcardKey);
-    if (
-      !object
-      || object.key !== postcardKey
-      || object.httpMetadata?.contentType !== 'image/jpeg'
-      || object.customMetadata?.sessionId !== sessionId
-      || object.customMetadata?.eventId !== eventId
-      || object.customMetadata?.assetKind !== 'postcard'
-    ) return notFound();
+    if (!object || !hasOwnedPostcard(object, postcardKey, {
+      sessionId,
+      eventId: session.event_id,
+      workflowInstanceId: session.workflow_instance_id,
+    })) return notFound();
 
     const download = url.searchParams.get('download') === '1';
     const headers = new Headers({

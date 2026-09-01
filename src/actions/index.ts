@@ -6,7 +6,7 @@ import { loadEventScene } from '../db/scenes';
 import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord } from '../db/sessions';
 import { toGenerationFailureCode } from '../lib/generation-errors';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
-import { hasExactSelfieOwnership } from '../lib/selfie-ownership';
+import { hasExactSelfieOwnership, workflowSessionAssetKey } from '../lib/selfie-ownership';
 import type { Scene } from '../data/scenes';
 
 const startInput = z.object({
@@ -76,8 +76,8 @@ export const server = {
         const scene = await loadEventScene(env.DB, event.id, sceneId);
         if (!scene) throw new ActionError({ code: 'BAD_REQUEST', message: 'That scene is not available for this booth.' });
 
-        const selfieKey = `sessions/${idempotencyKey}/selfie.jpg`;
         const workflowInstanceId = crypto.randomUUID();
+        const selfieKey = workflowSessionAssetKey(idempotencyKey, workflowInstanceId, 'selfie');
         const claim = await createPendingSession(env.DB, {
           id: idempotencyKey,
           event_id: event.id,

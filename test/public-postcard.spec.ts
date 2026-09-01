@@ -13,18 +13,20 @@ import { GET } from '../src/pages/api/events/[eventId]/sessions/[sessionId]/post
 
 const eventId = '7';
 const sessionId = '00000000-0000-4000-8000-000000000001';
-const postcardKey = `sessions/${sessionId}/postcard.jpg`;
+const workflowInstanceId = '10000000-0000-4000-8000-000000000002';
+const postcardKey = `sessions/${sessionId}/${workflowInstanceId}/postcard.jpg`;
+const legacyPostcardKey = `sessions/${sessionId}/postcard.jpg`;
 const session = {
   id: sessionId,
   event_id: Number(eventId),
   status: 'completed',
   scene_id: 'brooklyn-bridge',
   scene_name: 'Brooklyn Bridge',
-  selfie_key: `sessions/${sessionId}/selfie.jpg`,
+  selfie_key: `sessions/${sessionId}/${workflowInstanceId}/selfie.jpg`,
   selfie_sha256: 'sha256',
-  caricature_key: `sessions/${sessionId}/caricature.jpg`,
+  caricature_key: `sessions/${sessionId}/${workflowInstanceId}/caricature.jpg`,
   postcard_key: postcardKey,
-  workflow_instance_id: 'workflow-1',
+  workflow_instance_id: workflowInstanceId,
   error_code: null,
   error_msg: null,
   created_at: 1,
@@ -40,7 +42,7 @@ function requestUrl(query = '') {
 function imageObject(
   key = postcardKey,
   contentType: string | null = 'image/jpeg',
-  customMetadata: Record<string, string> = { sessionId, eventId, assetKind: 'postcard' },
+  customMetadata: Record<string, string> = { sessionId, eventId, workflowInstanceId, assetKind: 'postcard' },
 ) {
   return {
     key,
@@ -88,6 +90,76 @@ describe('public postcard endpoint', () => {
   });
 
   it.each([
+    ['missing workflow metadata', { sessionId, eventId, assetKind: 'postcard' }],
+    ['mismatched workflow metadata', { sessionId, eventId, workflowInstanceId: 'replacement-instance', assetKind: 'postcard' }],
+  ])('rejects a new scoped postcard with %s', async (_label, customMetadata) => {
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject(postcardKey, 'image/jpeg', customMetadata));
+
+    const response = await get();
+
+    expect(response.status).toBe(404);
+  });
+
+  it.each([
+    ['JPEG content type', 'image/jpeg'],
+    ['absent historical content type', null],
+  ])('serves an exact completed legacy postcard with %s and no metadata', async (_label, contentType) => {
+    loadSession.mockResolvedValue({
+      ...session,
+      selfie_key: `sessions/${sessionId}/selfie.jpg`,
+      caricature_key: `sessions/${sessionId}/caricature.jpg`,
+      postcard_key: legacyPostcardKey,
+    });
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject(legacyPostcardKey, contentType, {}));
+
+    const response = await get();
+
+    expect(response.status).toBe(200);
+    expect(fakeEnv.SELFIES.get).toHaveBeenCalledWith(legacyPostcardKey);
+    expect(response.headers.get('Content-Type')).toBe('image/jpeg');
+  });
+
+  it('serves an exact legacy postcard from a completed row without a historical workflow ID', async () => {
+    loadSession.mockResolvedValue({
+      ...session,
+      postcard_key: legacyPostcardKey,
+      workflow_instance_id: null,
+    });
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject(legacyPostcardKey, null, {}));
+
+    const response = await get();
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects conflicting metadata on an exact legacy postcard', async () => {
+    loadSession.mockResolvedValue({ ...session, postcard_key: legacyPostcardKey });
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject(legacyPostcardKey, 'image/jpeg', {
+      sessionId,
+      eventId,
+      workflowInstanceId: 'replacement-instance',
+      assetKind: 'postcard',
+    }));
+
+    const response = await get();
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects workflow metadata on a legacy postcard when the completed row has no workflow ID', async () => {
+    loadSession.mockResolvedValue({
+      ...session,
+      postcard_key: legacyPostcardKey,
+      workflow_instance_id: null,
+    });
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject(legacyPostcardKey));
+
+    const response = await get();
+
+    expect(response.status).toBe(404);
+  });
+
+  it.each([
     ['missing parameters', { eventId: undefined, sessionId: undefined }, session, imageObject()],
     ['invalid event ID', { eventId: '7-sentinel', sessionId }, session, imageObject()],
     ['invalid session ID', { eventId, sessionId: 'bad/session' }, session, imageObject()],
@@ -100,9 +172,9 @@ describe('public postcard endpoint', () => {
     ['mismatched object', { eventId, sessionId }, session, imageObject('sessions/other/postcard.jpg')],
     ['non-JPEG object', { eventId, sessionId }, session, imageObject(postcardKey, 'text/html')],
     ['missing object content type', { eventId, sessionId }, session, imageObject(postcardKey, null)],
-    ['mismatched object session', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId: '00000000-0000-4000-8000-000000000002', eventId, assetKind: 'postcard' })],
-    ['mismatched object event', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId: '8', assetKind: 'postcard' })],
-    ['mismatched object asset kind', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId, assetKind: 'caricature' })],
+    ['mismatched object session', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId: '00000000-0000-4000-8000-000000000002', eventId, workflowInstanceId, assetKind: 'postcard' })],
+    ['mismatched object event', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId: '8', workflowInstanceId, assetKind: 'postcard' })],
+    ['mismatched object asset kind', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId, workflowInstanceId, assetKind: 'caricature' })],
   ])('returns the same protected 404 for a %s', async (_label, params, sessionResult, objectResult) => {
     loadSession.mockResolvedValue(sessionResult);
     fakeEnv.SELFIES.get.mockResolvedValue(objectResult);

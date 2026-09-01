@@ -212,13 +212,53 @@ describe('public action error boundaries', () => {
     expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
   });
 
+  it('creates new sessions and selfies under a workflow-scoped key', async () => {
+    const scopedSelfieKey = `sessions/${sessionId}/${workflowInstanceId}/selfie.jpg`;
+    const scopedSession = {
+      ...session,
+      status: 'uploading',
+      selfie_key: scopedSelfieKey,
+      workflow_instance_id: workflowInstanceId,
+    };
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(workflowInstanceId);
+    loadSession.mockResolvedValueOnce(null).mockResolvedValue(scopedSession);
+    createPendingSession.mockResolvedValue({ session: { ...scopedSession, status: 'pending' }, created: true });
+    transitionSession.mockResolvedValue(scopedSession);
+    fakeEnv.SELFIES.head
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(event.id),
+          workflowInstanceId,
+          assetKind: 'selfie',
+          selfieSha256,
+        },
+      });
+
+    await startGeneration(startInput());
+
+    expect(createPendingSession).toHaveBeenCalledWith(fakeEnv.DB, expect.objectContaining({
+      id: sessionId,
+      selfie_key: scopedSelfieKey,
+      workflow_instance_id: workflowInstanceId,
+    }));
+    expect(fakeEnv.SELFIES.put).toHaveBeenCalledWith(scopedSelfieKey, validJpeg, expect.anything());
+    expect(fakeEnv.SELFIES.put).not.toHaveBeenCalledWith(`sessions/${sessionId}/selfie.jpg`, expect.anything(), expect.anything());
+  });
+
   it('uses a fresh workflow identity when a session UUID is recreated', async () => {
     const oldInstance = {
       status: vi.fn().mockResolvedValue({ status: 'errored' }),
       restart: vi.fn(),
       resume: vi.fn(),
     };
-    const recreatedSession = { ...session, workflow_instance_id: workflowInstanceId };
+    const recreatedSession = {
+      ...session,
+      selfie_key: `sessions/${sessionId}/${workflowInstanceId}/selfie.jpg`,
+      workflow_instance_id: workflowInstanceId,
+    };
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(workflowInstanceId);
     loadSession.mockResolvedValueOnce(null).mockResolvedValue(recreatedSession);
     createPendingSession.mockResolvedValue({ session: recreatedSession, created: true });

@@ -24,7 +24,12 @@ import { generateCaricature } from '../src/lib/replicate';
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const workflowInstanceId = 'instance-1';
 const selfieSha256 = '1a493b22d4b17319c1fae01707e77e4c93e3836b84e766722cc61189ee89e224';
-const selfieKey = `sessions/${sessionId}/selfie.jpg`;
+const workflowPrefix = `sessions/${sessionId}/${workflowInstanceId}`;
+const selfieKey = `${workflowPrefix}/selfie.jpg`;
+const caricatureKey = `${workflowPrefix}/caricature.jpg`;
+const postcardKey = `${workflowPrefix}/postcard.jpg`;
+const legacySelfieKey = `sessions/${sessionId}/selfie.jpg`;
+const legacySelfieSha256 = '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
 const payload = {
   sessionId,
   workflowInstanceId,
@@ -39,6 +44,24 @@ const payload = {
   selfieSha256,
   watermarkKey: 'events/1/watermarks/brand.png',
   watermarkWidth: 620,
+};
+const sessionRecord = {
+  id: sessionId,
+  event_id: payload.eventId,
+  status: 'uploading' as const,
+  scene_id: payload.sceneId,
+  scene_name: payload.sceneName,
+  selfie_key: selfieKey,
+  selfie_sha256: selfieSha256,
+  caricature_key: null,
+  postcard_key: null,
+  workflow_instance_id: workflowInstanceId,
+  error_code: null,
+  error_msg: null,
+  created_at: 1,
+  completed_at: null,
+  pipeline_ms: null,
+  updated_at: 1,
 };
 
 function createStep() {
@@ -75,11 +98,22 @@ function createEnvironment() {
       selfieSha256,
     },
   };
+  const caricature = {
+    body: new ReadableStream(),
+    httpMetadata: { contentType: 'image/jpeg' },
+    customMetadata: {
+      sessionId,
+      eventId: String(payload.eventId),
+      workflowInstanceId,
+      assetKind: 'caricature',
+      sceneId: payload.sceneId,
+    },
+  };
   return {
     env: {
       SELFIES: {
         head: vi.fn().mockResolvedValue(selfie),
-        get: vi.fn().mockResolvedValue(selfie),
+        get: vi.fn().mockImplementation(async (key: string) => key === selfieKey ? selfie : caricature),
         delete: vi.fn().mockResolvedValue(undefined),
         put: vi.fn().mockResolvedValue(undefined),
       },
@@ -88,6 +122,7 @@ function createEnvironment() {
       REPLICATE_API_TOKEN: 'test-token',
     },
     selfie,
+    caricature,
   };
 }
 
@@ -102,24 +137,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadSession).mockResolvedValue({
-      id: sessionId,
-      event_id: payload.eventId,
-      status: 'uploading',
-      scene_id: payload.sceneId,
-      scene_name: payload.sceneName,
-      selfie_key: selfieKey,
-      selfie_sha256: selfieSha256,
-      caricature_key: null,
-      postcard_key: null,
-      workflow_instance_id: workflowInstanceId,
-      error_code: null,
-      error_msg: null,
-      created_at: 1,
-      completed_at: null,
-      pipeline_ms: null,
-      updated_at: 1,
-    });
+    vi.mocked(loadSession).mockResolvedValue(sessionRecord);
     vi.mocked(transitionSession).mockResolvedValue(undefined as never);
     vi.mocked(buildPostcard).mockResolvedValue({ ok: true, status: 200, body: new Uint8Array([4, 5, 6]) } as never);
     vi.mocked(generateCaricature).mockResolvedValue(new Uint8Array([7, 8, 9]));
@@ -187,7 +205,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
   it('continues to generation only after a safe verdict', async () => {
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
-    const { env, selfie } = createEnvironment();
+    const { env, caricature } = createEnvironment();
     const workflow = createWorkflow(env);
 
     await workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never);
@@ -198,10 +216,10 @@ describe('CaricatureWorkflow moderation gate', () => {
       expect.any(Uint8Array),
       'Use a bold editorial ink style. Stored event scene prompt. Stone arches and Manhattan behind the guest. Use the event palette and avoid logos. Keep the person recognizable, expressive, and centered. No text.',
     );
-    expect(buildPostcard).toHaveBeenCalledWith(env, selfie, payload.watermarkKey, payload.watermarkWidth);
+    expect(buildPostcard).toHaveBeenCalledWith(env, caricature, payload.watermarkKey, payload.watermarkWidth);
     expect(env.SELFIES.put).toHaveBeenNthCalledWith(
       1,
-      `sessions/${sessionId}/caricature.jpg`,
+      caricatureKey,
       new Uint8Array([7, 8, 9]),
       {
         httpMetadata: { contentType: 'image/jpeg' },
@@ -216,7 +234,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     );
     expect(env.SELFIES.put).toHaveBeenNthCalledWith(
       2,
-      `sessions/${sessionId}/postcard.jpg`,
+      postcardKey,
       new Uint8Array([4, 5, 6]),
       {
         httpMetadata: { contentType: 'image/jpeg' },
@@ -230,7 +248,12 @@ describe('CaricatureWorkflow moderation gate', () => {
       },
     );
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything(), workflowInstanceId);
+    expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'compositing', {
+      scene_name: payload.sceneName,
+      caricature_key: caricatureKey,
+    }, workflowInstanceId);
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({
+      postcard_key: postcardKey,
       pipeline_ms: expect.any(Number),
     }), workflowInstanceId);
   });
@@ -289,9 +312,9 @@ describe('CaricatureWorkflow moderation gate', () => {
 
   it('exits before workflow steps when the session belongs to a newer workflow', async () => {
     vi.mocked(loadSession).mockResolvedValue({
-      id: sessionId,
+      ...sessionRecord,
       workflow_instance_id: 'replacement-instance',
-    } as never);
+    });
     const { env } = createEnvironment();
     const step = createStep();
     const workflow = createWorkflow(env);
@@ -314,9 +337,9 @@ describe('CaricatureWorkflow moderation gate', () => {
   it('stops before generation when ownership changes after moderation', async () => {
     let ownsSession = true;
     vi.mocked(loadSession).mockImplementation(async () => ({
-      id: sessionId,
+      ...sessionRecord,
       workflow_instance_id: ownsSession ? workflowInstanceId : 'replacement-instance',
-    }) as never);
+    }));
     vi.mocked(moderateImage).mockImplementation(async () => {
       ownsSession = false;
       return { safe: true, reasons: [], raw: '', elapsedMs: 10 };
@@ -338,9 +361,9 @@ describe('CaricatureWorkflow moderation gate', () => {
   it('does not delete a replacement selfie when ownership changes after rejection', async () => {
     let ownsSession = true;
     vi.mocked(loadSession).mockImplementation(async () => ({
-      id: sessionId,
+      ...sessionRecord,
       workflow_instance_id: ownsSession ? workflowInstanceId : 'replacement-instance',
-    }) as never);
+    }));
     vi.mocked(moderateImage).mockImplementation(async () => {
       ownsSession = false;
       return { safe: false, reasons: ['sexual content'], raw: '', elapsedMs: 10 };
@@ -396,9 +419,9 @@ describe('CaricatureWorkflow moderation gate', () => {
   it('does not store generated output after losing ownership', async () => {
     let ownsSession = true;
     vi.mocked(loadSession).mockImplementation(async () => ({
-      id: sessionId,
+      ...sessionRecord,
       workflow_instance_id: ownsSession ? workflowInstanceId : 'replacement-instance',
-    }) as never);
+    }));
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(generateCaricature).mockImplementation(async () => {
       ownsSession = false;
@@ -415,5 +438,166 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(generateCaricature).toHaveBeenCalledTimes(1);
     expect(env.SELFIES.put).not.toHaveBeenCalled();
     expect(buildPostcard).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing metadata', {}],
+    ['mismatched workflow metadata', {
+      sessionId,
+      eventId: String(payload.eventId),
+      workflowInstanceId: 'replacement-instance',
+      assetKind: 'caricature',
+    }],
+  ])('rejects generated caricature ownership with %s before composition', async (_label, customMetadata) => {
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    const { env, caricature } = createEnvironment();
+    caricature.customMetadata = customMetadata as typeof caricature.customMetadata;
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(buildPostcard).not.toHaveBeenCalled();
+    expect(env.SELFIES.put).not.toHaveBeenCalledWith(postcardKey, expect.anything(), expect.anything());
+  });
+
+  it('recovers a legacy in-flight selfie by hashing its bytes when metadata is absent', async () => {
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(loadSession).mockResolvedValue({
+      ...sessionRecord,
+      selfie_key: legacySelfieKey,
+      selfie_sha256: legacySelfieSha256,
+    });
+    const { env, selfie, caricature } = createEnvironment();
+    const legacySelfie = { ...selfie, customMetadata: {} };
+    env.SELFIES.get.mockImplementation(async (key: string) => key === legacySelfieKey ? legacySelfie : caricature);
+    const workflow = createWorkflow(env);
+
+    await workflow.run({
+      instanceId: workflowInstanceId,
+      payload: { ...payload, selfieKey: legacySelfieKey, selfieSha256: undefined },
+    } as never, createStep() as never);
+
+    expect(moderateImage).toHaveBeenCalledTimes(1);
+    expect(generateCaricature).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a legacy in-flight selfie when its bytes do not match the persisted hash', async () => {
+    vi.mocked(loadSession).mockResolvedValue({
+      ...sessionRecord,
+      selfie_key: legacySelfieKey,
+      selfie_sha256: 'mismatched-sha256',
+    });
+    const { env, selfie, caricature } = createEnvironment();
+    const legacySelfie = { ...selfie, customMetadata: {} };
+    env.SELFIES.get.mockImplementation(async (key: string) => key === legacySelfieKey ? legacySelfie : caricature);
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({
+      instanceId: workflowInstanceId,
+      payload: { ...payload, selfieKey: legacySelfieKey, selfieSha256: undefined },
+    } as never, createStep() as never)).resolves.toEqual({ sessionId, postcardKey: null });
+
+    expect(moderateImage).not.toHaveBeenCalled();
+    expect(generateCaricature).not.toHaveBeenCalled();
+  });
+
+  it('rejects conflicting ownership metadata on a legacy in-flight selfie', async () => {
+    vi.mocked(loadSession).mockResolvedValue({
+      ...sessionRecord,
+      selfie_key: legacySelfieKey,
+      selfie_sha256: legacySelfieSha256,
+    });
+    const { env, selfie, caricature } = createEnvironment();
+    const legacySelfie = {
+      ...selfie,
+      customMetadata: { sessionId: 'replacement-session' },
+    };
+    env.SELFIES.get.mockImplementation(async (key: string) => key === legacySelfieKey ? legacySelfie : caricature);
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({
+      instanceId: workflowInstanceId,
+      payload: { ...payload, selfieKey: legacySelfieKey, selfieSha256: undefined },
+    } as never, createStep() as never)).resolves.toEqual({ sessionId, postcardKey: null });
+
+    expect(moderateImage).not.toHaveBeenCalled();
+  });
+
+  it('never reads assets from a replacement workflow after an entry-check interleaving', async () => {
+    const replacementWorkflowInstanceId = 'instance-2';
+    const replacementSelfieKey = `sessions/${sessionId}/${replacementWorkflowInstanceId}/selfie.jpg`;
+    vi.mocked(loadSession)
+      .mockResolvedValueOnce(sessionRecord)
+      .mockResolvedValue({
+        ...sessionRecord,
+        selfie_key: replacementSelfieKey,
+        workflow_instance_id: replacementWorkflowInstanceId,
+      });
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(env.SELFIES.get).not.toHaveBeenCalledWith(replacementSelfieKey);
+    expect(env.SELFIES.put).not.toHaveBeenCalled();
+    expect(env.SELFIES.delete).not.toHaveBeenCalled();
+  });
+
+  it('cannot delete a replacement workflow selfie after a final-check interleaving', async () => {
+    let currentSession = sessionRecord;
+    const replacementWorkflowInstanceId = 'instance-2';
+    const replacementSelfieKey = `sessions/${sessionId}/${replacementWorkflowInstanceId}/selfie.jpg`;
+    vi.mocked(loadSession).mockImplementation(async () => currentSession);
+    vi.mocked(moderateImage).mockResolvedValue({ safe: false, reasons: ['unsafe'], raw: '', elapsedMs: 10 });
+    const { env, selfie, caricature } = createEnvironment();
+    let selfieReads = 0;
+    env.SELFIES.get.mockImplementation(async (key: string) => {
+      if (key !== selfieKey) return caricature;
+      selfieReads += 1;
+      if (selfieReads === 2) {
+        currentSession = {
+          ...sessionRecord,
+          selfie_key: replacementSelfieKey,
+          workflow_instance_id: replacementWorkflowInstanceId,
+        };
+      }
+      return selfie;
+    });
+    const workflow = createWorkflow(env);
+
+    await workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never);
+
+    expect(env.SELFIES.delete).toHaveBeenCalledWith(selfieKey);
+    expect(env.SELFIES.delete).not.toHaveBeenCalledWith(replacementSelfieKey);
+  });
+
+  it('cannot overwrite replacement workflow outputs after a write interleaving', async () => {
+    let currentSession = sessionRecord;
+    const replacementWorkflowInstanceId = 'instance-2';
+    const replacementCaricatureKey = `sessions/${sessionId}/${replacementWorkflowInstanceId}/caricature.jpg`;
+    vi.mocked(loadSession).mockImplementation(async () => currentSession);
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    const { env } = createEnvironment();
+    env.SELFIES.put.mockImplementation(async (key: string) => {
+      if (key === caricatureKey) {
+        currentSession = {
+          ...sessionRecord,
+          workflow_instance_id: replacementWorkflowInstanceId,
+        };
+      }
+      return {} as R2Object;
+    });
+    const workflow = createWorkflow(env);
+
+    await workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never);
+
+    expect(env.SELFIES.put).toHaveBeenCalledWith(caricatureKey, expect.anything(), expect.anything());
+    expect(env.SELFIES.put).not.toHaveBeenCalledWith(replacementCaricatureKey, expect.anything(), expect.anything());
   });
 });

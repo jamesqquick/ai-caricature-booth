@@ -35,8 +35,8 @@ describe('admin session image proxy', () => {
 
   it.each([
     ['selfie', 'sessions/session-1/selfie.jpg'],
-    ['caricature', 'sessions/session-1/caricature.jpg'],
-    ['postcard', 'sessions/session-1/postcard.jpg'],
+    ['caricature', 'sessions/session-1/workflow-1/caricature.jpg'],
+    ['postcard', 'sessions/session-1/workflow-1/postcard.jpg'],
   ])('resolves the %s key server-side and streams the object', async (kind, key) => {
     loadAdminSessionImageKey.mockResolvedValue(key);
     fakeEnv.SELFIES.get.mockResolvedValue(imageObject());
@@ -107,6 +107,8 @@ describe('admin session image proxy', () => {
   it.each([
     ['cross-owned key', 'sessions/other-session/selfie.jpg'],
     ['wrong kind key', 'sessions/session-1/postcard.jpg'],
+    ['nested wrong kind key', 'sessions/session-1/workflow-1/postcard.jpg'],
+    ['nested path traversal', 'sessions/session-1/workflow-1/../selfie.jpg'],
     ['corrupted key', 'private/session-1/selfie.jpg'],
   ])('returns 404 without reading R2 for a %s', async (_label, key) => {
     loadAdminSessionImageKey.mockResolvedValue(key);

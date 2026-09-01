@@ -7,7 +7,7 @@ import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
 import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
-import { hasExactSelfieOwnership } from './lib/selfie-ownership';
+import { hasExactSessionAssetOwnership, readOwnedSelfieBytes, workflowSessionAssetKey } from './lib/selfie-ownership';
 
 export type CaricaturePayload = {
   sessionId: string;
@@ -20,7 +20,7 @@ export type CaricaturePayload = {
   eventPromptPreamble?: string | null;
   eventConstraints?: string | null;
   selfieKey: string;
-  selfieSha256: string;
+  selfieSha256?: string;
   watermarkKey: string | null;
   watermarkWidth: number | null;
 };
@@ -45,7 +45,22 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     } = event.payload;
     const stopped = { sessionId, postcardKey: null };
     const ownsSession = () => ownsWorkflowSession(this.env.DB, sessionId, event.instanceId);
-    if (workflowInstanceId !== event.instanceId || !(await ownsSession())) return stopped;
+    const session = await loadSession(this.env.DB, sessionId);
+    const ownedSelfieSha256 = selfieSha256 ?? session?.selfie_sha256;
+    if (
+      workflowInstanceId !== event.instanceId
+      || session?.workflow_instance_id !== event.instanceId
+      || session.event_id !== eventId
+      || session.selfie_key !== selfieKey
+      || !ownedSelfieSha256
+      || session.selfie_sha256 !== ownedSelfieSha256
+    ) return stopped;
+    const selfieOwnership = {
+      sessionId,
+      eventId,
+      workflowInstanceId: event.instanceId,
+      selfieSha256: ownedSelfieSha256,
+    };
     const markErrored = async (errorCode: GenerationFailureCode) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_code: errorCode }, event.instanceId);
     };
@@ -63,12 +78,13 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         if (!(await ownsSession())) return 'stale';
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Uploaded selfie was not found.');
-        if (!hasExactSelfieOwnership(selfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return 'stale';
-        const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
+        const selfieBytes = await readOwnedSelfieBytes(selfie, selfieKey, selfieOwnership);
+        if (!selfieBytes) return 'stale';
+        const verdict = await moderateImage(this.env.AI, selfieBytes);
         if (!verdict.safe) {
           if (!(await ownsSession())) return 'stale';
-          const currentSelfie = await this.env.SELFIES.head(selfieKey);
-          if (!hasExactSelfieOwnership(currentSelfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return 'stale';
+          const currentSelfie = await this.env.SELFIES.get(selfieKey);
+          if (!currentSelfie || !await readOwnedSelfieBytes(currentSelfie, selfieKey, selfieOwnership)) return 'stale';
           await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
           await markErrored('photo_rejected');
           console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
@@ -97,19 +113,20 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         if (!(await ownsSession())) return null;
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');
-        if (!hasExactSelfieOwnership(selfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return null;
+        const selfieBytes = await readOwnedSelfieBytes(selfie, selfieKey, selfieOwnership);
+        if (!selfieBytes) return null;
         const prompt = composeGenerationPrompt({
           preamble: eventPromptPreamble,
           scenePrompt,
           sceneDescription,
           constraints: eventConstraints,
         });
-        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), prompt);
+        const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, selfieBytes, prompt);
         if (!(await ownsSession())) return null;
-        const key = `sessions/${sessionId}/caricature.jpg`;
+        const key = workflowSessionAssetKey(sessionId, event.instanceId, 'caricature');
         await this.env.SELFIES.put(key, bytes, {
           httpMetadata: { contentType: 'image/jpeg' },
-          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId, assetKind: 'caricature', sceneId },
+          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId: event.instanceId, assetKind: 'caricature', sceneId },
         });
         await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key }, event.instanceId);
         return key;
@@ -128,15 +145,21 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         if (!(await ownsSession())) return null;
         const caricature = await this.env.SELFIES.get(caricatureKey);
         if (!caricature) throw new Error('Generated caricature was not found.');
+        if (!hasExactSessionAssetOwnership(caricature, {
+          sessionId,
+          eventId,
+          workflowInstanceId: event.instanceId,
+          assetKind: 'caricature',
+        })) return null;
         console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
         const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
         if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
         if (!(await ownsSession())) return null;
         console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));
-        const key = `sessions/${sessionId}/postcard.jpg`;
+        const key = workflowSessionAssetKey(sessionId, event.instanceId, 'postcard');
         await this.env.SELFIES.put(key, postcard.body, {
           httpMetadata: { contentType: 'image/jpeg' },
-          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId, assetKind: 'postcard', sceneId },
+          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId: event.instanceId, assetKind: 'postcard', sceneId },
         });
         console.info(JSON.stringify({ message: 'postcard stored', sessionId, attempt: ctx.attempt, elapsedMs: Date.now() - startedAt }));
         return key;
