@@ -1,0 +1,19 @@
+test/admin-session-detail.spec.ts
+  s_fb2b28c3bde364::t_bbb68d8f29275a 29,43-64,67,69,76-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "36ccf709f015ec40eeec1c54aa908eee3aebbba0",
+  "prompts": {},
+  "sessions": {
+    "s_fb2b28c3bde364": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2a2d869ffevSXV14V0UajVQE",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
