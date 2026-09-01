@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AttendeePrintControl } from '../src/components/AttendeePrintControl';
+import { printCapabilityStorageKey } from '../src/lib/print-capability-storage';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const jobId = '0123456789abcdef0123456789abcdef';
@@ -15,6 +16,7 @@ function job(status: 'pending' | 'printing' | 'printed' | 'failed', printedAt: n
 describe('AttendeePrintControl', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
+    sessionStorage.setItem(printCapabilityStorageKey(sessionId), 'signed-print-token');
   });
 
   afterEach(() => {
@@ -45,12 +47,13 @@ describe('AttendeePrintControl', () => {
       body: expect.stringMatching(/"idempotencyKey":"[0-9a-f-]{36}"/),
       signal: expect.any(AbortSignal),
     }));
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({ printToken: 'signed-print-token' });
 
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
     expect(await screen.findByRole('button', { name: 'Printing postcard' })).toBeTruthy();
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
-    expect(await screen.findByRole('button', { name: 'Postcard printed' })).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toContain('Your postcard has been printed.');
+    expect(await screen.findByRole('button', { name: 'Sent to printer' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('The printer accepted your postcard.');
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
@@ -135,5 +138,13 @@ describe('AttendeePrintControl', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Check print request' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(firstBody);
+  });
+
+  it('does not expose physical printing for a shared postcard without a capability', () => {
+    sessionStorage.removeItem(printCapabilityStorageKey(sessionId));
+
+    render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
+
+    expect(screen.queryByRole('button', { name: /print/i })).toBeNull();
   });
 });

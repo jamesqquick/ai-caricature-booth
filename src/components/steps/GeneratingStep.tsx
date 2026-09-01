@@ -13,7 +13,7 @@ type Props = {
   scene: Scene;
   photoDataUrl: string;
   eventSlug: string;
-  onComplete: (sessionId: string) => void;
+  onComplete: (sessionId: string, printToken: string) => void;
 };
 
 export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: Props) {
@@ -74,7 +74,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
           setIsComplete(true);
           await new Promise((resolve) => window.setTimeout(resolve, 1000));
           if (!active) return;
-          onComplete(started.data.sessionId);
+          onComplete(started.data.sessionId, started.data.printToken);
           return;
         }
         if (status.data.status === 'errored') throw new Error(status.data.error ?? "Couldn't create your postcard. Please try again.");

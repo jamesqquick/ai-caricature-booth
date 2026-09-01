@@ -3,9 +3,10 @@ import { z } from 'astro/zod';
 import { env } from 'cloudflare:workers';
 import { loadActiveEventById, loadActiveEventBySlug, type EventRecord } from '../db/events';
 import { loadEventScene } from '../db/scenes';
-import { createPendingSession, loadSession, transitionSession } from '../db/sessions';
+import { createPendingSession, loadSession, transitionSession, type SessionStatus } from '../db/sessions';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
 import type { Scene } from '../data/scenes';
+import { issuePrintCapability } from '../lib/print-capability';
 
 const startInput = z.object({
   eventSlug: z.string().min(1).max(120),
@@ -45,7 +46,7 @@ export const server = {
         }
         const current = await loadSession(env.DB, existing.id);
         if (current) await ensureWorkflow(current, scene, event);
-        return { sessionId: existing.id, status: current?.status ?? existing.status };
+        return await generationStartResult(existing.id, event.id, current?.status ?? existing.status);
       }
 
       const event = await loadActiveEventBySlug(env.DB, eventSlug);
@@ -65,13 +66,13 @@ export const server = {
         }
         const current = await loadSession(env.DB, claim.session.id);
         if (current) await ensureWorkflow(current, scene, event);
-        return { sessionId: claim.session.id, status: current?.status ?? claim.session.status };
+        return await generationStartResult(claim.session.id, event.id, current?.status ?? claim.session.status);
       }
 
       await ensureSelfieUploaded(idempotencyKey, selfieKey, bytes);
       const current = await loadSession(env.DB, idempotencyKey);
       if (current) await ensureWorkflow(current, scene, event);
-      return { sessionId: idempotencyKey, status: current?.status ?? claim.session.status };
+      return await generationStartResult(idempotencyKey, event.id, current?.status ?? claim.session.status);
     },
   }),
 
@@ -93,6 +94,14 @@ export const server = {
     },
   }),
 };
+
+async function generationStartResult(sessionId: string, eventId: number, status: SessionStatus) {
+  return {
+    sessionId,
+    status,
+    printToken: await issuePrintCapability(env.PRINT_CAPABILITY_SECRET, { sessionId, eventId }),
+  };
+}
 
 async function ensureWorkflow(
   session: NonNullable<Awaited<ReturnType<typeof loadSession>>>,

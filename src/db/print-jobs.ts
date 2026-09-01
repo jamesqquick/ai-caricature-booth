@@ -22,7 +22,7 @@ export type AgentPrintJob = Pick<AdminPrintJob, 'id' | 'sessionId' | 'eventId' |
   claimToken: string;
 };
 
-export type PrintJobField = 'eventId' | 'sessionId' | 'jobId' | 'eventSlug' | 'agentId' | 'knownClaims' | 'limit' | 'status' | 'error' | 'claimToken' | 'action' | 'idempotencyKey';
+export type PrintJobField = 'eventId' | 'sessionId' | 'jobId' | 'eventSlug' | 'agentId' | 'knownClaims' | 'limit' | 'status' | 'error' | 'claimToken' | 'action' | 'idempotencyKey' | 'printToken' | 'outcome' | 'confirmation';
 
 export class PrintJobValidationError extends Error {
   name = 'PrintJobValidationError';
@@ -46,6 +46,14 @@ export class PrintJobConflictError extends Error {
 
 export class PrintJobForbiddenError extends Error {
   name = 'PrintJobForbiddenError';
+}
+
+export class PrintJobPayloadTooLargeError extends Error {
+  name = 'PrintJobPayloadTooLargeError';
+
+  constructor(public readonly field: PrintJobField, public readonly maxBytes: number) {
+    super(`Request body must not exceed ${maxBytes} bytes.`);
+  }
 }
 
 type PrintJobRow = {
@@ -164,6 +172,17 @@ function parseAgentId(value: unknown) {
 
 export function parseAdminMutation(input: unknown) {
   const body = asObject(input, 'action');
+  if (body.action === 'resolve-orphan') {
+    const jobId = parseJobId(typeof body.jobId === 'string' ? body.jobId : undefined);
+    if (body.outcome !== 'printed' && body.outcome !== 'not-submitted') {
+      throw new PrintJobValidationError('outcome', 'outcome must be printed or not-submitted.');
+    }
+    const confirmation = `resolve print job ${jobId} as ${body.outcome}`;
+    if (body.confirmation !== confirmation) {
+      throw new PrintJobValidationError('confirmation', `confirmation must exactly match: ${confirmation}`);
+    }
+    return { action: 'resolve-orphan', jobId, outcome: body.outcome } as const;
+  }
   const idempotencyKey = parseIdempotencyKey(body.idempotencyKey);
   if (body.action === 'queue') return { action: 'queue', idempotencyKey } as const;
   if (body.action === 'retry') return { action: 'retry', jobId: parseJobId(typeof body.jobId === 'string' ? body.jobId : undefined), idempotencyKey } as const;
@@ -171,7 +190,8 @@ export function parseAdminMutation(input: unknown) {
 }
 
 export function parseAttendeeMutation(input: unknown) {
-  return { idempotencyKey: parseIdempotencyKey(asObject(input, 'idempotencyKey').idempotencyKey) };
+  const body = asObject(input, 'idempotencyKey');
+  return { idempotencyKey: parseIdempotencyKey(body.idempotencyKey), printToken: body.printToken };
 }
 
 function parseIdempotencyKey(value: unknown) {
@@ -215,11 +235,13 @@ export async function createAttendeePrintJob(database: D1Database, eventId: numb
            pj.status, pj.created_at, pj.printed_at, pj.error_msg
     FROM print_jobs pj
     INNER JOIN sessions s ON s.id = pj.session_id
+    INNER JOIN events e ON e.id = s.event_id
     WHERE pj.request_key = ? AND pj.session_id = ? AND pj.event_id = ?
       AND s.event_id = pj.event_id
       AND s.status = 'completed'
       AND s.postcard_key IS NOT NULL
       AND s.postcard_key <> ''
+      AND e.status = 'active'
     LIMIT 1
   `).bind(requestKey, sessionId, eventId).first<PrintJobRow>();
   if (repeated) return publicJob(repeated);
@@ -228,11 +250,13 @@ export async function createAttendeePrintJob(database: D1Database, eventId: numb
     INSERT INTO print_jobs (session_id, event_id, postcard_key, postcard_url, scene_name, request_key)
     SELECT s.id, s.event_id, s.postcard_key, ?, COALESCE(NULLIF(s.scene_name, ''), s.scene_id), ?
     FROM sessions s
+    INNER JOIN events e ON e.id = s.event_id
     WHERE s.id = ?
       AND s.event_id = ?
       AND s.status = 'completed'
       AND s.postcard_key IS NOT NULL
       AND s.postcard_key <> ''
+      AND e.status = 'active'
       AND NOT EXISTS (
         SELECT 1 FROM print_jobs pj
         WHERE pj.session_id = s.id
@@ -249,12 +273,14 @@ export async function createAttendeePrintJob(database: D1Database, eventId: numb
            pj.status, pj.created_at, pj.printed_at, pj.error_msg
     FROM print_jobs pj
     INNER JOIN sessions s ON s.id = pj.session_id
+    INNER JOIN events e ON e.id = s.event_id
     WHERE pj.session_id = ?
       AND s.event_id = ?
       AND pj.event_id = s.event_id
       AND s.status = 'completed'
       AND s.postcard_key IS NOT NULL
       AND s.postcard_key <> ''
+      AND e.status = 'active'
       AND (pj.request_key = ? OR pj.status IN ('pending', 'printing', 'printed'))
     ORDER BY pj.created_at DESC, pj.id DESC
     LIMIT 1
@@ -425,6 +451,27 @@ export async function retryAdminPrintJob(database: D1Database, sessionId: string
   ]);
   if (raced) return raced;
   return await throwMissingOrConflict(database, jobId, 'Only failed print jobs can be retried.', sessionId);
+}
+
+export async function resolveOrphanedPrintJob(
+  database: D1Database,
+  sessionId: string,
+  jobId: string,
+  outcome: 'printed' | 'not-submitted',
+): Promise<AdminPrintJob> {
+  const printed = outcome === 'printed';
+  const error = printed
+    ? null
+    : 'Operator resolved orphaned printing job as not submitted after inspecting CUPS and physical output.';
+  const row = await database.prepare(`
+    UPDATE print_jobs
+    SET status = ?, printed_at = ${printed ? 'unixepoch()' : 'NULL'}, error_msg = ?,
+        claim_token = NULL, claim_owner = NULL, terminal_claim_token = NULL
+    WHERE id = ? AND session_id = ? AND status = 'printing'
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(printed ? 'printed' : 'failed', error, jobId, sessionId).first<PrintJobRow>();
+  if (row) return adminJob(row);
+  return await throwMissingOrConflict(database, jobId, 'Only printing jobs can be resolved by an operator.', sessionId);
 }
 
 function receiptInsert(database: D1Database, requestKey: string, fingerprint: AdminRequestFingerprint, resultJobId: string) {

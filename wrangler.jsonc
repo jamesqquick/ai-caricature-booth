@@ -9,7 +9,7 @@
     "ACCESS_TEAM_DOMAIN": "https://cfcommunity.cloudflareaccess.com"
   },
   "secrets": {
-    "required": ["PRINT_AGENT_TOKEN", "REPLICATE_API_TOKEN"]
+    "required": ["PRINT_AGENT_TOKEN", "PRINT_CAPABILITY_SECRET", "REPLICATE_API_TOKEN"]
   },
   "assets": {
     "directory": "./dist",

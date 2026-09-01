@@ -287,6 +287,7 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
                     <time dateTime={new Date((job.printedAt ?? job.createdAt) * 1000).toISOString()}>{formattedTime(job.printedAt ?? job.createdAt)}</time>
                   </p>
                   {job.error && <p className="mb-0 mt-2 text-sm text-destructive">{job.error}</p>}
+                  {job.status === 'printing' && <p className="mb-0 mt-2 text-sm text-muted-foreground">Operator resolution is required if the print agent's local recovery state is unavailable.</p>}
                 </div>
                 {job.status === 'failed' && (
                   <Button type="button" variant="secondary" disabled={actionsDisabled} onClick={() => mutate('retry', job.id)} aria-label={`Retry failed print requested ${formattedTime(job.createdAt)}`}>

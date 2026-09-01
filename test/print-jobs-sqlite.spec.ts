@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { resolveAgentId } from '../print-agent/src/paths';
-import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, queueAdminPrintJob, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
+import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, loadAdminPrintJobs, PrintJobConflictError, queueAdminPrintJob, reconcilePrintJobs, releasePrintJob, resolveOrphanedPrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
   '0001_events.sql',
@@ -118,6 +118,20 @@ describe('print job SQLite integration', () => {
     }
   });
 
+  it('rejects attendee creation and replay when the event is inactive', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const queued = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
+      sqlite.prepare("UPDATE events SET status = 'archived' WHERE id = 1").run();
+
+      await expect(createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey)).rejects.toBeInstanceOf(Error);
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM print_jobs WHERE id = ?').get(queued.id)).toEqual({ count: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it('loads only one session print history newest first without private columns', async () => {
     const { sqlite, database } = await createDatabase();
     try {
@@ -186,6 +200,37 @@ describe('print job SQLite integration', () => {
 
       const printing = sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id);
       expect(printing).toEqual({ status: 'printing', claim_token: firstClaim.claimToken });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it.each([
+    ['printed', 'printed', null],
+    ['not-submitted', 'failed', 'Operator resolved orphaned printing job as not submitted after inspecting CUPS and physical output.'],
+  ] as const)('resolves an orphaned printing job as %s and clears claim state', async (outcome, status, error) => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
+      await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+
+      await expect(resolveOrphanedPrintJob(database, sessionId, pending.id, outcome)).resolves.toMatchObject({ status, error });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner, terminal_claim_token, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status, claim_token: null, claim_owner: null, terminal_claim_token: null, error_msg: error });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it.each(['pending', 'printed', 'failed'] as const)('rejects orphan resolution from %s', async (status) => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
+      sqlite.prepare('UPDATE print_jobs SET status = ? WHERE id = ?').run(status, pending.id);
+
+      await expect(resolveOrphanedPrintJob(database, sessionId, pending.id, 'printed')).rejects.toBeInstanceOf(PrintJobConflictError);
     } finally {
       sqlite.close();
     }

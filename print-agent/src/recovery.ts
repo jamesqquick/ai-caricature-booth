@@ -21,6 +21,15 @@ type RecoveryDependencies = {
 };
 
 type RecoveryErrorCode = "USAGE" | "MARKER_NOT_FOUND" | "ACK_FAILED" | "RELEASE_FAILED" | "STATE_FAILED";
+type RecoveryResult = { jobId: string; outcome: RecoveryOutcome };
+
+const RECOVERY_EXIT_CODES: Record<RecoveryErrorCode, number> = {
+  USAGE: 2,
+  MARKER_NOT_FOUND: 3,
+  ACK_FAILED: 4,
+  RELEASE_FAILED: 5,
+  STATE_FAILED: 6,
+};
 
 export const RECOVERY_USAGE = "Usage: pnpm print-agent:resolve -- --job-id <32-character-job-id> --outcome printed|not-submitted --confirm";
 
@@ -36,7 +45,7 @@ export async function runRecoveryCommand(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
   argv: string[],
   dependencies: RecoveryDependencies = {},
-): Promise<void> {
+): Promise<RecoveryResult> {
   const options = parseRecoveryArguments(argv);
   const config = loadConfig(env, argv);
   const { stateDir } = resolveAgentDirectories(config, packageRoot, homedir());
@@ -46,6 +55,7 @@ export async function runRecoveryCommand(
     await loadOrCreateInstallationId(stateDir);
     const outbox = dependencies.outbox ?? new FileAckOutbox(join(stateDir, "pending-acks.json"));
     await resolveMarker(config, outbox, options, dependencies);
+    return options;
   } finally {
     await lock.release();
   }
@@ -146,7 +156,12 @@ function safeError(code: RecoveryErrorCode, message: string, cause: unknown, sec
 }
 
 export function formatRecoveryFailure(error: unknown, secret?: string): string {
-  return redact(error instanceof Error ? error.message : String(error), secret ? [secret] : []);
+  const prefix = error instanceof RecoveryCommandError ? `${error.code}: ` : '';
+  return `${prefix}${redact(error instanceof Error ? error.message : String(error), secret ? [secret] : [])}`;
+}
+
+export function recoveryExitCode(error: unknown): number {
+  return error instanceof RecoveryCommandError ? RECOVERY_EXIT_CODES[error.code] : 1;
 }
 
 function redact(value: string, secrets: string[]): string {

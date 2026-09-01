@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const fakeEnv = vi.hoisted(() => ({ DB: {} }));
+const fakeEnv = vi.hoisted(() => ({ DB: {}, PRINT_CAPABILITY_SECRET: 'test-print-capability-secret' }));
 const createAttendeePrintJob = vi.hoisted(() => vi.fn());
 const loadAttendeePrintJob = vi.hoisted(() => vi.fn());
 const loadAdminPrintJobs = vi.hoisted(() => vi.fn());
@@ -10,6 +10,7 @@ const acknowledgePrintJob = vi.hoisted(() => vi.fn());
 const releasePrintJob = vi.hoisted(() => vi.fn());
 const queueAdminPrintJob = vi.hoisted(() => vi.fn());
 const retryAdminPrintJob = vi.hoisted(() => vi.fn());
+const resolveOrphanedPrintJob = vi.hoisted(() => vi.fn());
 
 vi.mock('cloudflare:workers', () => ({ env: fakeEnv }));
 vi.mock('../src/db/print-jobs', async (importOriginal) => ({
@@ -23,6 +24,7 @@ vi.mock('../src/db/print-jobs', async (importOriginal) => ({
   releasePrintJob,
   queueAdminPrintJob,
   retryAdminPrintJob,
+  resolveOrphanedPrintJob,
 }));
 
 import { POST as createJob } from '../src/pages/api/events/[eventId]/sessions/[sessionId]/print-jobs';
@@ -33,6 +35,7 @@ import { POST as acknowledgeJob } from '../src/pages/api/print-agent/jobs/[jobId
 import { POST as releaseJob } from '../src/pages/api/print-agent/jobs/[jobId]/release';
 import { GET as getAdminJobs, POST as mutateAdminJob } from '../src/pages/api/admin/sessions/[sessionId]/print-jobs';
 import { PrintJobConflictError, PrintJobNotFoundError } from '../src/db/print-jobs';
+import { issuePrintCapability } from '../src/lib/print-capability';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const jobId = '0123456789abcdef0123456789abcdef';
@@ -41,11 +44,12 @@ const agentId = 'b'.repeat(64);
 const publicJob = { id: jobId, status: 'pending', printedAt: null };
 const idempotencyKey = '10000000-0000-4000-8000-000000000001';
 
-function attendeeRequest(headers: HeadersInit = {}) {
+async function attendeeRequest(headers: HeadersInit = {}, body: Record<string, unknown> = {}) {
+  const printToken = await issuePrintCapability(fakeEnv.PRINT_CAPABILITY_SECRET, { sessionId, eventId: 7 });
   return new Request('https://booth.test/api/events/7/sessions/x/print-jobs', {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify({ idempotencyKey }),
+    body: JSON.stringify({ idempotencyKey, printToken, ...body }),
   });
 }
 
@@ -61,7 +65,7 @@ describe('print job APIs', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('validates event identifiers and never calls the database for invalid input', async () => {
-    const response = await createJob({ params: { eventId: '7x', sessionId: 'not-a-uuid' }, request: attendeeRequest() });
+    const response = await createJob({ params: { eventId: '7x', sessionId: 'not-a-uuid' }, request: await attendeeRequest() });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid eventId.', field: 'eventId' });
@@ -69,7 +73,7 @@ describe('print job APIs', () => {
   });
 
   it('rejects invalid session and job identifiers', async () => {
-    const invalidSession = await createJob({ params: { eventId: '7', sessionId: 'not-a-uuid' }, request: attendeeRequest() });
+    const invalidSession = await createJob({ params: { eventId: '7', sessionId: 'not-a-uuid' }, request: await attendeeRequest() });
     const invalidJob = await getJob({ params: { eventId: '7', sessionId, jobId: 'not-a-job-id' } });
 
     expect(invalidSession.status).toBe(400);
@@ -83,7 +87,7 @@ describe('print job APIs', () => {
   it('creates an attendee job scoped to its event and session', async () => {
     createAttendeePrintJob.mockResolvedValue(publicJob);
 
-    const response = await createJob({ params: { eventId: '7', sessionId }, request: attendeeRequest() });
+    const response = await createJob({ params: { eventId: '7', sessionId }, request: await attendeeRequest() });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ job: publicJob });
@@ -94,16 +98,46 @@ describe('print job APIs', () => {
     createAttendeePrintJob.mockResolvedValue(publicJob);
     const params = { eventId: '7', sessionId };
 
-    const wrongOrigin = await createJob({ params, request: attendeeRequest({ Origin: 'https://evil.test' }) });
-    const crossSite = await createJob({ params, request: attendeeRequest({ 'Sec-Fetch-Site': 'cross-site' }) });
-    const sameOrigin = await createJob({ params, request: attendeeRequest({ Origin: 'https://booth.test', 'Sec-Fetch-Site': 'same-origin' }) });
-    const headerless = await createJob({ params, request: attendeeRequest() });
+    const wrongOrigin = await createJob({ params, request: await attendeeRequest({ Origin: 'https://evil.test' }) });
+    const crossSite = await createJob({ params, request: await attendeeRequest({ 'Sec-Fetch-Site': 'cross-site' }) });
+    const sameOrigin = await createJob({ params, request: await attendeeRequest({ Origin: 'https://booth.test', 'Sec-Fetch-Site': 'same-origin' }) });
+    const headerless = await createJob({ params, request: await attendeeRequest() });
 
     expect(wrongOrigin.status).toBe(403);
     expect(crossSite.status).toBe(403);
     expect(sameOrigin.status).toBe(200);
     expect(headerless.status).toBe(200);
     expect(createAttendeePrintJob).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects missing, tampered, expired, and differently bound attendee capabilities', async () => {
+    const params = { eventId: '7', sessionId };
+    const valid = await issuePrintCapability(fakeEnv.PRINT_CAPABILITY_SECRET, { sessionId, eventId: 7 }, 1);
+    const requests = [
+      new Request('https://booth.test/api/events/7/sessions/x/print-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idempotencyKey }) }),
+      await attendeeRequest({}, { printToken: `${valid.slice(0, -1)}x` }),
+      await attendeeRequest({}, { printToken: await issuePrintCapability(fakeEnv.PRINT_CAPABILITY_SECRET, { sessionId, eventId: 8 }) }),
+      await attendeeRequest({}, { printToken: valid }),
+    ];
+
+    for (const request of requests) {
+      const response = await createJob({ params, request });
+      expect(response.status).toBe(403);
+    }
+    expect(createAttendeePrintJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects attendee JSON above 2 KiB from declared or streamed size', async () => {
+    const params = { eventId: '7', sessionId };
+    const declared = await attendeeRequest({ 'Content-Length': '4096' });
+    const streamed = await attendeeRequest({ 'Content-Length': '1' }, { padding: 'x'.repeat(2_048) });
+
+    for (const request of [declared, streamed]) {
+      const response = await createJob({ params, request });
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({ error: 'Request body must not exceed 2048 bytes.', field: 'idempotencyKey' });
+    }
+    expect(createAttendeePrintJob).not.toHaveBeenCalled();
   });
 
   it('requires JSON and blocks cross-origin admin browser posts at the route', async () => {
@@ -329,6 +363,26 @@ describe('print job APIs', () => {
     expect(retryResponse.status).toBe(200);
     expect(queueAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, idempotencyKey);
     expect(retryAdminPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId, idempotencyKey);
+  });
+
+  it('requires an exact confirmation phrase for admin orphan resolution', async () => {
+    resolveOrphanedPrintJob.mockResolvedValue({ ...publicJob, status: 'printed' });
+    const outcome = 'printed';
+    const confirmation = `resolve print job ${jobId} as ${outcome}`;
+
+    const invalid = await mutateAdminJob({
+      params: { sessionId },
+      request: adminRequest({ action: 'resolve-orphan', jobId, outcome, confirmation: 'confirm' }),
+    });
+    const valid = await mutateAdminJob({
+      params: { sessionId },
+      request: adminRequest({ action: 'resolve-orphan', jobId, outcome, confirmation }),
+    });
+
+    expect(invalid.status).toBe(400);
+    expect(resolveOrphanedPrintJob).toHaveBeenCalledOnce();
+    expect(valid.status).toBe(200);
+    expect(resolveOrphanedPrintJob).toHaveBeenCalledWith(fakeEnv.DB, sessionId, jobId, outcome);
   });
 
   it('returns safe admin print history for the requested session', async () => {

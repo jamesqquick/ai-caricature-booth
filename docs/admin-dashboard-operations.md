@@ -4,7 +4,7 @@ The admin dashboard is available at `/admin`. Cloudflare Access must protect exa
 
 ## Environment configuration
 
-The Worker requires `PRINT_AGENT_TOKEN` and `REPLICATE_API_TOKEN` secrets. Set them with `pnpm exec wrangler secret put <NAME>` so values do not enter shell history or source control. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned with the Access application in `wrangler.jsonc`.
+The Worker requires `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` secrets. Set them with `pnpm exec wrangler secret put <NAME>` so values do not enter shell history or source control. `PRINT_CAPABILITY_SECRET` signs 2-hour attendee print capabilities and must be an independent random value, not a copy of the print-agent token, Replicate token, or an Access secret. It belongs only in the Worker environment and must not be added to `print-agent/.env`. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned with the Access application in `wrangler.jsonc`.
 
 The print agent loads these settings from `print-agent/.env` or its service environment:
 
@@ -99,6 +99,36 @@ Use **Retry** only for a job whose status is `failed`. Retry returns that failed
 
 Use **Reprint postcard** to create an intentional new print job after the previous job reached a terminal state. This can produce another physical copy. Never use Reprint to work around `printing`, an unresolved local `submitting` marker, a stale dashboard, or an uncertain CUPS result. Resolve the original job first.
 
+### Orphaned printing job resolution
+
+This procedure is mandatory when a job remains `printing` but the owning agent's local claim state is unavailable. Do not use Retry or Reprint first.
+
+1. Stop the affected print agent and preserve its state directory, archives, and logs.
+2. Inspect CUPS queue/history, printer logs, physical output, and the matching archived PDF. If the local `submitting` marker still exists, use the submitting-marker recovery procedure instead of the admin action.
+3. Choose `printed` only when CUPS accepted the job or the physical copy exists. Choose `not-submitted` only when evidence proves CUPS did not accept it. If uncertain, preserve the job as `printing` and escalate.
+4. From the authenticated `/admin` origin, use browser developer tools to run the same-origin request below with the exact job and session IDs. Set `outcome` to the investigated result. The confirmation phrase is deliberately derived from the exact job ID and outcome.
+
+```js
+const sessionId = '<session-uuid>';
+const jobId = '<32-character-job-id>';
+const outcome = 'printed'; // or 'not-submitted'
+
+await fetch(`/api/admin/sessions/${sessionId}/print-jobs`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    action: 'resolve-orphan',
+    jobId,
+    outcome,
+    confirmation: `resolve print job ${jobId} as ${outcome}`,
+  }),
+}).then(async (response) => ({ status: response.status, body: await response.json() }));
+```
+
+5. Require a `200` response and verify the dashboard history now shows `printed` or `failed`. `not-submitted` resolves to `failed`, after which Retry can safely return that exact job to `pending`.
+
+The endpoint resolves only a currently `printing` job belonging to the specified session. It clears active claim state and never returns claim or capability tokens. A missing job returns `404`; a terminal or otherwise non-printing job returns `409` without changing it.
+
 ## Local files and retention
 
 Keep the installation and state paths stable across restarts and deployments:
@@ -161,7 +191,7 @@ For `not-submitted`, the command releases the exact persisted claim. It removes 
 4. Use the attendee link to verify the active event flow.
 5. Change the event to `archived` when it should no longer accept new attendee sessions.
 
-`draft` and `archived` events do not appear as active attendee experiences. Archiving is reversible and does not delete sessions or image objects.
+`draft` and `archived` events do not appear as active attendee experiences. They cannot create attendee print jobs, including idempotent replay of an earlier attendee print request. Existing postcard links and print-status reads remain available as read-only history. Archiving is reversible and does not delete sessions or image objects.
 
 ## Image privacy
 
@@ -199,6 +229,8 @@ Treat downloaded images as private attendee data. Store them only where the even
 - Lock error: stop the running agent and retry; do not race recovery against polling.
 - `ACK_FAILED` or `RELEASE_FAILED`: fix connectivity and rerun the same decision. The command retained safe local state.
 - `STATE_FAILED`: check disk space, ownership, and `0700`/`0600` permissions before proceeding.
+
+Recovery CLI exit codes are stable for service automation: `1` unexpected failure, `2` usage, `3` marker not found, `4` printed ACK failure, `5` release failure, and `6` local state failure. Logs and successful output include only the job ID and chosen outcome, never claim credentials.
 
 ### Access returns 403
 

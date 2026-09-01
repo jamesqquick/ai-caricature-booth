@@ -26,10 +26,11 @@ Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not e
 
 ## Deployment
 
-Set the Worker secrets through Wrangler's secure prompt. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print its value.
+Set the Worker secrets through Wrangler's secure prompt. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization and must be an independent random value, not a copy of `PRINT_AGENT_TOKEN`, `REPLICATE_API_TOKEN`, or any Access secret. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print either value.
 
 ```sh
 pnpm exec wrangler secret put PRINT_AGENT_TOKEN
+pnpm exec wrangler secret put PRINT_CAPABILITY_SECRET
 pnpm exec wrangler secret put REPLICATE_API_TOKEN
 pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
 pnpm build
@@ -57,6 +58,8 @@ pnpm print-agent:start
 ```
 
 Mock mode writes generated PDFs to `print-agent/spool/`. Every processed job also creates an archive in `print-agent/output/`. Production services should use a stable checkout/install path and an absolute `PRINT_AGENT_STATE_DIR` owned only by the service account.
+
+`PRINT_CAPABILITY_SECRET` belongs only in the Worker environment. Do not add it to `print-agent/.env`; the print agent authenticates with `PRINT_AGENT_TOKEN`, which is a separate credential.
 
 If startup reports an unresolved `submitting` marker, stop the agent and follow [Submitting marker recovery](docs/admin-dashboard-operations.md#submitting-marker-recovery). The recovery command never polls or prints:
 

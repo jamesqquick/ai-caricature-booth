@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PrintJobStatus } from '../db/print-jobs';
 import { fetchWithDeadline, RequestDeadlineError } from '../lib/fetch-with-deadline';
 import { setPrintActive } from '../lib/print-activity';
+import { readPrintCapability } from '../lib/print-capability-storage';
 
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_INTERVAL_MS = 8_000;
@@ -49,7 +50,7 @@ const buttonCopy: Record<PrintState, string> = {
   submitting: 'Requesting print...',
   pending: 'Print queued',
   printing: 'Printing postcard',
-  printed: 'Postcard printed',
+  printed: 'Sent to printer',
   failed: 'Try print again',
   error: 'Try print again',
 };
@@ -59,7 +60,7 @@ const statusCopy: Record<PrintState, string> = {
   submitting: 'Sending your postcard to the printer.',
   pending: 'Your postcard is queued for printing.',
   printing: 'Your postcard is printing. Please wait for it to finish.',
-  printed: 'Your postcard has been printed.',
+  printed: 'The printer accepted your postcard.',
   failed: 'The print failed. You can send a fresh print request.',
   error: '',
 };
@@ -70,6 +71,7 @@ type Props = {
 };
 
 export function AttendeePrintControl({ eventId, sessionId }: Props) {
+  const [printToken, setPrintToken] = useState<string | null>(null);
   const [state, setState] = useState<PrintState>('idle');
   const [jobId, setJobId] = useState('');
   const [error, setError] = useState('');
@@ -81,6 +83,11 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
   const storageKey = `print-request:${eventId}:${sessionId}`;
 
   useEffect(() => {
+    setPrintToken(readPrintCapability(sessionId));
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!printToken) return;
     const storedRequestKey = sessionStorage.getItem(storageKey);
     if (storedRequestKey) {
       requestKey.current = storedRequestKey;
@@ -90,7 +97,7 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
       setPrintActive(true);
     }
     return () => requestController.current?.abort();
-  }, [storageKey]);
+  }, [printToken, storageKey]);
 
   useEffect(() => {
     if (!ACTIVE_STATUSES.includes(state as PrintJobStatus) || !jobId) {
@@ -136,7 +143,7 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
   }, [endpoint, jobId, state, storageKey]);
 
   const requestPrint = async () => {
-    if (requestInFlight.current || state === 'pending' || state === 'printing' || state === 'printed') return;
+    if (!printToken || requestInFlight.current || state === 'pending' || state === 'printing' || state === 'printed') return;
     requestInFlight.current = true;
     requestController.current?.abort();
     const controller = new AbortController();
@@ -154,7 +161,7 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
       const response = await fetchWithDeadline(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ idempotencyKey: requestKey.current }),
+        body: JSON.stringify({ idempotencyKey: requestKey.current, printToken }),
         signal: controller.signal,
       });
       const nextJob = await responseJob(response, true);
@@ -178,6 +185,8 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
 
   const disabled = state === 'submitting' || state === 'pending' || state === 'printing' || state === 'printed';
   const buttonLabel = state === 'error' && recoveryPending ? 'Check print request' : buttonCopy[state];
+
+  if (!printToken) return null;
 
   return (
     <div className="contents">

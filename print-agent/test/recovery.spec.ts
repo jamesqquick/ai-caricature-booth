@@ -5,12 +5,21 @@ import { describe, expect, it, vi } from "vitest";
 import { AgentLock } from "../src/lock.js";
 import { FileAckOutbox } from "../src/outbox.js";
 import { QueueRequestError } from "../src/queue.js";
-import { RecoveryCommandError, runRecoveryCommand } from "../src/recovery.js";
+import { formatRecoveryFailure, recoveryExitCode, RecoveryCommandError, runRecoveryCommand } from "../src/recovery.js";
 import { job } from "./fixtures.js";
 
 const claim = { id: job.id, claimToken: job.claimToken };
 
 describe("submitting marker recovery", () => {
+  it("maps typed failures to stable safe exit codes", () => {
+    expect(recoveryExitCode(new RecoveryCommandError("USAGE", "invalid input"))).toBe(2);
+    expect(recoveryExitCode(new RecoveryCommandError("MARKER_NOT_FOUND", "missing marker"))).toBe(3);
+    expect(recoveryExitCode(new RecoveryCommandError("ACK_FAILED", "network"))).toBe(4);
+    expect(recoveryExitCode(new RecoveryCommandError("RELEASE_FAILED", "network"))).toBe(5);
+    expect(recoveryExitCode(new RecoveryCommandError("STATE_FAILED", "disk"))).toBe(6);
+    expect(recoveryExitCode(new Error("unknown"))).toBe(1);
+  });
+
   it("requires explicit confirmation", async () => {
     const { env } = await setup();
 
@@ -48,9 +57,11 @@ describe("submitting marker recovery", () => {
       await expect(context.outbox.list()).resolves.toEqual([{ job: claim, status: "printed" }]);
     });
 
-    await runRecoveryCommand(context.env, args("printed"), { ackJob });
+    const result = await runRecoveryCommand(context.env, args("printed"), { ackJob });
 
     expect(ackJob).toHaveBeenCalledOnce();
+    expect(result).toEqual({ jobId: job.id, outcome: "printed" });
+    expect(JSON.stringify(result)).not.toContain(job.claimToken);
     await expect(context.outbox.list()).resolves.toEqual([]);
   });
 
@@ -121,6 +132,7 @@ describe("submitting marker recovery", () => {
     expect((error as Error).message).toContain("[redacted]");
     expect((error as Error).message).not.toContain(job.claimToken);
     expect((error as Error).message).not.toContain(context.env.PRINT_AGENT_TOKEN);
+    expect(formatRecoveryFailure(error, context.env.PRINT_AGENT_TOKEN)).toMatch(/^ACK_FAILED: /);
   });
 });
 
