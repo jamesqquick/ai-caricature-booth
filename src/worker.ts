@@ -1,15 +1,17 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
-import { transitionSession } from './db/sessions';
+import { loadSession, transitionSession } from './db/sessions';
 import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
 import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
+import { hasExactSelfieOwnership } from './lib/selfie-ownership';
 
 export type CaricaturePayload = {
   sessionId: string;
+  workflowInstanceId: string;
   eventId: number;
   sceneId: string;
   sceneName: string;
@@ -18,6 +20,7 @@ export type CaricaturePayload = {
   eventPromptPreamble?: string | null;
   eventConstraints?: string | null;
   selfieKey: string;
+  selfieSha256: string;
   watermarkKey: string | null;
   watermarkWidth: number | null;
 };
@@ -27,6 +30,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     const workflowStartedAt = Date.now();
     const {
       sessionId,
+      workflowInstanceId,
       eventId,
       sceneId,
       sceneName,
@@ -35,33 +39,43 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       eventPromptPreamble,
       eventConstraints,
       selfieKey,
+      selfieSha256,
       watermarkKey,
       watermarkWidth,
     } = event.payload;
+    const stopped = { sessionId, postcardKey: null };
+    const ownsSession = () => ownsWorkflowSession(this.env.DB, sessionId, event.instanceId);
+    if (workflowInstanceId !== event.instanceId || !(await ownsSession())) return stopped;
     const markErrored = async (errorCode: GenerationFailureCode) => {
-      await transitionSession(this.env.DB, sessionId, 'errored', { error_code: errorCode });
+      await transitionSession(this.env.DB, sessionId, 'errored', { error_code: errorCode }, event.instanceId);
     };
     await step.do('mark-moderating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'moderating', { workflow_instance_id: event.instanceId });
+      await transitionSession(this.env.DB, sessionId, 'moderating', {}, event.instanceId);
       return true;
     });
+    if (!(await ownsSession())) return stopped;
 
-    let moderationPassed: boolean;
+    let moderationOutcome: 'safe' | 'unsafe' | 'stale';
     const moderationStartedAt = Date.now();
     try {
-      moderationPassed = await step.do<boolean>('moderate-selfie', { retries: { limit: 2, delay: '2 seconds', backoff: 'exponential' }, timeout: '1 minute' }, async () => {
+      moderationOutcome = await step.do<'safe' | 'unsafe' | 'stale'>('moderate-selfie', { retries: { limit: 2, delay: '2 seconds', backoff: 'exponential' }, timeout: '1 minute' }, async () => {
         const startedAt = Date.now();
+        if (!(await ownsSession())) return 'stale';
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Uploaded selfie was not found.');
+        if (!hasExactSelfieOwnership(selfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return 'stale';
         const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
         if (!verdict.safe) {
+          if (!(await ownsSession())) return 'stale';
+          const currentSelfie = await this.env.SELFIES.head(selfieKey);
+          if (!hasExactSelfieOwnership(currentSelfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return 'stale';
           await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
           await markErrored('photo_rejected');
           console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
-          return false;
+          return 'unsafe';
         }
         console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'safe' }));
-        return true;
+        return 'safe';
       });
     } catch (error) {
       console.error(JSON.stringify({ message: 'photo moderation failed', sessionId, elapsedMs: Date.now() - moderationStartedAt, outcome: 'service-error', ...errorDiagnostic(error) }));
@@ -69,18 +83,21 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       throw error;
     }
 
-    if (!moderationPassed) return { sessionId, postcardKey: null };
+    if (moderationOutcome !== 'safe' || !(await ownsSession())) return stopped;
 
     await step.do('mark-generating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'generating', { workflow_instance_id: event.instanceId });
+      await transitionSession(this.env.DB, sessionId, 'generating', {}, event.instanceId);
       return true;
     });
+    if (!(await ownsSession())) return stopped;
 
-    let caricatureKey: string;
+    let caricatureKey: string | null;
     try {
-      caricatureKey = await step.do<string>('generate-caricature', { retries: { limit: 0, delay: '1 second' }, timeout: '3 minutes' }, async () => {
+      caricatureKey = await step.do<string | null>('generate-caricature', { retries: { limit: 0, delay: '1 second' }, timeout: '3 minutes' }, async () => {
+        if (!(await ownsSession())) return null;
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');
+        if (!hasExactSelfieOwnership(selfie, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return null;
         const prompt = composeGenerationPrompt({
           preamble: eventPromptPreamble,
           scenePrompt,
@@ -88,12 +105,13 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
           constraints: eventConstraints,
         });
         const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), prompt);
+        if (!(await ownsSession())) return null;
         const key = `sessions/${sessionId}/caricature.jpg`;
         await this.env.SELFIES.put(key, bytes, {
           httpMetadata: { contentType: 'image/jpeg' },
-          customMetadata: { sessionId, eventId: String(eventId), assetKind: 'caricature', sceneId },
+          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId, assetKind: 'caricature', sceneId },
         });
-        await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key });
+        await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key }, event.instanceId);
         return key;
       });
     } catch (error) {
@@ -101,21 +119,24 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       await markErrored('generation_failed');
       throw error;
     }
+    if (!caricatureKey || !(await ownsSession())) return stopped;
 
-    let postcardKey: string;
+    let postcardKey: string | null;
     try {
-      postcardKey = await step.do('compose-postcard', { retries: { limit: 2, delay: '2 seconds', backoff: 'exponential' } }, async (ctx) => {
+      postcardKey = await step.do<string | null>('compose-postcard', { retries: { limit: 2, delay: '2 seconds', backoff: 'exponential' } }, async (ctx) => {
         const startedAt = Date.now();
+        if (!(await ownsSession())) return null;
         const caricature = await this.env.SELFIES.get(caricatureKey);
         if (!caricature) throw new Error('Generated caricature was not found.');
         console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
         const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
         if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
+        if (!(await ownsSession())) return null;
         console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));
         const key = `sessions/${sessionId}/postcard.jpg`;
         await this.env.SELFIES.put(key, postcard.body, {
           httpMetadata: { contentType: 'image/jpeg' },
-          customMetadata: { sessionId, eventId: String(eventId), assetKind: 'postcard', sceneId },
+          customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId, assetKind: 'postcard', sceneId },
         });
         console.info(JSON.stringify({ message: 'postcard stored', sessionId, attempt: ctx.attempt, elapsedMs: Date.now() - startedAt }));
         return key;
@@ -125,16 +146,22 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       await markErrored('composition_failed');
       throw error;
     }
+    if (!postcardKey || !(await ownsSession())) return stopped;
 
     await step.do('mark-completed', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
       await transitionSession(this.env.DB, sessionId, 'completed', {
         postcard_key: postcardKey,
         pipeline_ms: Math.max(0, Date.now() - workflowStartedAt),
-      });
+      }, event.instanceId);
       return true;
     });
     return { sessionId, postcardKey };
   }
+}
+
+async function ownsWorkflowSession(database: D1Database, sessionId: string, workflowInstanceId: string) {
+  const session = await loadSession(database, sessionId);
+  return session?.workflow_instance_id === workflowInstanceId;
 }
 
 function errorDiagnostic(error: unknown) {

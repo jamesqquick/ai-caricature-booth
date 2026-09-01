@@ -14,6 +14,7 @@ const fakeEnv = vi.hoisted(() => ({
 const loadActiveEventById = vi.hoisted(() => vi.fn());
 const loadActiveEventBySlug = vi.hoisted(() => vi.fn());
 const loadEventScene = vi.hoisted(() => vi.fn());
+const claimWorkflowInstanceId = vi.hoisted(() => vi.fn());
 const createPendingSession = vi.hoisted(() => vi.fn());
 const loadSession = vi.hoisted(() => vi.fn());
 const transitionSession = vi.hoisted(() => vi.fn());
@@ -33,7 +34,7 @@ vi.mock('astro:actions', () => ({
 vi.mock('cloudflare:workers', () => ({ env: fakeEnv }));
 vi.mock('../src/db/events', () => ({ loadActiveEventById, loadActiveEventBySlug }));
 vi.mock('../src/db/scenes', () => ({ loadEventScene }));
-vi.mock('../src/db/sessions', () => ({ createPendingSession, loadSession, transitionSession }));
+vi.mock('../src/db/sessions', () => ({ claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession }));
 
 import { server } from '../src/actions';
 
@@ -122,12 +123,18 @@ describe('public action error boundaries', () => {
     loadEventScene.mockResolvedValue(scene);
     createPendingSession.mockResolvedValue({ session, created: false });
     loadSession.mockResolvedValue(session);
-    transitionSession.mockResolvedValue(session);
+    claimWorkflowInstanceId.mockResolvedValue({ ...session, workflow_instance_id: sessionId });
+    transitionSession.mockImplementation(async (_database, _sessionId, status, _fields, expectedWorkflowInstanceId) => ({
+      ...session,
+      status,
+      workflow_instance_id: expectedWorkflowInstanceId,
+    }));
     fakeEnv.SELFIES.head.mockResolvedValue({
       httpMetadata: { contentType: 'image/jpeg' },
       customMetadata: {
         sessionId,
         eventId: String(event.id),
+        workflowInstanceId: sessionId,
         assetKind: 'selfie',
         selfieSha256,
       },
@@ -176,10 +183,33 @@ describe('public action error boundaries', () => {
       customMetadata: {
         sessionId,
         eventId: String(event.id),
+        workflowInstanceId: sessionId,
         assetKind: 'selfie',
         selfieSha256,
       },
     });
+  });
+
+  it('persists a legacy workflow identity before starting its workflow', async () => {
+    await startGeneration(startInput());
+
+    expect(claimWorkflowInstanceId).toHaveBeenCalledWith(fakeEnv.DB, sessionId, sessionId);
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({
+      id: sessionId,
+      params: expect.objectContaining({ workflowInstanceId: sessionId, selfieSha256 }),
+    }));
+  });
+
+  it('does not adopt a workflow identity claimed by another request', async () => {
+    claimWorkflowInstanceId.mockResolvedValue({ ...session, workflow_instance_id: 'replacement-instance' });
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(fakeEnv.SELFIES.put).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
   });
 
   it('uses a fresh workflow identity when a session UUID is recreated', async () => {
@@ -192,6 +222,27 @@ describe('public action error boundaries', () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(workflowInstanceId);
     loadSession.mockResolvedValueOnce(null).mockResolvedValue(recreatedSession);
     createPendingSession.mockResolvedValue({ session: recreatedSession, created: true });
+    fakeEnv.SELFIES.head
+      .mockResolvedValueOnce({
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(event.id),
+          workflowInstanceId: sessionId,
+          assetKind: 'selfie',
+          selfieSha256,
+        },
+      })
+      .mockResolvedValue({
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(event.id),
+          workflowInstanceId,
+          assetKind: 'selfie',
+          selfieSha256,
+        },
+      });
     fakeEnv.CARICATURE_WORKFLOW.create.mockImplementation(async ({ id }: { id: string }) => {
       if (id === sessionId) throw new Error('Retained workflow instance');
     });
@@ -204,9 +255,65 @@ describe('public action error boundaries', () => {
       workflow_instance_id: workflowInstanceId,
     }));
     expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: workflowInstanceId }));
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({
+      params: expect.objectContaining({ workflowInstanceId, selfieSha256 }),
+    }));
     expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
     expect(oldInstance.restart).not.toHaveBeenCalled();
     expect(oldInstance.resume).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a workflow after a stale selfie replacement upload fails', async () => {
+    const uploadError = new Error('R2 replacement failed');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const currentSession = { ...session, workflow_instance_id: workflowInstanceId };
+    loadSession.mockResolvedValue(currentSession);
+    fakeEnv.SELFIES.head.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        sessionId,
+        eventId: String(event.id),
+        workflowInstanceId: 'retained-workflow-instance',
+        assetKind: 'selfie',
+        selfieSha256,
+      },
+    });
+    fakeEnv.SELFIES.put.mockRejectedValue(uploadError);
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+    await expect(getGeneration({ sessionId })).resolves.toMatchObject({ status: 'uploading' });
+
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(uploadError.message);
+  });
+
+  it('does not overwrite a selfie after the session changes workflow ownership', async () => {
+    const currentSession = { ...session, workflow_instance_id: workflowInstanceId };
+    loadSession.mockResolvedValue(currentSession);
+    fakeEnv.SELFIES.head.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        sessionId,
+        eventId: String(event.id),
+        workflowInstanceId: 'retained-workflow-instance',
+        assetKind: 'selfie',
+        selfieSha256,
+      },
+    });
+    transitionSession.mockResolvedValue({ ...currentSession, workflow_instance_id: 'replacement-instance' });
+
+    await expect(caughtError(() => startGeneration(startInput()))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'uploading', {}, workflowInstanceId);
+    expect(fakeEnv.SELFIES.put).not.toHaveBeenCalled();
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
   });
 
   it('contains workflow diagnostics from startGeneration', async () => {

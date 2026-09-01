@@ -3,9 +3,10 @@ import { z } from 'astro/zod';
 import { env } from 'cloudflare:workers';
 import { loadActiveEventById, loadActiveEventBySlug, type EventRecord } from '../db/events';
 import { loadEventScene } from '../db/scenes';
-import { createPendingSession, loadSession, transitionSession } from '../db/sessions';
+import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord } from '../db/sessions';
 import { toGenerationFailureCode } from '../lib/generation-errors';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
+import { hasExactSelfieOwnership } from '../lib/selfie-ownership';
 import type { Scene } from '../data/scenes';
 
 const startInput = z.object({
@@ -57,10 +58,15 @@ export const server = {
           if (existing.selfie_sha256 && existing.selfie_sha256 !== selfieSha256) {
             throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session already uses another image. Start over.' });
           }
-          if (existing.status === 'pending' || existing.status === 'uploading') {
-            await ensureSelfieUploaded(existing.id, existing.event_id, existing.selfie_key, selfieSha256, bytes);
+          const ownedSession = ['completed', 'errored'].includes(existing.status)
+            ? existing
+            : await ensureWorkflowIdentity(existing);
+          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+          if (ownedSession.status === 'pending' || ownedSession.status === 'uploading') {
+            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+            await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
-          const current = await loadSession(env.DB, existing.id);
+          const current = await loadSession(env.DB, ownedSession.id);
           if (current) await ensureWorkflow(current, scene, event);
           return { sessionId: existing.id, status: current?.status ?? existing.status };
         }
@@ -86,15 +92,20 @@ export const server = {
           if (claim.session.event_id !== event.id || claim.session.scene_id !== scene.id || claim.session.selfie_sha256 !== selfieSha256) {
             throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session does not match the selected booth. Start over.' });
           }
-          if (claim.session.status === 'pending' || claim.session.status === 'uploading') {
-            await ensureSelfieUploaded(claim.session.id, claim.session.event_id, claim.session.selfie_key, selfieSha256, bytes);
+          const ownedSession = ['completed', 'errored'].includes(claim.session.status)
+            ? claim.session
+            : await ensureWorkflowIdentity(claim.session);
+          if (!ownedSession) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+          if (ownedSession.status === 'pending' || ownedSession.status === 'uploading') {
+            if (!ownedSession.workflow_instance_id) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+            await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
-          const current = await loadSession(env.DB, claim.session.id);
+          const current = await loadSession(env.DB, ownedSession.id);
           if (current) await ensureWorkflow(current, scene, event);
           return { sessionId: claim.session.id, status: current?.status ?? claim.session.status };
         }
 
-        await ensureSelfieUploaded(idempotencyKey, event.id, selfieKey, selfieSha256, bytes);
+        await ensureSelfieUploaded(idempotencyKey, event.id, workflowInstanceId, selfieKey, selfieSha256, bytes);
         const current = await loadSession(env.DB, idempotencyKey);
         if (current) await ensureWorkflow(current, scene, event);
         return { sessionId: idempotencyKey, status: current?.status ?? claim.session.status };
@@ -138,21 +149,31 @@ async function ensureWorkflow(
   event: EventRecord,
 ) {
   if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return;
-  if (!(await env.SELFIES.head(session.selfie_key))) return;
-  const workflowInstanceId = session.workflow_instance_id ?? session.id;
+  const ownedSession = await ensureWorkflowIdentity(session);
+  const workflowInstanceId = ownedSession?.workflow_instance_id;
+  if (!ownedSession || !workflowInstanceId) return;
+  const selfie = await env.SELFIES.head(ownedSession.selfie_key);
+  if (!hasExactSelfieOwnership(selfie, {
+    sessionId: ownedSession.id,
+    eventId: ownedSession.event_id,
+    workflowInstanceId,
+    selfieSha256: ownedSession.selfie_sha256,
+  })) return;
   try {
     await env.CARICATURE_WORKFLOW.create({
       id: workflowInstanceId,
       params: {
-        sessionId: session.id,
-        eventId: session.event_id,
+        sessionId: ownedSession.id,
+        workflowInstanceId,
+        eventId: ownedSession.event_id,
         sceneId: scene.id,
         sceneName: scene.name,
         sceneDescription: scene.description,
         scenePrompt: scene.prompt,
         eventPromptPreamble: event.scene_style_preamble,
         eventConstraints: event.scene_constraints,
-        selfieKey: session.selfie_key,
+        selfieKey: ownedSession.selfie_key,
+        selfieSha256: ownedSession.selfie_sha256,
         watermarkKey: event.watermark_image_key,
         watermarkWidth: event.watermark_w,
       },
@@ -173,27 +194,31 @@ async function ensureWorkflow(
       }
       throw createError;
     } catch (recoveryError) {
-      console.error(JSON.stringify({ message: 'workflow start failed', sessionId: session.id, ...errorDiagnostic(recoveryError) }));
+      console.error(JSON.stringify({ message: 'workflow start failed', sessionId: ownedSession.id, ...errorDiagnostic(recoveryError) }));
       throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
     }
   }
 }
 
-async function ensureSelfieUploaded(sessionId: string, eventId: number, selfieKey: string, selfieSha256: string, bytes: Uint8Array) {
+async function ensureWorkflowIdentity(session: SessionRecord): Promise<(SessionRecord & { workflow_instance_id: string }) | null> {
+  if (session.workflow_instance_id) return { ...session, workflow_instance_id: session.workflow_instance_id };
+  const claimed = await claimWorkflowInstanceId(env.DB, session.id, session.id);
+  return claimed?.workflow_instance_id === session.id ? { ...claimed, workflow_instance_id: claimed.workflow_instance_id } : null;
+}
+
+async function ensureSelfieUploaded(sessionId: string, eventId: number, workflowInstanceId: string, selfieKey: string, selfieSha256: string, bytes: Uint8Array) {
   const existing = await env.SELFIES.head(selfieKey);
-  if (
-    existing?.httpMetadata?.contentType === 'image/jpeg'
-    && existing.customMetadata?.sessionId === sessionId
-    && existing.customMetadata?.eventId === String(eventId)
-    && existing.customMetadata?.assetKind === 'selfie'
-    && existing.customMetadata?.selfieSha256 === selfieSha256
-  ) return;
-  await transitionSession(env.DB, sessionId, 'uploading');
+  if (hasExactSelfieOwnership(existing, { sessionId, eventId, workflowInstanceId, selfieSha256 })) return;
+  const uploadingSession = await transitionSession(env.DB, sessionId, 'uploading', {}, workflowInstanceId);
+  if (uploadingSession?.workflow_instance_id !== workflowInstanceId || uploadingSession.status !== 'uploading') {
+    throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
+  }
   await env.SELFIES.put(selfieKey, bytes, {
     httpMetadata: { contentType: 'image/jpeg' },
     customMetadata: {
       sessionId,
       eventId: String(eventId),
+      workflowInstanceId,
       assetKind: 'selfie',
       selfieSha256,
     },

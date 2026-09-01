@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { loadSession, transitionSession } from '../src/db/sessions';
+import { claimWorkflowInstanceId, loadSession, transitionSession } from '../src/db/sessions';
 import {
   GENERATION_FAILURE_CODES,
   generationFailureContent,
@@ -135,6 +135,10 @@ describe('generation failure contract', () => {
       VALUES ('legacy-session', 1, 'errored', 'scene-1', 'legacy/selfie.jpg', 'legacy attendee message');
       INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, workflow_instance_id)
       VALUES ('helper-session', 1, 'generating', 'scene-1', 'helper/selfie.jpg', 'workflow-original');
+      INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, workflow_instance_id)
+      VALUES ('guarded-session', 1, 'generating', 'scene-1', 'guarded/selfie.jpg', 'workflow-current');
+      INSERT INTO sessions (id, event_id, status, scene_id, selfie_key)
+      VALUES ('legacy-session-owner', 1, 'uploading', 'scene-1', 'legacy-owner/selfie.jpg');
     `);
 
     sqlite.exec(await readFile(migrationUrl, 'utf8'));
@@ -160,6 +164,24 @@ describe('generation failure contract', () => {
       status: 'errored',
       workflow_instance_id: 'workflow-original',
       error_code: 'composition_failed',
+    });
+
+    await transitionSession(database, 'guarded-session', 'compositing', {}, 'workflow-stale');
+    await expect(loadSession(database, 'guarded-session')).resolves.toMatchObject({
+      status: 'generating',
+      workflow_instance_id: 'workflow-current',
+    });
+    await transitionSession(database, 'guarded-session', 'compositing', {}, 'workflow-current');
+    await expect(loadSession(database, 'guarded-session')).resolves.toMatchObject({
+      status: 'compositing',
+      workflow_instance_id: 'workflow-current',
+    });
+
+    await expect(claimWorkflowInstanceId(database, 'legacy-session-owner', 'legacy-session-owner')).resolves.toMatchObject({
+      workflow_instance_id: 'legacy-session-owner',
+    });
+    await expect(claimWorkflowInstanceId(database, 'legacy-session-owner', 'workflow-replacement')).resolves.toMatchObject({
+      workflow_instance_id: 'legacy-session-owner',
     });
   });
 });

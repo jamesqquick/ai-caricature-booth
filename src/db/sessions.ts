@@ -62,11 +62,24 @@ export async function createPendingSession(
   return { session: await loadSession(database, input.id), created: result.meta.changes === 1 };
 }
 
+export async function claimWorkflowInstanceId(database: D1Database, id: string, workflowInstanceId: string) {
+  const db = createDb(database);
+  await db.run(sql`
+    UPDATE sessions
+    SET workflow_instance_id = ${workflowInstanceId},
+        updated_at = unixepoch()
+    WHERE id = ${id}
+      AND workflow_instance_id IS NULL
+  `);
+  return loadSession(database, id);
+}
+
 export async function transitionSession(
   database: D1Database,
   id: string,
   nextStatus: SessionStatus,
   fields: Partial<Pick<SessionRecord, 'scene_name' | 'caricature_key' | 'postcard_key' | 'workflow_instance_id' | 'error_code' | 'error_msg' | 'pipeline_ms'>> = {},
+  expectedWorkflowInstanceId?: string,
 ) {
   const current = await loadSession(database, id);
   if (!current || isTerminalSessionStatus(current.status)) return current;
@@ -96,6 +109,7 @@ export async function transitionSession(
         updated_at = unixepoch()
     WHERE id = ${id}
       AND status IN (${sql.join(predecessors[nextStatus].map((status) => sql`${status}`), sql`, `)})
+      ${expectedWorkflowInstanceId ? sql`AND workflow_instance_id = ${expectedWorkflowInstanceId}` : sql``}
   `);
   return loadSession(database, id);
 }
