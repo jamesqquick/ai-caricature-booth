@@ -109,7 +109,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
 
     let caricatureKey: string | null;
     try {
-      caricatureKey = await step.do<string | null>('generate-caricature', { retries: { limit: 0, delay: '1 second' }, timeout: '3 minutes' }, async () => {
+      caricatureKey = await step.do<string | null>('generate-caricature', { retries: { limit: 1, delay: '1 second' }, timeout: '3 minutes' }, async () => {
         if (!(await ownsSession())) return null;
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');

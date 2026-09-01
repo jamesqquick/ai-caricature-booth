@@ -79,8 +79,8 @@ export const server = {
             await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
           const current = await loadClaimedSession(generationClaim(ownedSession));
-          await ensureWorkflow(current, scene, event);
-          return { sessionId: existing.id, status: current.status };
+          const ensured = await ensureWorkflow(current, scene, event);
+          return { sessionId: existing.id, status: ensured.status };
         }
 
         const event = await loadActiveEventBySlug(env.DB, eventSlug);
@@ -113,8 +113,8 @@ export const server = {
             await ensureSelfieUploaded(ownedSession.id, ownedSession.event_id, ownedSession.workflow_instance_id, ownedSession.selfie_key, selfieSha256, bytes);
           }
           const current = await loadClaimedSession(generationClaim(ownedSession));
-          await ensureWorkflow(current, scene, event);
-          return { sessionId: claim.session.id, status: current.status };
+          const ensured = await ensureWorkflow(current, scene, event);
+          return { sessionId: claim.session.id, status: ensured.status };
         }
 
         await ensureSelfieUploaded(idempotencyKey, event.id, workflowInstanceId, selfieKey, selfieSha256, bytes);
@@ -126,8 +126,8 @@ export const server = {
           selfie_sha256: selfieSha256,
           workflow_instance_id: workflowInstanceId,
         });
-        await ensureWorkflow(current, scene, event);
-        return { sessionId: idempotencyKey, status: current.status };
+        const ensured = await ensureWorkflow(current, scene, event);
+        return { sessionId: idempotencyKey, status: ensured.status };
       } catch (error) {
         throwPublicActionError('startGeneration', sessionId, error, "Couldn't start your postcard. Please try again.");
       }
@@ -142,12 +142,12 @@ export const server = {
         const parsed = getInput.safeParse(input);
         if (!parsed.success) throw new ActionError({ code: 'BAD_REQUEST', message: 'Invalid postcard session. Start over.' });
         sessionId = parsed.data.sessionId;
-        const session = await loadSession(env.DB, sessionId);
+        let session = await loadSession(env.DB, sessionId);
         if (!session) throw new ActionError({ code: 'NOT_FOUND', message: 'This postcard session was not found. Start over.' });
         if (!['completed', 'errored'].includes(session.status)) {
           const event = await loadActiveEventById(env.DB, session.event_id);
           const scene = event ? await loadEventScene(env.DB, event.id, session.scene_id) : null;
-          if (event && scene) await ensureWorkflow(session, scene, event);
+          if (event && scene) session = await ensureWorkflow(session, scene, event);
         }
         const result = {
           status: session.status,
@@ -167,13 +167,20 @@ async function ensureWorkflow(
   scene: Scene,
   event: EventRecord,
 ) {
-  if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return;
+  if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return session;
   const ownedSession = await ensureWorkflowIdentity(session);
   const workflowInstanceId = ownedSession?.workflow_instance_id;
   if (!ownedSession || !workflowInstanceId) {
     throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: START_GENERATION_ERROR });
   }
   const claim = generationClaim(ownedSession);
+  const failSelfieOwnership = async () => {
+    await transitionSession(env.DB, ownedSession.id, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, workflowInstanceId);
+    return loadClaimedSession(claim);
+  };
   const ownership = {
     sessionId: ownedSession.id,
     eventId: ownedSession.event_id,
@@ -182,15 +189,15 @@ async function ensureWorkflow(
   };
   const selfie = await env.SELFIES.head(ownedSession.selfie_key);
   if (!hasExactSelfieOwnership(selfie, ownership)) {
-    if (ownedSession.selfie_key !== legacySessionAssetKey(ownedSession.id, 'selfie')) return;
+    if (ownedSession.selfie_key !== legacySessionAssetKey(ownedSession.id, 'selfie')) return failSelfieOwnership();
     const legacyObject = await env.SELFIES.get(ownedSession.selfie_key);
     const legacySelfie = legacyObject
       ? await readOwnedSelfieBytes(legacyObject, ownedSession.selfie_key, ownership)
       : null;
-    if (!legacySelfie) return;
+    if (!legacySelfie) return failSelfieOwnership();
   }
   let current = await loadClaimedSession(claim);
-  if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return;
+  if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return current;
   try {
     await env.CARICATURE_WORKFLOW.create({
       id: workflowInstanceId,
@@ -210,23 +217,23 @@ async function ensureWorkflow(
         watermarkWidth: event.watermark_w,
       },
     });
-    return;
+    return loadClaimedSession(claim);
   } catch (createError) {
     try {
       current = await loadClaimedSession(claim);
-      if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return;
+      if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return current;
       const instance = await env.CARICATURE_WORKFLOW.get(workflowInstanceId);
       const { status } = await instance.status();
-      if (['queued', 'running', 'waiting', 'waitingForPause', 'complete'].includes(status)) return;
+      if (['queued', 'running', 'waiting', 'waitingForPause', 'complete'].includes(status)) return current;
       if (status === 'errored' || status === 'terminated') {
         await loadClaimedSession(claim);
         await instance.restart();
-        return;
+        return loadClaimedSession(claim);
       }
       if (status === 'paused') {
         await loadClaimedSession(claim);
         await instance.resume();
-        return;
+        return loadClaimedSession(claim);
       }
       throw createError;
     } catch (recoveryError) {

@@ -101,7 +101,7 @@ function waitForAction<T>(action: Promise<T>, signal: AbortSignal): Promise<T | 
 function isPermanentActionError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
   const { type, code } = error as { type?: unknown; code?: unknown };
-  return type === 'AstroActionError' && (code === 'BAD_REQUEST' || code === 'NOT_FOUND');
+  return type === 'AstroActionError' && (code === 'BAD_REQUEST' || code === 'NOT_FOUND' || code === 'CONTENT_TOO_LARGE');
 }
 
 function waitForDelay(delayMs: number, signal: AbortSignal) {

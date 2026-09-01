@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'astro:actions': fileURLToPath(new URL('./test/astro-actions.mock.ts', import.meta.url)),
     },
   },
 });

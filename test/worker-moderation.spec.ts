@@ -66,13 +66,17 @@ const sessionRecord = {
 
 function createStep() {
   const calls: string[] = [];
+  const configs = new Map<string, { retries?: { limit?: number } }>();
   const step = {
     calls,
+    configs,
     async do<T>(name: string, configOrCallback: unknown, callback?: (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T>) {
       const config = typeof configOrCallback === 'function' ? {} : configOrCallback as { retries?: { limit?: number } };
       const run = typeof configOrCallback === 'function' ? configOrCallback as (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T> : callback!;
-      const attempts = Math.max(1, config.retries?.limit ?? 1);
+      const attempts = config.retries?.limit ?? 1;
+      if (attempts < 1) throw new Error(`Invalid total attempt limit for ${name}: ${attempts}`);
       calls.push(name);
+      configs.set(name, config);
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
           return await run({ attempt, config: { retries: config.retries?.limit === undefined ? undefined : { limit: config.retries.limit } } });
@@ -207,10 +211,12 @@ describe('CaricatureWorkflow moderation gate', () => {
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     const { env, caricature } = createEnvironment();
     const workflow = createWorkflow(env);
+    const step = createStep();
 
-    await workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never);
+    await workflow.run({ instanceId: workflowInstanceId, payload } as never, step as never);
 
     expect(generateCaricature).toHaveBeenCalledTimes(1);
+    expect(step.configs.get('generate-caricature')?.retries?.limit).toBe(1);
     expect(generateCaricature).toHaveBeenCalledWith(
       'test-token',
       expect.any(Uint8Array),

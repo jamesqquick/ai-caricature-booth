@@ -1,82 +1,77 @@
 /** @vitest-environment jsdom */
 
-import { useEffect, useRef, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CameraStep } from '../src/components/steps/CameraStep';
-import { GeneratingStep, type GenerationActions } from '../src/components/steps/GeneratingStep';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const actionMocks: GenerationActions = {
-  startGeneration: vi.fn(),
-  getGeneration: vi.fn(),
-};
+vi.mock('astro:actions', () => ({ actions: {} }));
 
-function RecoveryHarness() {
-  const [showCamera, setShowCamera] = useState(false);
-  const stageRef = useRef<HTMLElement>(null);
+vi.mock('../src/components/steps/CameraStep', () => ({
+  CameraStep: ({ onUsePhoto }: { onUsePhoto: (photoDataUrl: string) => void }) => (
+    <div>
+      <h1 data-step-focus tabIndex={-1}>Take your photo.</h1>
+      <button type="button" onClick={() => onUsePhoto('data:image/jpeg;base64,cGhvdG8=')}>Use mock photo</button>
+    </div>
+  ),
+}));
 
-  useEffect(() => {
-    if (showCamera) stageRef.current?.querySelector<HTMLElement>('[data-step-focus]')?.focus();
-  }, [showCamera]);
+vi.mock('../src/components/steps/GeneratingStep', () => ({
+  GeneratingStep: ({ scene, onChooseAnotherPhoto }: { scene: { name: string }; onChooseAnotherPhoto: () => void }) => (
+    <div role="alert">
+      <span>Failed for {scene.name}</span>
+      <button type="button" onClick={onChooseAnotherPhoto}>Choose another photo</button>
+    </div>
+  ),
+}));
 
-  return (
-    <section ref={stageRef}>
-      {showCamera ? (
-        <CameraStep onUsePhoto={vi.fn()} />
-      ) : (
-        <GeneratingStep
-          scene={{ id: 'subway', name: 'Subway', description: 'A subway platform' }}
-          photoDataUrl="data:image/jpeg;base64,cGhvdG8="
-          eventSlug="demo-event"
-          onComplete={vi.fn()}
-          onChooseAnotherPhoto={() => setShowCamera(true)}
-          generationActions={actionMocks}
-        />
-      )}
-    </section>
+import { Photobooth } from '../src/components/Photobooth';
+
+const scenes = [
+  { id: 'subway', name: 'Subway', description: 'A subway platform' },
+  { id: 'rooftop', name: 'Rooftop', description: 'A rooftop at sunset' },
+];
+
+function renderPhotobooth() {
+  return render(
+    <Photobooth
+      eventName="Demo event"
+      eventSlug="demo-event"
+      tagline="Pick a scene"
+      kioskIdleSubhead="Ready when you are"
+      scenePickerHeading="Choose your scene."
+      accentColor="#ff5c35"
+      scenes={scenes}
+    />,
   );
 }
 
 describe('Photobooth recovery focus', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.mocked(actionMocks.startGeneration).mockResolvedValue({
-      data: { sessionId: '00000000-0000-4000-8000-000000000001', status: 'uploading' },
-      error: undefined,
-    });
-    vi.mocked(actionMocks.getGeneration).mockResolvedValue({
-      data: { status: 'errored', failureCode: 'photo_rejected', postcardUrl: null },
-      error: undefined,
-    });
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000001');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      blob: vi.fn().mockResolvedValue(new Blob(['photo'], { type: 'image/jpeg' })),
-    }));
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: vi.fn().mockReturnValue({ matches: true }),
-    });
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: vi.fn(() => new Promise(() => {})) },
-    });
-  });
-
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-    vi.useRealTimers();
   });
 
-  it('focuses the camera step after choosing another photo', async () => {
-    render(<RecoveryHarness />);
-    await screen.findByRole('alert');
+  it('focuses the camera and preserves its selected scene after recovery', async () => {
+    renderPhotobooth();
+    fireEvent.click(screen.getByRole('button', { name: /Rooftop/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use mock photo' }));
+    expect(screen.getByRole('alert').textContent).toContain('Failed for Rooftop');
 
     fireEvent.click(screen.getByRole('button', { name: 'Choose another photo' }));
 
     expect(screen.queryByRole('alert')).toBeNull();
     const cameraFocusTarget = screen.getByRole('heading', { name: 'Take your photo.' });
     await waitFor(() => expect(document.activeElement).toBe(cameraFocusTarget));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Return to scene selection' }));
+    expect(screen.getByRole('button', { name: /Rooftop/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('allows vertical scrolling at every viewport width', () => {
+    const { container } = renderPhotobooth();
+    const booth = container.querySelector('main');
+
+    expect(booth?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(booth?.classList.contains('overflow-hidden')).toBe(false);
   });
 });

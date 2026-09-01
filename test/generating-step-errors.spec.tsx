@@ -22,11 +22,11 @@ const firstIdempotencyKey = '00000000-0000-4000-8000-000000000001';
 const secondIdempotencyKey = '00000000-0000-4000-8000-000000000002';
 const actionTimeoutMs = 15_000;
 
-function astroActionError(code: 'BAD_REQUEST' | 'NOT_FOUND', message: string) {
+function astroActionError(code: 'BAD_REQUEST' | 'NOT_FOUND' | 'CONTENT_TOO_LARGE', message: string) {
   return {
     type: 'AstroActionError',
     code,
-    status: code === 'BAD_REQUEST' ? 400 : 404,
+    status: code === 'BAD_REQUEST' ? 400 : code === 'NOT_FOUND' ? 404 : 413,
     message,
   };
 }
@@ -166,6 +166,7 @@ describe('GeneratingStep error recovery', () => {
   it.each([
     ['BAD_REQUEST', 'BAD_REQUEST_SECRET: invalid session details'],
     ['NOT_FOUND', 'NOT_FOUND_SECRET: missing booth details'],
+    ['CONTENT_TOO_LARGE', 'CONTENT_TOO_LARGE_SECRET: request body details'],
   ] as const)('treats Astro %s start errors as permanent without disclosing details', async (code, sentinel) => {
     actionMocks.startGeneration.mockResolvedValue({
       data: undefined,
@@ -185,6 +186,7 @@ describe('GeneratingStep error recovery', () => {
   it.each([
     ['BAD_REQUEST', 'BAD_REQUEST_POLL_SECRET: invalid session details'],
     ['NOT_FOUND', 'NOT_FOUND_POLL_SECRET: missing session details'],
+    ['CONTENT_TOO_LARGE', 'CONTENT_TOO_LARGE_POLL_SECRET: request body details'],
   ] as const)('treats Astro %s poll errors as permanent without disclosing details', async (code, sentinel) => {
     actionMocks.startGeneration.mockResolvedValue(startResult());
     actionMocks.getGeneration.mockResolvedValue({

@@ -9,6 +9,9 @@ export default defineConfig({
   adapter: cloudflare({ imageService: 'passthrough' }),
   integrations: [react()],
   output: 'server',
+  security: {
+    actionBodySizeLimit: 7 * 1024 * 1024,
+  },
   session: false,
   vite: {
     plugins: [tailwindcss()],

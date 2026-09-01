@@ -445,9 +445,13 @@ describe('public action error boundaries', () => {
     if (recovery === 'resume') expect(instance.resume).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects metadata-less legacy recovery when object bytes do not match D1', async () => {
-    const legacySession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
-    loadSession.mockResolvedValue(legacySession);
+  it('fails a legacy recovery closed when object bytes do not match D1', async () => {
+    let currentSession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status };
+      return currentSession;
+    });
     fakeEnv.SELFIES.head.mockResolvedValue({ httpMetadata: { contentType: 'image/jpeg' }, customMetadata: {} });
     fakeEnv.SELFIES.get.mockResolvedValue({
       httpMetadata: { contentType: 'image/jpeg' },
@@ -455,29 +459,89 @@ describe('public action error boundaries', () => {
       arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
     });
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'moderating' });
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'errored' });
 
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, sessionId);
     expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
     expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
   });
 
-  it('rejects conflicting legacy selfie metadata without reading its bytes', async () => {
-    const legacySession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+  it('fails a legacy recovery closed for conflicting metadata without reading its bytes', async () => {
+    let currentSession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
     const arrayBuffer = vi.fn();
     const conflictingObject = {
       httpMetadata: { contentType: 'image/jpeg' },
       customMetadata: { workflowInstanceId: 'replacement-instance' },
       arrayBuffer,
     };
-    loadSession.mockResolvedValue(legacySession);
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status };
+      return currentSession;
+    });
     fakeEnv.SELFIES.head.mockResolvedValue(conflictingObject);
     fakeEnv.SELFIES.get.mockResolvedValue(conflictingObject);
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'moderating' });
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'errored' });
 
     expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, sessionId);
     expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
     expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+  });
+
+  it('returns a fresh terminal failure when the claimed selfie is missing', async () => {
+    let currentSession = { ...session, status: 'generating', workflow_instance_id: sessionId };
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status };
+      return currentSession;
+    });
+    fakeEnv.SELFIES.head.mockResolvedValue(null);
+    fakeEnv.SELFIES.get.mockResolvedValue(null);
+
+    await expect(getGeneration({ sessionId })).resolves.toEqual({
+      status: 'errored',
+      failureCode: 'unknown_failure',
+      postcardUrl: null,
+    });
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, sessionId);
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
+  });
+
+  it('cannot fail a row recreated before the ownership transition', async () => {
+    const originalSession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
+    const replacementSession = { ...originalSession, workflow_instance_id: 'replacement-instance' };
+    let currentSession = originalSession;
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, _status, _fields, expectedWorkflowInstanceId) => {
+      currentSession = replacementSession;
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) throw new Error('stale transition applied');
+      return currentSession;
+    });
+    fakeEnv.SELFIES.head.mockResolvedValue(null);
+    fakeEnv.SELFIES.get.mockResolvedValue(null);
+
+    await expect(caughtError(() => getGeneration({ sessionId }))).resolves.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start your postcard. Please try again.",
+    });
+
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, sessionId);
+    expect(currentSession).toEqual(replacementSession);
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
   });
 
   it('does not recover a workflow after a stale selfie replacement upload fails', async () => {
