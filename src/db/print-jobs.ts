@@ -211,7 +211,7 @@ export async function claimPrintJobs(database: D1Database, eventSlug: string, li
     sceneName: job.scene_name,
     postcardUrl: job.postcard_url,
     createdAt: job.created_at,
-  }));
+  })).sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
 }
 
 export async function acknowledgePrintJob(database: D1Database, jobId: string, acknowledgement: Acknowledgement): Promise<AdminPrintJob> {

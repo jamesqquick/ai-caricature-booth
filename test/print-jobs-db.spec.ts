@@ -137,7 +137,9 @@ describe('print job data layer', () => {
   });
 
   it('selects and transitions event-scoped pending jobs in one update statement', async () => {
-    const claimed = [row, { ...row, id: 'fedcba9876543210fedcba9876543210', created_at: 101 }];
+    const newer = { ...row, id: 'fedcba9876543210fedcba9876543210', created_at: 101 };
+    const sameTime = { ...row, id: 'abcdef0123456789abcdef0123456789' };
+    const claimed = [newer, sameTime, row];
     const prepared: Array<ReturnType<typeof statement>> = [];
     const database = {
       prepare(query: string) {
@@ -147,13 +149,14 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    const jobs = await claimPrintJobs(database, 'demo-event', 2);
+    const jobs = await claimPrintJobs(database, 'demo-event', 3);
 
     expect(prepared).toHaveLength(1);
     expect(prepared[0].query).toMatch(/UPDATE print_jobs[\s\S]*WHERE id IN \([\s\S]*SELECT pj\.id[\s\S]*INNER JOIN events e ON e\.id = pj\.event_id[\s\S]*pj\.status = 'pending'[\s\S]*e\.slug = \?[\s\S]*ORDER BY pj\.created_at ASC, pj\.id ASC[\s\S]*LIMIT \?[\s\S]*\)[\s\S]*AND status = 'pending'[\s\S]*RETURNING/);
-    expect(prepared[0].values).toEqual(['demo-event', 2]);
-    expect(jobs).toHaveLength(2);
-    expect(jobs[0]).toMatchObject({ id: claimed[0].id, eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge' });
+    expect(prepared[0].values).toEqual(['demo-event', 3]);
+    expect(jobs).toHaveLength(3);
+    expect(jobs.map((job) => job.id)).toEqual([row.id, sameTime.id, newer.id]);
+    expect(jobs[0]).toMatchObject({ eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge' });
   });
 
   it('only acknowledges printing jobs and applies terminal fields safely', async () => {
