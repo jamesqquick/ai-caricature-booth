@@ -1,0 +1,67 @@
+drizzle/migrations/0014_print_job_requests.sql
+  s_15299d0b9948a9::t_e5644711eae2f0 1-24
+print-agent/src/index.ts
+  s_271dec47afe709::t_99194f9a67bdd2 7,30-31
+print-agent/src/installation.ts
+  s_271dec47afe709::t_1cd47eafa94b71 1-72
+print-agent/src/paths.ts
+  s_271dec47afe709::t_a3e642d67ec6da 11,21-27
+print-agent/test/installation.spec.ts
+  s_4dfeeb5e04e838::t_5dbbe6cd69ea4f 1-50
+print-agent/test/paths.spec.ts
+  s_271dec47afe709::t_643a13f0261855 6,36-37,40
+src/components/admin/PrintHistory.tsx
+  s_f0f95a13a55efc::t_36f10c1346fcbe 23-58,127,133-136,191-198,206-207,215,221-224
+src/db/print-jobs.ts
+  s_15299d0b9948a9::t_2be23c9c63e311 65-77,370-371,374-394,405-406,409-425,430-471,475,477-479
+src/lib/print-job-response.ts
+  s_15299d0b9948a9::t_1bb58aa155653c 11-23
+src/pages/api/admin/sessions/[sessionId]/print-jobs.ts
+  s_4dfeeb5e04e838::t_63edc81180e547 3,18
+src/pages/api/events/[eventId]/sessions/[sessionId]/print-jobs.ts
+  s_15299d0b9948a9::t_12f1c4563398d5 2-3,9
+test/admin-print-history.spec.tsx
+  s_4dfeeb5e04e838::t_884dd1b45f8432 35,150-193
+test/print-jobs-api.spec.ts
+  s_4dfeeb5e04e838::t_8b9f932fb66e69 52-59,109-131,219,321,325,369
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c7a46c6cc09085fe493bfc78dd69fbae68f5d369",
+  "prompts": {},
+  "sessions": {
+    "s_15299d0b9948a9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa568a741ffelsPk4kqB5m9Pyo",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_271dec47afe709": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa55cc616ffePx0jP0CFTnNel4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_4dfeeb5e04e838": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2a8e8c6ffeSsoiI6nPl4hAM7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_f0f95a13a55efc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2cb25bcffeeyNOtLC0nwBYtB",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
