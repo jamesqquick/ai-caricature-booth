@@ -1,0 +1,23 @@
+src/components/steps/GeneratingStep.tsx
+  s_4f1198128134b1::t_10bcb2afde6cac 38,57-60,74-104,122,131-132,136,144,148,154,162,164,169,172-173,181-182,216,218-219,223-230,234-240,256,261-262,266,270-271,273-274,276,294,306,314,318-319,324
+test/generating-step-errors.spec.tsx
+  s_4f1198128134b1::t_3ea51e475b2d7e 6,23-40,49,80-91,166-213,227-241,243-265,267,275-280,337-338
+test/photobooth-recovery-focus.spec.tsx
+  s_4f1198128134b1::t_17f797aa27455b 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "173c529f3e6983ed86edcbb9908d113d7c7e3402",
+  "prompts": {},
+  "sessions": {
+    "s_4f1198128134b1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa1dedc38ffeDyxE83Dod5GGdw",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
