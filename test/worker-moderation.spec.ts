@@ -168,7 +168,34 @@ describe('CaricatureWorkflow moderation gate', () => {
       'Use a bold editorial ink style. Stored event scene prompt. Stone arches and Manhattan behind the guest. Use the event palette and avoid logos. Keep the person recognizable, expressive, and centered. No text.',
     );
     expect(buildPostcard).toHaveBeenCalledWith(env, selfie, payload.watermarkKey, payload.watermarkWidth);
-    expect(env.SELFIES.put).toHaveBeenCalled();
+    expect(env.SELFIES.put).toHaveBeenNthCalledWith(
+      1,
+      `sessions/${sessionId}/caricature.jpg`,
+      new Uint8Array([7, 8, 9]),
+      {
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(payload.eventId),
+          assetKind: 'caricature',
+          sceneId: payload.sceneId,
+        },
+      },
+    );
+    expect(env.SELFIES.put).toHaveBeenNthCalledWith(
+      2,
+      `sessions/${sessionId}/postcard.jpg`,
+      new Uint8Array([4, 5, 6]),
+      {
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(payload.eventId),
+          assetKind: 'postcard',
+          sceneId: payload.sceneId,
+        },
+      },
+    );
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything());
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({
       pipeline_ms: expect.any(Number),

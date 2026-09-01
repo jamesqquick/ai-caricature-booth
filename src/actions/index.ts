@@ -58,7 +58,7 @@ export const server = {
             throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session already uses another image. Start over.' });
           }
           if (existing.status === 'pending' || existing.status === 'uploading') {
-            await ensureSelfieUploaded(existing.id, existing.selfie_key, bytes);
+            await ensureSelfieUploaded(existing.id, existing.event_id, existing.selfie_key, selfieSha256, bytes);
           }
           const current = await loadSession(env.DB, existing.id);
           if (current) await ensureWorkflow(current, scene, event);
@@ -78,14 +78,14 @@ export const server = {
             throw new ActionError({ code: 'BAD_REQUEST', message: 'This photo session does not match the selected booth. Start over.' });
           }
           if (claim.session.status === 'pending' || claim.session.status === 'uploading') {
-            await ensureSelfieUploaded(claim.session.id, claim.session.selfie_key, bytes);
+            await ensureSelfieUploaded(claim.session.id, claim.session.event_id, claim.session.selfie_key, selfieSha256, bytes);
           }
           const current = await loadSession(env.DB, claim.session.id);
           if (current) await ensureWorkflow(current, scene, event);
           return { sessionId: claim.session.id, status: current?.status ?? claim.session.status };
         }
 
-        await ensureSelfieUploaded(idempotencyKey, selfieKey, bytes);
+        await ensureSelfieUploaded(idempotencyKey, event.id, selfieKey, selfieSha256, bytes);
         const current = await loadSession(env.DB, idempotencyKey);
         if (current) await ensureWorkflow(current, scene, event);
         return { sessionId: idempotencyKey, status: current?.status ?? claim.session.status };
@@ -169,10 +169,25 @@ async function ensureWorkflow(
   }
 }
 
-async function ensureSelfieUploaded(sessionId: string, selfieKey: string, bytes: Uint8Array) {
-  if (await env.SELFIES.head(selfieKey)) return;
+async function ensureSelfieUploaded(sessionId: string, eventId: number, selfieKey: string, selfieSha256: string, bytes: Uint8Array) {
+  const existing = await env.SELFIES.head(selfieKey);
+  if (
+    existing?.httpMetadata?.contentType === 'image/jpeg'
+    && existing.customMetadata?.sessionId === sessionId
+    && existing.customMetadata?.eventId === String(eventId)
+    && existing.customMetadata?.assetKind === 'selfie'
+    && existing.customMetadata?.selfieSha256 === selfieSha256
+  ) return;
   await transitionSession(env.DB, sessionId, 'uploading');
-  await env.SELFIES.put(selfieKey, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  await env.SELFIES.put(selfieKey, bytes, {
+    httpMetadata: { contentType: 'image/jpeg' },
+    customMetadata: {
+      sessionId,
+      eventId: String(eventId),
+      assetKind: 'selfie',
+      selfieSha256,
+    },
+  });
 }
 
 async function hashBytes(bytes: Uint8Array) {

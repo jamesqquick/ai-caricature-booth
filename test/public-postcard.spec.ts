@@ -37,7 +37,11 @@ function requestUrl(query = '') {
   return new URL(`https://booth.test/api/events/${eventId}/sessions/${sessionId}/postcard${query}`);
 }
 
-function imageObject(key = postcardKey, contentType = 'image/jpeg') {
+function imageObject(
+  key = postcardKey,
+  contentType: string | null = 'image/jpeg',
+  customMetadata: Record<string, string> = { sessionId, eventId, assetKind: 'postcard' },
+) {
   return {
     key,
     body: new ReadableStream({
@@ -46,7 +50,8 @@ function imageObject(key = postcardKey, contentType = 'image/jpeg') {
         controller.close();
       },
     }),
-    httpMetadata: { contentType },
+    httpMetadata: contentType ? { contentType } : {},
+    customMetadata,
   };
 }
 
@@ -94,6 +99,10 @@ describe('public postcard endpoint', () => {
     ['missing object', { eventId, sessionId }, session, null],
     ['mismatched object', { eventId, sessionId }, session, imageObject('sessions/other/postcard.jpg')],
     ['non-JPEG object', { eventId, sessionId }, session, imageObject(postcardKey, 'text/html')],
+    ['missing object content type', { eventId, sessionId }, session, imageObject(postcardKey, null)],
+    ['mismatched object session', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId: '00000000-0000-4000-8000-000000000002', eventId, assetKind: 'postcard' })],
+    ['mismatched object event', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId: '8', assetKind: 'postcard' })],
+    ['mismatched object asset kind', { eventId, sessionId }, session, imageObject(postcardKey, 'image/jpeg', { sessionId, eventId, assetKind: 'caricature' })],
   ])('returns the same protected 404 for a %s', async (_label, params, sessionResult, objectResult) => {
     loadSession.mockResolvedValue(sessionResult);
     fakeEnv.SELFIES.get.mockResolvedValue(objectResult);
@@ -115,7 +124,7 @@ describe('public postcard endpoint', () => {
     expect(fakeEnv.SELFIES.get).not.toHaveBeenCalled();
   });
 
-  it('contains D1 diagnostics and returns a fixed protected 503', async () => {
+  it('logs only safe D1 diagnostics and returns a fixed protected 503', async () => {
     const diagnostic = 'd1-postcard-sentinel-b049ce';
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     loadSession.mockRejectedValue(new Error(diagnostic));
@@ -127,15 +136,17 @@ describe('public postcard endpoint', () => {
     expect(body).toBe('Postcard temporarily unavailable');
     expect(body).not.toContain(diagnostic);
     expectSecurityHeaders(response);
-    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
-    expect(JSON.stringify(errorLog.mock.calls)).toContain(eventId);
-    expect(JSON.stringify(errorLog.mock.calls)).toContain(sessionId);
+    const logs = JSON.stringify(errorLog.mock.calls);
+    expect(logs).not.toContain(diagnostic);
+    expect(logs).toContain(eventId);
+    expect(logs).toContain(sessionId);
+    expect(logs).toContain('Error');
   });
 
-  it('contains R2 diagnostics and returns a fixed protected 503', async () => {
-    const diagnostic = 'r2-postcard-sentinel-7cd32a';
+  it('does not log an R2 error message containing the postcard key or a secret', async () => {
+    const diagnostic = 'r2-postcard-secret-sentinel-7cd32a';
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    fakeEnv.SELFIES.get.mockRejectedValue(new Error(diagnostic));
+    fakeEnv.SELFIES.get.mockRejectedValue(new TypeError(`${postcardKey}: ${diagnostic}`));
 
     const response = await get();
     const body = await response.text();
@@ -143,8 +154,11 @@ describe('public postcard endpoint', () => {
     expect(response.status).toBe(503);
     expect(body).toBe('Postcard temporarily unavailable');
     expect(body).not.toContain(diagnostic);
+    expect(body).not.toContain(postcardKey);
     expectSecurityHeaders(response);
-    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain(postcardKey);
+    const logs = JSON.stringify(errorLog.mock.calls);
+    expect(logs).not.toContain(diagnostic);
+    expect(logs).not.toContain(postcardKey);
+    expect(logs).toContain('TypeError');
   });
 });

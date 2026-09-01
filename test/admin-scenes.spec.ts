@@ -9,6 +9,7 @@ import { createServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { loadEventScene, loadScenesByEvent } from '../src/db/scenes';
 import { createPendingSession } from '../src/db/sessions';
+import { toPublicScene } from '../src/data/scenes';
 
 const migrationUrl = new URL('../drizzle/migrations/0006_event_scenes.sql', import.meta.url);
 const simplifyMigrationUrl = new URL('../drizzle/migrations/0007_simplify_event_scenes.sql', import.meta.url);
@@ -215,6 +216,25 @@ describe('event scene migration', () => {
 });
 
 describe('event scene queries', () => {
+  it('projects a fresh public scene without prompt fields', () => {
+    const scene = {
+      id: 'private-scene',
+      name: 'Private Scene',
+      description: 'Attendee-safe description.',
+      prompt: 'private-prompt-sentinel-c2198a',
+    };
+
+    const publicScene = toPublicScene(scene);
+
+    expect(publicScene).toEqual({
+      id: scene.id,
+      name: scene.name,
+      description: scene.description,
+    });
+    expect(publicScene).not.toBe(scene);
+    expect(publicScene).not.toHaveProperty('prompt');
+  });
+
   it('keeps prompts out of rendered event-page hydration while retaining them server-side', async () => {
     const { sqlite, database } = createSceneDatabase();
     await migrateScenes(sqlite);
@@ -312,6 +332,7 @@ describe('event scene runtime wiring', () => {
 
     await expect(transform(route, { filename: 'src/pages/e/[slug].astro' })).resolves.toBeTruthy();
     expect(route).toContain('loadScenesByEvent(env.DB, event.id)');
+    expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('scenes={scenes}');
   });
 
@@ -319,6 +340,7 @@ describe('event scene runtime wiring', () => {
     const route = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/index.astro' })).resolves.toBeTruthy();
+    expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
     expect(route).toContain('scenes.slice(0, 3)');
     expect(route).toContain('scenes.slice(0, 4)');

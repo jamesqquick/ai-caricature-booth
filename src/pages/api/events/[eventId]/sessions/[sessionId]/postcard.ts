@@ -5,6 +5,7 @@ export const prerender = false;
 
 const EVENT_ID_PATTERN = /^[1-9]\d{0,18}$/;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SAFE_ERROR_NAMES = new Set(['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'URIError', 'EvalError', 'AggregateError']);
 const RESPONSE_HEADERS = {
   'Cache-Control': 'private, no-store',
   'X-Content-Type-Options': 'nosniff',
@@ -38,7 +39,10 @@ export async function GET({ params, url }: { params: Record<string, string | und
     if (
       !object
       || object.key !== postcardKey
-      || (object.httpMetadata?.contentType && object.httpMetadata.contentType !== 'image/jpeg')
+      || object.httpMetadata?.contentType !== 'image/jpeg'
+      || object.customMetadata?.sessionId !== sessionId
+      || object.customMetadata?.eventId !== eventId
+      || object.customMetadata?.assetKind !== 'postcard'
     ) return notFound();
 
     const download = url.searchParams.get('download') === '1';
@@ -61,6 +65,6 @@ export async function GET({ params, url }: { params: Record<string, string | und
 
 function errorDiagnostic(error: unknown) {
   return error instanceof Error
-    ? { errorName: error.name, errorMessage: error.message }
+    ? { errorName: SAFE_ERROR_NAMES.has(error.name) ? error.name : 'Error' }
     : { errorType: typeof error };
 }

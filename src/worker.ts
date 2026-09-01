@@ -89,7 +89,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         });
         const bytes = await generateCaricature(this.env.REPLICATE_API_TOKEN, new Uint8Array(await selfie.arrayBuffer()), prompt);
         const key = `sessions/${sessionId}/caricature.jpg`;
-        await this.env.SELFIES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { eventId: String(eventId), sceneId } });
+        await this.env.SELFIES.put(key, bytes, {
+          httpMetadata: { contentType: 'image/jpeg' },
+          customMetadata: { sessionId, eventId: String(eventId), assetKind: 'caricature', sceneId },
+        });
         await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key });
         return key;
       });
@@ -110,7 +113,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
         console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));
         const key = `sessions/${sessionId}/postcard.jpg`;
-        await this.env.SELFIES.put(key, postcard.body, { httpMetadata: { contentType: 'image/jpeg' } });
+        await this.env.SELFIES.put(key, postcard.body, {
+          httpMetadata: { contentType: 'image/jpeg' },
+          customMetadata: { sessionId, eventId: String(eventId), assetKind: 'postcard', sceneId },
+        });
         console.info(JSON.stringify({ message: 'postcard stored', sessionId, attempt: ctx.attempt, elapsedMs: Date.now() - startedAt }));
         return key;
       });

@@ -38,6 +38,7 @@ vi.mock('../src/db/sessions', () => ({ createPendingSession, loadSession, transi
 import { server } from '../src/actions';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
+const selfieSha256 = '1a493b22d4b17319c1fae01707e77e4c93e3836b84e766722cc61189ee89e224';
 const event = {
   id: 7,
   slug: 'launch-night',
@@ -59,7 +60,7 @@ const session = {
   scene_id: scene.id,
   scene_name: scene.name,
   selfie_key: `sessions/${sessionId}/selfie.jpg`,
-  selfie_sha256: '',
+  selfie_sha256: selfieSha256,
   caricature_key: null,
   postcard_key: null,
   workflow_instance_id: null,
@@ -121,7 +122,15 @@ describe('public action error boundaries', () => {
     createPendingSession.mockResolvedValue({ session, created: false });
     loadSession.mockResolvedValue(session);
     transitionSession.mockResolvedValue(session);
-    fakeEnv.SELFIES.head.mockResolvedValue({});
+    fakeEnv.SELFIES.head.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        sessionId,
+        eventId: String(event.id),
+        assetKind: 'selfie',
+        selfieSha256,
+      },
+    });
     fakeEnv.SELFIES.put.mockResolvedValue(undefined);
     fakeEnv.CARICATURE_WORKFLOW.create.mockResolvedValue(undefined);
   });
@@ -146,6 +155,30 @@ describe('public action error boundaries', () => {
 
     expectContained(error, diagnostic);
     expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+  });
+
+  it('overwrites stale selfie metadata when a deleted session UUID is reused', async () => {
+    fakeEnv.SELFIES.head.mockResolvedValue({
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        sessionId,
+        eventId: '999',
+        assetKind: 'selfie',
+        selfieSha256: 'stale-selfie-sha256',
+      },
+    });
+
+    await startGeneration(startInput());
+
+    expect(fakeEnv.SELFIES.put).toHaveBeenCalledWith(session.selfie_key, validJpeg, {
+      httpMetadata: { contentType: 'image/jpeg' },
+      customMetadata: {
+        sessionId,
+        eventId: String(event.id),
+        assetKind: 'selfie',
+        selfieSha256,
+      },
+    });
   });
 
   it('contains workflow diagnostics from startGeneration', async () => {
