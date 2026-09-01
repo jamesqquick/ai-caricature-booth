@@ -115,7 +115,7 @@ export const server = {
           failureCode: session.status === 'errored' ? toGenerationFailureCode(session.error_code, session.error_msg) : null,
           postcardUrl: session.status === 'completed' ? `/api/events/${session.event_id}/sessions/${session.id}/postcard` : null,
         };
-        return result as typeof result & { error?: never };
+        return result;
       } catch (error) {
         throwPublicActionError('getGeneration', sessionId, error, "Couldn't check your postcard. Please try again.");
       }

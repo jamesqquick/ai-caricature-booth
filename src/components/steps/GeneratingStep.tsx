@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { actions } from 'astro:actions';
 import { AlertCircle, Check } from 'lucide-react';
 import type { Scene } from '../../data/scenes';
+import { generationFailureContent, isGenerationFailureCode } from '../../lib/generation-errors';
 import { GENERATION_PROGRESS_DURATION_MS, generationPhases, generationProgressRanges, phaseForGenerationStatus, progressForPhase, type GenerationPhase } from '../../lib/generation-progress';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -77,7 +78,10 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete }: P
           onComplete(started.data.sessionId);
           return;
         }
-        if (status.data.status === 'errored') throw new Error(status.data.error ?? "Couldn't create your postcard. Please try again.");
+        if (status.data.status === 'errored') {
+          const failureCode = isGenerationFailureCode(status.data.failureCode) ? status.data.failureCode : 'unknown_failure';
+          throw new Error(generationFailureContent[failureCode].message);
+        }
         const phase = phaseForGenerationStatus(status.data.status);
         if (phase) setActivePhase(phase);
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
