@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { GenerationFailureCode } from '../lib/generation-errors';
 import { createDb } from './index';
 
 export const SESSION_STATUSES = [
@@ -24,6 +25,7 @@ export type SessionRecord = {
   caricature_key: string | null;
   postcard_key: string | null;
   workflow_instance_id: string | null;
+  error_code: GenerationFailureCode | null;
   error_msg: string | null;
   created_at: number;
   completed_at: number | null;
@@ -37,7 +39,14 @@ export function isTerminalSessionStatus(status: SessionStatus) {
 
 export async function loadSession(database: D1Database, id: string) {
   const db = createDb(database);
-  return db.get<SessionRecord>(sql`SELECT * FROM sessions WHERE id = ${id} LIMIT 1`);
+  return db.get<SessionRecord>(sql`
+    SELECT id, event_id, status, scene_id, scene_name, selfie_key, selfie_sha256,
+           caricature_key, postcard_key, workflow_instance_id, error_code, error_msg,
+           created_at, completed_at, pipeline_ms, updated_at
+    FROM sessions
+    WHERE id = ${id}
+    LIMIT 1
+  `);
 }
 
 export async function createPendingSession(
@@ -57,7 +66,7 @@ export async function transitionSession(
   database: D1Database,
   id: string,
   nextStatus: SessionStatus,
-  fields: Partial<Pick<SessionRecord, 'scene_name' | 'caricature_key' | 'postcard_key' | 'workflow_instance_id' | 'error_msg' | 'pipeline_ms'>> = {},
+  fields: Partial<Pick<SessionRecord, 'scene_name' | 'caricature_key' | 'postcard_key' | 'workflow_instance_id' | 'error_code' | 'error_msg' | 'pipeline_ms'>> = {},
 ) {
   const current = await loadSession(database, id);
   if (!current || isTerminalSessionStatus(current.status)) return current;
@@ -80,6 +89,7 @@ export async function transitionSession(
         caricature_key = COALESCE(${fields.caricature_key ?? null}, caricature_key),
         postcard_key = COALESCE(${fields.postcard_key ?? null}, postcard_key),
         workflow_instance_id = COALESCE(${fields.workflow_instance_id ?? null}, workflow_instance_id),
+        error_code = ${fields.error_code ?? null},
         error_msg = ${fields.error_msg ?? null},
         completed_at = CASE WHEN ${nextStatus} = 'completed' THEN unixepoch() ELSE completed_at END,
         pipeline_ms = CASE WHEN ${nextStatus} = 'completed' THEN ${fields.pipeline_ms ?? null} ELSE pipeline_ms END,

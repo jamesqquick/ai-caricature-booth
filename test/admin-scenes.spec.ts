@@ -190,6 +190,14 @@ describe('event scene runtime wiring', () => {
         scene_name TEXT,
         selfie_key TEXT NOT NULL,
         selfie_sha256 TEXT NOT NULL,
+        caricature_key TEXT,
+        postcard_key TEXT,
+        workflow_instance_id TEXT,
+        error_code TEXT,
+        error_msg TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        completed_at INTEGER,
+        pipeline_ms INTEGER,
         updated_at INTEGER NOT NULL
       );
     `);
