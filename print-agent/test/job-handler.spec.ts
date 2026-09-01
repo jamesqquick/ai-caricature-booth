@@ -2,15 +2,18 @@ import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { DownloadError, downloadPostcard, handleJob, JobProcessingError } from "../src/job-handler.js";
+import { DownloadError, MAX_POSTCARD_BYTES, downloadPostcard, handleJob, JobProcessingError } from "../src/job-handler.js";
 import type { Sleep } from "../src/types.js";
 import { config, job } from "./fixtures.js";
 
 describe("downloadPostcard", () => {
+  const jpeg = Uint8Array.of(0xff, 0xd8, 1, 0xff, 0xd9);
+
   it("resolves postcardUrl against workerUrl and validates JPEG content", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(Uint8Array.of(1), { headers: { "content-type": "image/jpeg" } }));
-    await expect(downloadPostcard(config, job, { fetch })).resolves.toEqual(Uint8Array.of(1));
-    expect(fetch.mock.calls[0]?.[0]).toBe("https://booth.example.com/api/events/42/sessions/123/postcard");
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(jpeg, { headers: { "content-type": "image/jpeg" } }));
+    await expect(downloadPostcard(config, job, { fetch })).resolves.toEqual(jpeg);
+    expect(fetch.mock.calls[0]?.[0]).toBe(`https://booth.example.com/api/events/42/sessions/${job.sessionId}/postcard`);
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
     expect(fetch.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -19,7 +22,7 @@ describe("downloadPostcard", () => {
       .mockRejectedValueOnce(new TypeError("offline"))
       .mockResolvedValueOnce(new Response("busy", { status: 429 }))
       .mockResolvedValueOnce(new Response("down", { status: 503 }))
-      .mockResolvedValueOnce(new Response(Uint8Array.of(1), { headers: { "content-type": "image/jpeg" } }));
+      .mockResolvedValueOnce(new Response(jpeg, { headers: { "content-type": "image/jpeg" } }));
     const sleep = vi.fn<Sleep>(async () => undefined);
     await downloadPostcard(config, job, { fetch, sleep, retryDelaysMs: [10, 20, 30] });
     expect(fetch).toHaveBeenCalledTimes(4);
@@ -32,6 +35,53 @@ describe("downloadPostcard", () => {
       await expect(downloadPostcard(config, job, { fetch, sleep: vi.fn(), retryDelaysMs: [1, 1] })).rejects.toBeInstanceOf(DownloadError);
       expect(fetch).toHaveBeenCalledOnce();
     }
+  });
+
+  it.each([
+    "https://evil.example.com/api/events/42/sessions/123e4567-e89b-12d3-a456-426614174000/postcard",
+    "/api/events/42/sessions/other/postcard",
+    "/api/events/42/sessions/123e4567-e89b-12d3-a456-426614174000/postcard/extra",
+    "http://[",
+  ])("rejects an unsafe postcard URL before fetching: %s", async (postcardUrl) => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    await expect(downloadPostcard(config, { ...job, postcardUrl }, { fetch })).rejects.toBeInstanceOf(DownloadError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-loopback HTTP even if configuration validation is bypassed", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    await expect(downloadPostcard({ ...config, workerUrl: "http://booth.example.com" }, job, { fetch })).rejects.toBeInstanceOf(DownloadError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects redirects and oversized declared or streamed bodies", async () => {
+    const responses = [
+      new Response(null, { status: 302, headers: { location: "https://evil.example.com/postcard.jpg" } }),
+      new Response(jpeg, { headers: { "content-type": "image/jpeg", "content-length": String(MAX_POSTCARD_BYTES + 1) } }),
+      new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(MAX_POSTCARD_BYTES));
+          controller.enqueue(Uint8Array.of(1));
+          controller.close();
+        },
+      }), { headers: { "content-type": "image/jpeg" } }),
+    ];
+    for (const response of responses) {
+      const fetch = vi.fn<typeof globalThis.fetch>(async () => response);
+      await expect(downloadPostcard(config, job, { fetch, retryDelaysMs: [] })).rejects.toBeInstanceOf(DownloadError);
+    }
+  });
+
+  it("validates JPEG boundary signatures and wraps stream errors", async () => {
+    for (const body of [Uint8Array.of(0, 0, 0xff, 0xd9), Uint8Array.of(0xff, 0xd8, 0, 0)]) {
+      const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(body, { headers: { "content-type": "image/jpeg" } }));
+      await expect(downloadPostcard(config, job, { fetch, retryDelaysMs: [] })).rejects.toBeInstanceOf(DownloadError);
+    }
+
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("socket reset")); },
+    }), { headers: { "content-type": "image/jpeg" } }));
+    await expect(downloadPostcard(config, job, { fetch, retryDelaysMs: [] })).rejects.toMatchObject({ name: "DownloadError", retryable: true });
   });
 });
 

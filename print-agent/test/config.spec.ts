@@ -29,6 +29,7 @@ describe("loadConfig", () => {
     [{ ...validEnv, PRINTER_DRIVER: "laser" }, [], "PRINTER_DRIVER"],
     [{ ...validEnv, PRINTER_DRIVER: "dnp", PRINTER_NAME: "  " }, [], "PRINTER_NAME"],
     [{ ...validEnv, EVENT_SLUG: "Invalid Slug" }, [], "EVENT_SLUG"],
+    [{ ...validEnv, WORKER_URL: "http://booth.example.com" }, [], "WORKER_URL"],
     [validEnv, ["--event-slug"], "--event-slug"],
   ])("throws an actionable typed error for invalid configuration", (env, argv, field) => {
     expect(() => loadConfig(env, argv)).toThrow(ConfigurationError);
@@ -42,5 +43,9 @@ describe("loadConfig", () => {
       printerDriver: "dnp-ds620",
       printerName: "DNP DS620",
     });
+  });
+
+  it.each(["http://localhost:4321", "http://127.0.0.1:4321", "http://[::1]:4321"])("allows loopback HTTP for local development: %s", (workerUrl) => {
+    expect(loadConfig({ ...validEnv, WORKER_URL: workerUrl }, [])).toMatchObject({ workerUrl });
   });
 });

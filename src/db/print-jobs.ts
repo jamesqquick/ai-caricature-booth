@@ -98,8 +98,7 @@ export function parseClaimInput(input: unknown) {
 
 export function parseAcknowledgement(input: unknown): Acknowledgement {
   const body = asObject(input, 'status');
-  const claimToken = typeof body.claimToken === 'string' ? body.claimToken.toLowerCase() : '';
-  if (!JOB_ID_PATTERN.test(claimToken)) throw new PrintJobValidationError('claimToken', 'Invalid claimToken.');
+  const claimToken = parseClaimToken(body.claimToken);
   if (body.status === 'printed') return { status: 'printed', claimToken };
   if (body.status !== 'failed') throw new PrintJobValidationError('status', 'status must be printed or failed.');
   const error = typeof body.error === 'string' ? body.error.trim() : '';
@@ -107,6 +106,17 @@ export function parseAcknowledgement(input: unknown): Acknowledgement {
     throw new PrintJobValidationError('error', `error must be between 1 and ${MAX_ERROR_LENGTH} characters.`);
   }
   return { status: 'failed', error, claimToken };
+}
+
+export function parseRelease(input: unknown) {
+  const body = asObject(input, 'claimToken');
+  return { claimToken: parseClaimToken(body.claimToken) };
+}
+
+function parseClaimToken(value: unknown) {
+  const claimToken = typeof value === 'string' ? value.toLowerCase() : '';
+  if (!JOB_ID_PATTERN.test(claimToken)) throw new PrintJobValidationError('claimToken', 'Invalid claimToken.');
+  return claimToken;
 }
 
 export function parseAdminMutation(input: unknown) {
@@ -227,18 +237,38 @@ export async function acknowledgePrintJob(database: D1Database, jobId: string, a
   const row = acknowledgement.status === 'printed'
     ? await database.prepare(`
         UPDATE print_jobs
-        SET status = 'printed', printed_at = unixepoch(), error_msg = NULL, claim_token = NULL
+        SET status = 'printed', printed_at = unixepoch(), error_msg = NULL,
+            claim_token = NULL, terminal_claim_token = claim_token
         WHERE id = ? AND status = 'printing' AND claim_token = ?
         RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
       `).bind(jobId, acknowledgement.claimToken).first<PrintJobRow>()
     : await database.prepare(`
         UPDATE print_jobs
-        SET status = 'failed', printed_at = NULL, error_msg = ?, claim_token = NULL
+        SET status = 'failed', printed_at = NULL, error_msg = ?,
+            claim_token = NULL, terminal_claim_token = claim_token
         WHERE id = ? AND status = 'printing' AND claim_token = ?
         RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
       `).bind(acknowledgement.error, jobId, acknowledgement.claimToken).first<PrintJobRow>();
   if (row) return adminJob(row);
+  const terminal = await database.prepare(`
+    SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    FROM print_jobs
+    WHERE id = ? AND status = ? AND terminal_claim_token = ?
+    LIMIT 1
+  `).bind(jobId, acknowledgement.status, acknowledgement.claimToken).first<PrintJobRow>();
+  if (terminal) return adminJob(terminal);
   return await throwMissingOrConflict(database, jobId, 'Print job is not printing.');
+}
+
+export async function releasePrintJob(database: D1Database, jobId: string, claimToken: string): Promise<AdminPrintJob> {
+  const row = await database.prepare(`
+    UPDATE print_jobs
+    SET status = 'pending', claim_token = NULL
+    WHERE id = ? AND status = 'printing' AND claim_token = ?
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(jobId, claimToken).first<PrintJobRow>();
+  if (row) return adminJob(row);
+  return await throwMissingOrConflict(database, jobId, 'Print job claim is no longer active.');
 }
 
 export async function queueAdminPrintJob(database: D1Database, sessionId: string): Promise<AdminPrintJob> {

@@ -12,11 +12,13 @@ type RequestDependencies = {
   timeoutMs?: number;
 };
 
+type QueueOperation = "claim" | "ack" | "release";
+
 export class QueueRequestError extends Error {
   readonly name = "QueueRequestError";
 
   constructor(
-    public readonly operation: "claim" | "ack",
+    public readonly operation: QueueOperation,
     message: string,
     public readonly status?: number,
     options?: ErrorOptions,
@@ -53,16 +55,27 @@ export async function ackJob(
   const body = status === "failed"
     ? { status, claimToken: job.claimToken, error }
     : { status, claimToken: job.claimToken };
-  await request(
+  const response = await request(
     "ack",
     new URL(`/api/print-agent/jobs/${encodeURIComponent(job.id)}/ack`, config.workerUrl),
     { method: "POST", headers: headers(config), body: JSON.stringify(body) },
     dependencies,
   );
+  await consumeSuccessfulResponse(response, "ack");
+}
+
+export async function releaseJob(config: AgentConfig, job: PrintJob, dependencies: RequestDependencies = {}): Promise<void> {
+  const response = await request(
+    "release",
+    new URL(`/api/print-agent/jobs/${encodeURIComponent(job.id)}/release`, config.workerUrl),
+    { method: "POST", headers: headers(config), body: JSON.stringify({ claimToken: job.claimToken }) },
+    dependencies,
+  );
+  await consumeSuccessfulResponse(response, "release");
 }
 
 async function request(
-  operation: "claim" | "ack",
+  operation: QueueOperation,
   url: URL,
   init: RequestInit,
   { fetch: fetchImplementation = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestDependencies,
@@ -75,18 +88,30 @@ async function request(
     throw new QueueRequestError(operation, `network or timeout error (${reason})`, undefined, { cause });
   }
   if (!response.ok) {
-    const detail = await readBoundedText(response, MAX_ERROR_BODY_BYTES);
+    const detail = await readResponseText(response, operation, MAX_ERROR_BODY_BYTES);
     throw new QueueRequestError(operation, `HTTP ${response.status}${detail ? `: ${detail}` : ""}`, response.status);
   }
   return response;
 }
 
-async function parseJson(response: Response, operation: "claim" | "ack"): Promise<unknown> {
-  const text = await readBoundedText(response, MAX_RESPONSE_BODY_BYTES);
+async function parseJson(response: Response, operation: QueueOperation): Promise<unknown> {
+  const text = await readResponseText(response, operation, MAX_RESPONSE_BODY_BYTES);
   try {
     return JSON.parse(text);
   } catch (cause) {
     throw new QueueRequestError(operation, "Worker returned invalid JSON.", response.status, { cause });
+  }
+}
+
+async function consumeSuccessfulResponse(response: Response, operation: QueueOperation): Promise<void> {
+  await readResponseText(response, operation, MAX_RESPONSE_BODY_BYTES);
+}
+
+async function readResponseText(response: Response, operation: QueueOperation, limit: number): Promise<string> {
+  try {
+    return await readBoundedText(response, limit);
+  } catch (cause) {
+    throw new QueueRequestError(operation, "could not consume Worker response body.", response.status, { cause });
   }
 }
 

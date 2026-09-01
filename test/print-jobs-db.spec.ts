@@ -7,6 +7,7 @@ import {
   PrintJobConflictError,
   PrintJobNotFoundError,
   queueAdminPrintJob,
+  releasePrintJob,
   retryAdminPrintJob,
 } from '../src/db/print-jobs';
 
@@ -195,10 +196,47 @@ describe('print job data layer', () => {
 
     const job = await acknowledgePrintJob(database, row.id, { status: 'failed', error: 'Paper jam', claimToken: row.claim_token });
 
-    expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?, claim_token = NULL");
+    expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?");
+    expect(statements[0].query).toContain('claim_token = NULL, terminal_claim_token = claim_token');
     expect(statements[0].values).toEqual(['Paper jam', row.id, row.claim_token]);
     expect(job).toMatchObject({ status: 'failed', printedAt: null, error: 'Paper jam' });
     expect(job).not.toHaveProperty('postcardKey');
+  });
+
+  it('returns an already-applied terminal acknowledgement for the same token without another mutation', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    let call = 0;
+    const terminal = { ...row, status: 'printed', printed_at: 200, claim_token: null, terminal_claim_token: row.claim_token };
+    const database = {
+      prepare(query: string) {
+        call += 1;
+        const prepared = statement(query, call === 1 ? null : terminal);
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    await expect(acknowledgePrintJob(database, row.id, { status: 'printed', claimToken: row.claim_token }))
+      .resolves.toMatchObject({ id: row.id, status: 'printed', printedAt: 200 });
+    expect(statements).toHaveLength(2);
+    expect(statements[1].query).toContain('status = ? AND terminal_claim_token = ?');
+    expect(statements[1].values).toEqual([row.id, 'printed', row.claim_token]);
+  });
+
+  it('releases only the matching active claim back to pending', async () => {
+    const statements: ReturnType<typeof statement>[] = [];
+    const database = {
+      prepare(query: string) {
+        const prepared = statement(query, { ...row, status: 'pending', claim_token: null });
+        statements.push(prepared);
+        return prepared;
+      },
+    } as unknown as D1Database;
+
+    await expect(releasePrintJob(database, row.id, row.claim_token)).resolves.toMatchObject({ status: 'pending' });
+    expect(statements[0].query).toContain("SET status = 'pending', claim_token = NULL");
+    expect(statements[0].query).toContain("WHERE id = ? AND status = 'printing' AND claim_token = ?");
+    expect(statements[0].values).toEqual([row.id, row.claim_token]);
   });
 
   it('retries only failed or explicitly selected printing jobs for the requested session', async () => {

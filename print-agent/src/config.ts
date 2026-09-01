@@ -27,6 +27,9 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new ConfigurationError("WORKER_URL", "Must use http:// or https://.");
   }
+  if (parsedUrl.protocol === "http:" && !isLoopback(parsedUrl.hostname)) {
+    throw new ConfigurationError("WORKER_URL", "Must use https:// except for loopback development URLs.");
+  }
   if (!EVENT_SLUG_PATTERN.test(eventSlug.trim()) || eventSlug.length > 120) {
     throw new ConfigurationError("EVENT_SLUG", "Must be at most 120 characters using lowercase letters, numbers, and single hyphens.");
   }
@@ -43,6 +46,10 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     printerDriver,
     ...(printerName ? { printerName } : {}),
   };
+}
+
+function isLoopback(hostname: string): boolean {
+  return hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
 function parseEventSlugFlag(argv: string[]): string | undefined {

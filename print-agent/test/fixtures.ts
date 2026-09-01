@@ -15,7 +15,7 @@ export const job: PrintJob = {
   eventId: 42,
   eventSlug: "test-event",
   sceneName: "Central Park",
-  postcardUrl: "/api/events/42/sessions/123/postcard",
+  postcardUrl: "/api/events/42/sessions/123e4567-e89b-12d3-a456-426614174000/postcard",
   createdAt: 1_700_000_000,
   claimToken: "b".repeat(32),
 };

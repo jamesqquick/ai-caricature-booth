@@ -7,6 +7,7 @@ import type { AgentConfig, PrintJob, Sleep } from "./types.js";
 
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRY_DELAYS_MS = [500, 1_500, 4_000];
+export const MAX_POSTCARD_BYTES = 15 * 1_024 * 1_024;
 
 type Fetch = typeof globalThis.fetch;
 
@@ -58,7 +59,7 @@ export async function downloadPostcard(
   job: PrintJob,
   dependencies: DownloadDependencies = {},
 ): Promise<Uint8Array> {
-  const url = new URL(job.postcardUrl, `${config.workerUrl}/`).toString();
+  const url = validatePostcardUrl(config, job);
   const fetchImplementation = dependencies.fetch ?? globalThis.fetch;
   const sleep = dependencies.sleep ?? abortableSleep;
   const retryDelays = dependencies.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
@@ -67,7 +68,7 @@ export async function downloadPostcard(
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     try {
-      const response = await fetchImplementation(url, { signal: AbortSignal.timeout(timeoutMs) });
+      const response = await fetchImplementation(url, { redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
       if (!response.ok) {
         const retryable = response.status === 429 || response.status >= 500;
         const detail = await readBoundedText(response);
@@ -77,8 +78,14 @@ export async function downloadPostcard(
       if (contentType !== "image/jpeg") {
         throw new DownloadError(url, `expected image/jpeg but received ${contentType || "no content type"}`, false, response.status);
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength === 0) throw new DownloadError(url, "received an empty JPEG body", false, response.status);
+      const declaredLength = response.headers.get("content-length");
+      if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_POSTCARD_BYTES)) {
+        throw new DownloadError(url, `invalid or oversized content-length (${declaredLength})`, false, response.status);
+      }
+      const bytes = await readPostcardBody(response, url);
+      if (bytes.byteLength < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes.at(-2) !== 0xff || bytes.at(-1) !== 0xd9) {
+        throw new DownloadError(url, "body does not have valid JPEG boundary markers", false, response.status);
+      }
       return bytes;
     } catch (cause) {
       const error = cause instanceof DownloadError
@@ -90,6 +97,56 @@ export async function downloadPostcard(
     }
   }
   throw lastError ?? new DownloadError(url, "download failed", true);
+}
+
+function validatePostcardUrl(config: AgentConfig, job: PrintJob): string {
+  let workerUrl: URL;
+  let postcardUrl: URL;
+  try {
+    workerUrl = new URL(config.workerUrl);
+    postcardUrl = new URL(job.postcardUrl, workerUrl);
+  } catch (cause) {
+    throw new DownloadError(job.postcardUrl, "invalid URL", false, undefined, { cause });
+  }
+  const expectedPath = `/api/events/${job.eventId}/sessions/${job.sessionId}/postcard`;
+  if (postcardUrl.origin !== workerUrl.origin) {
+    throw new DownloadError(postcardUrl.toString(), "must use the configured Worker origin", false);
+  }
+  if (postcardUrl.protocol !== "https:" && !(postcardUrl.protocol === "http:" && isLoopback(postcardUrl.hostname))) {
+    throw new DownloadError(postcardUrl.toString(), "must use HTTPS except on loopback", false);
+  }
+  if (postcardUrl.pathname !== expectedPath || postcardUrl.search || postcardUrl.hash) {
+    throw new DownloadError(postcardUrl.toString(), `must use the exact path ${expectedPath}`, false);
+  }
+  return postcardUrl.toString();
+}
+
+function isLoopback(hostname: string): boolean {
+  return hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+async function readPostcardBody(response: Response, url: string): Promise<Uint8Array> {
+  if (!response.body) throw new DownloadError(url, "received an empty JPEG body", false, response.status);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    if (length > MAX_POSTCARD_BYTES) {
+      await reader.cancel();
+      throw new DownloadError(url, `JPEG exceeds ${MAX_POSTCARD_BYTES} bytes`, false, response.status);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 export async function handleJob(

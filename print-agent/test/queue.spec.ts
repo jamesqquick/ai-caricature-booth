@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { QueueRequestError, ackJob, claimJobs } from "../src/queue.js";
+import { QueueRequestError, ackJob, claimJobs, releaseJob } from "../src/queue.js";
 import { config, job } from "./fixtures.js";
 
 describe("queue client", () => {
@@ -24,6 +24,38 @@ describe("queue client", () => {
       `https://booth.example.com/api/print-agent/jobs/${job.id}/ack`,
       expect.objectContaining({ body: JSON.stringify({ status: "failed", claimToken: job.claimToken, error: "paper jam" }) }),
     );
+  });
+
+  it("releases with the claim token", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ job: { id: job.id } }));
+    await releaseJob(config, job, { fetch });
+    expect(fetch).toHaveBeenCalledWith(
+      `https://booth.example.com/api/print-agent/jobs/${job.id}/release`,
+      expect.objectContaining({ body: JSON.stringify({ claimToken: job.claimToken }) }),
+    );
+  });
+
+  it.each([
+    ["ack", (fetch: typeof globalThis.fetch) => ackJob(config, job, "printed", undefined, { fetch })],
+    ["release", (fetch: typeof globalThis.fetch) => releaseJob(config, job, { fetch })],
+  ] as const)("bounds and consumes successful %s response bodies", async (_operation, request) => {
+    const cancel = vi.fn();
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new Uint8Array(300_000)); },
+      cancel,
+    })));
+    await expect(request(fetch)).resolves.toBeUndefined();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["ack", (fetch: typeof globalThis.fetch) => ackJob(config, job, "printed", undefined, { fetch })],
+    ["release", (fetch: typeof globalThis.fetch) => releaseJob(config, job, { fetch })],
+  ] as const)("wraps successful %s response stream failures", async (operation, request) => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("stream failed")); },
+    })));
+    await expect(request(fetch)).rejects.toMatchObject({ name: "QueueRequestError", operation });
   });
 
   it("bounds response errors and reports timeout failures with context", async () => {

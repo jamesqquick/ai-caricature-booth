@@ -5,6 +5,7 @@ const createAttendeePrintJob = vi.hoisted(() => vi.fn());
 const loadAttendeePrintJob = vi.hoisted(() => vi.fn());
 const claimPrintJobs = vi.hoisted(() => vi.fn());
 const acknowledgePrintJob = vi.hoisted(() => vi.fn());
+const releasePrintJob = vi.hoisted(() => vi.fn());
 const queueAdminPrintJob = vi.hoisted(() => vi.fn());
 const retryAdminPrintJob = vi.hoisted(() => vi.fn());
 
@@ -15,6 +16,7 @@ vi.mock('../src/db/print-jobs', async (importOriginal) => ({
   loadAttendeePrintJob,
   claimPrintJobs,
   acknowledgePrintJob,
+  releasePrintJob,
   queueAdminPrintJob,
   retryAdminPrintJob,
 }));
@@ -23,6 +25,7 @@ import { POST as createJob } from '../src/pages/api/events/[eventId]/sessions/[s
 import { GET as getJob } from '../src/pages/api/events/[eventId]/sessions/[sessionId]/print-jobs/[jobId]';
 import { POST as claimJobs } from '../src/pages/api/print-agent/jobs/claim';
 import { POST as acknowledgeJob } from '../src/pages/api/print-agent/jobs/[jobId]/ack';
+import { POST as releaseJob } from '../src/pages/api/print-agent/jobs/[jobId]/release';
 import { POST as mutateAdminJob } from '../src/pages/api/admin/sessions/[sessionId]/print-jobs';
 import { PrintJobConflictError, PrintJobNotFoundError } from '../src/db/print-jobs';
 
@@ -149,6 +152,34 @@ describe('print job APIs', () => {
       expect(await response.json()).toEqual({ error: 'Invalid claimToken.', field: 'claimToken' });
     }
     expect(acknowledgePrintJob).not.toHaveBeenCalled();
+  });
+
+  it('releases a matching claimed job through the authenticated agent contract', async () => {
+    releasePrintJob.mockResolvedValue({ ...publicJob, status: 'pending' });
+    const response = await releaseJob({
+      params: { jobId },
+      request: new Request('https://booth.test/api/print-agent/jobs/x/release', {
+        method: 'POST', body: JSON.stringify({ claimToken }),
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ job: { ...publicJob, status: 'pending' } });
+    expect(releasePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, claimToken);
+  });
+
+  it('rejects missing or malformed release claim tokens', async () => {
+    for (const value of [undefined, '', 'not-a-token']) {
+      const response = await releaseJob({
+        params: { jobId },
+        request: new Request('https://booth.test/api/print-agent/jobs/x/release', {
+          method: 'POST', body: JSON.stringify({ claimToken: value }),
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Invalid claimToken.', field: 'claimToken' });
+    }
+    expect(releasePrintJob).not.toHaveBeenCalled();
   });
 
   it('accepts a 500-character failure message and rejects 501 characters', async () => {

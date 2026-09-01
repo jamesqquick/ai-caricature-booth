@@ -3,9 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { handleJob } from "./job-handler.js";
+import { FileAckOutbox } from "./outbox.js";
 import { PrintPoller } from "./poller.js";
 import { createPrinter } from "./printer.js";
-import { ackJob, claimJobs } from "./queue.js";
+import { ackJob, claimJobs, releaseJob } from "./queue.js";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   const outputDir = join(packageRoot, "output");
   const controller = new AbortController();
   const stop = (signal: NodeJS.Signals) => {
-    console.info(`[agent] received ${signal}; stopping after the active request or job.`);
+    console.info(`[agent] received ${signal}; stopping after the active job and releasing unprocessed claims.`);
     controller.abort();
   };
   process.once("SIGINT", stop);
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
     claimJobs: () => claimJobs(config),
     handleJob: (job) => handleJob(config, job, printer, { outputDir }),
     ackJob: (job, status, error) => ackJob(config, job, status, error),
+    releaseJob: (job) => releaseJob(config, job),
+    outbox: new FileAckOutbox(join(outputDir, "state", "pending-acks.json")),
   });
   await poller.run(controller.signal);
 }
