@@ -26,6 +26,7 @@ function createDatabase(row: unknown) {
   return {
     prepare(sql: string) {
       expect(sql).toContain('WHERE s.id = ?');
+      expect(sql).toContain('s.error_code');
       return {
         bind(id: string) {
           expect(id).toBe('admin-demo-001');
@@ -39,30 +40,79 @@ function createDatabase(row: unknown) {
   } as unknown as D1Database;
 }
 
+function createSessionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    session_id: 'admin-demo-001',
+    event_id: 7,
+    event_name: 'Demo Event',
+    event_slug: 'demo-event',
+    scene_id: 'subway',
+    scene_name: 'Subway Platform',
+    status: 'errored',
+    created_at: 100,
+    updated_at: 300,
+    completed_at: null,
+    error_code: null,
+    error_message: null,
+    workflow_id: 'workflow-2',
+    has_selfie: 1,
+    has_caricature: 0,
+    has_postcard: 0,
+    ...overrides,
+  };
+}
+
 describe('admin session detail', () => {
   it('loads one session as a safe detail model without raw image keys', async () => {
-    const result = await loadAdminSession(createDatabase({
-      session_id: 'admin-demo-001',
-      event_id: 7,
-      event_name: 'Demo Event',
-      event_slug: 'demo-event',
-      scene_id: 'subway',
-      scene_name: 'Subway Platform',
-      status: 'errored',
-      created_at: 100,
-      updated_at: 300,
-      completed_at: null,
-      error_message: 'Moderation failed',
-      workflow_id: 'workflow-2',
-      has_selfie: 1,
-      has_caricature: 0,
-      has_postcard: 0,
+    const result = await loadAdminSession(createDatabase(createSessionRow({
       selfie_key: 'must-not-leak',
-    }), 'admin-demo-001');
+    })), 'admin-demo-001');
 
     expect(result).toMatchObject({ id: 'admin-demo-001', status: 'errored', hasSelfie: true, hasCaricature: false });
     expect(result).not.toHaveProperty('selfieKey');
     expect(result).not.toHaveProperty('selfie_key');
+  });
+
+  it('renders safe failure details when only a stable error code is stored', async () => {
+    const result = await loadAdminSession(createDatabase(createSessionRow({
+      error_code: 'generation_failed',
+    })), 'admin-demo-001');
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+
+    expect(result).toMatchObject({
+      errorCode: 'generation_failed',
+      errorMessage: "We couldn't create your caricature. Please try again.",
+    });
+    expect(source).toContain('{session.errorCode && (');
+    expect(source).toContain('{session.errorCode}');
+    expect(source).toContain('{session.errorMessage}');
+  });
+
+  it('maps known legacy errors to their stable failure details', async () => {
+    const result = await loadAdminSession(createDatabase(createSessionRow({
+      error_message: "We couldn't finish your postcard. Please try again.",
+    })), 'admin-demo-001');
+
+    expect(result).toMatchObject({
+      errorCode: 'composition_failed',
+      errorMessage: "We couldn't finish your postcard. Please try again.",
+    });
+  });
+
+  it('maps unknown legacy errors to generic safe output without exposing the source text', async () => {
+    const diagnostic = 'legacy-sentinel-database-host-4c91e2';
+    const result = await loadAdminSession(createDatabase(createSessionRow({
+      error_message: diagnostic,
+    })), 'admin-demo-001');
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+
+    expect(result).toMatchObject({
+      errorCode: 'unknown_failure',
+      errorMessage: "We couldn't create your postcard. Please try again.",
+    });
+    expect(JSON.stringify(result)).not.toContain(diagnostic);
+    expect(source).not.toContain('error_message');
+    expect(source).not.toContain(diagnostic);
   });
 
   it('returns null for an unknown session', async () => {
