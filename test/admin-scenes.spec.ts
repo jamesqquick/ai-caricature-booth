@@ -142,6 +142,29 @@ describe('event scene migration', () => {
 });
 
 describe('event scene queries', () => {
+  it('keeps prompts out of public scene hydration while retaining them server-side', async () => {
+    const { sqlite, database } = createSceneDatabase();
+    await migrateScenes(sqlite);
+    const promptSentinel = 'private-prompt-sentinel-a61e9c';
+    sqlite.prepare(`
+      UPDATE event_scenes SET prompt = ?
+      WHERE event_id = 1 AND id = 'hot-dog-stand'
+    `).run(promptSentinel);
+
+    const scenes = await loadScenesByEvent(database, 1);
+    const hydrationData = JSON.stringify({ scenes });
+    const serverScene = await loadEventScene(database, 1, 'hot-dog-stand');
+
+    expect(scenes.find((scene) => scene.id === 'hot-dog-stand')).toEqual({
+      id: 'hot-dog-stand',
+      name: 'Hot Dog Stand',
+      description: 'A curbside classic with mustard-yellow swagger.',
+    });
+    expect(hydrationData).not.toContain(promptSentinel);
+    expect(hydrationData).not.toContain('prompt');
+    expect(serverScene?.prompt).toBe(promptSentinel);
+  });
+
   it('loads every scene for one event in creation order', async () => {
     const { sqlite, database } = createSceneDatabase();
     await migrateScenes(sqlite);

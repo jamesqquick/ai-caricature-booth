@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
-import type { Scene } from '../data/scenes';
+import type { PublicScene } from '../data/scenes';
 import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
 import { eventAccentForeground } from '../lib/event-accent';
 import { Stepper } from './Stepper';
@@ -20,7 +20,7 @@ type Props = {
   kioskIdleSubhead: string;
   scenePickerHeading: string;
   accentColor: string;
-  scenes: Scene[];
+  scenes: PublicScene[];
 };
 
 export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor, scenes }: Props) {

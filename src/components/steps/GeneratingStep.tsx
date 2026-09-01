@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { actions } from 'astro:actions';
 import { AlertCircle, Check } from 'lucide-react';
-import type { Scene } from '../../data/scenes';
+import type { PublicScene } from '../../data/scenes';
 import { generationFailureContent, isGenerationFailureCode } from '../../lib/generation-errors';
 import { GENERATION_PROGRESS_DURATION_MS, generationPhases, generationProgressRanges, phaseForGenerationStatus, progressForPhase, type GenerationPhase } from '../../lib/generation-progress';
 import { Badge } from '../ui/badge';
@@ -11,7 +11,7 @@ import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 
 type Props = {
-  scene: Scene;
+  scene: PublicScene;
   photoDataUrl: string;
   eventSlug: string;
   onComplete: (sessionId: string) => void;
