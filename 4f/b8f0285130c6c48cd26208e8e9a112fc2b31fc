@@ -1,0 +1,43 @@
+drizzle/migrations/0013_print_job_request_keys.sql
+  s_d4e6b520326bd7::t_8d0efec9000ef2 1-5
+src/components/ReviewTimeoutPrompt.tsx
+  s_1352646f6cd362::t_136a88ca7126f1 12,28,31
+src/lib/fetch-with-deadline.ts
+  s_1352646f6cd362::t_530f801a9fc0a7 1-29
+test/attendee-print-control.spec.tsx
+  s_b99fae9be9adff::t_ea2d0cb649bc60 22-23,43-47,89,114,117-138
+test/print-jobs-api.spec.ts
+  s_d4e6b520326bd7::t_0596e5b44e2463 42-50,56,64,78,82-98,290,294,299-300,341-342
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4fb8f0285130c6c48cd26208e8e9a112fc2b31fc",
+  "prompts": {},
+  "sessions": {
+    "s_1352646f6cd362": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2352375ffeO6dBCW37VmqiwS",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_b99fae9be9adff": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa275bd5fffeK1HXY3Euin7kwf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_d4e6b520326bd7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2955db0ffeUEbKgW5dPuDZRC",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
