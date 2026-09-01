@@ -1,0 +1,23 @@
+print-agent/src/job-handler.ts
+  s_2803404e04710c::t_997fc00f1d1cab 6,172,178,183
+print-agent/src/print-artifact.ts
+  s_2803404e04710c::t_9082184ce0d06c 1-21
+print-agent/src/printer.ts
+  s_2803404e04710c::t_43256f12f27fd4 7-8,16-17,20,51,54,59,80,82,84,87,94,96,100,104,112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bafd78893f4f88726a4d0c84cbc7bef442abcfb2",
+  "prompts": {},
+  "sessions": {
+    "s_2803404e04710c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa1c78461ffeQlS6ofD0e8JIam",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
