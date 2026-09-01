@@ -1,0 +1,19 @@
+src/actions/index.ts
+  s_b25d73bc1a073c::t_0dbe2b6a0b2c56 6,9,61-67,69,95-101,103,108,152-161,166-168,175-176,197,203-209,211-215,221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "07999c1a6637ebad9cf24a170a9c5fa6e6d16848",
+  "prompts": {},
+  "sessions": {
+    "s_b25d73bc1a073c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa257ac27ffeB6FowoKHYYeYS8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
