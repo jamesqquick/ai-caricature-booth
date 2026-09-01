@@ -1,0 +1,29 @@
+print-agent/test/pdf.spec.ts
+  s_d4e6b520326bd7::t_a88d467b092dda 3,6-7,26-42,44-50
+print-agent/test/poller.spec.ts
+  s_ec0b875a6d5036::t_b5f636499f5896 5-6,8,13,16-19,26,29,32,36,84,89-92,96-100,135,139,141,146-147,152,174,177,181-250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e474ecd406d57691890ec582965d6988a8549ed6",
+  "prompts": {},
+  "sessions": {
+    "s_d4e6b520326bd7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2955db0ffeUEbKgW5dPuDZRC",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_ec0b875a6d5036": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2ba5c6affep3T4xk8GobcVFr",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
