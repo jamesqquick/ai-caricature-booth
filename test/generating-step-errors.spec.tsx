@@ -404,7 +404,7 @@ describe('GeneratingStep error recovery', () => {
     renderGenerating();
 
     const heading = await screen.findByRole('heading', { name: "We couldn't start your postcard." });
-    expect(document.activeElement).toBe(heading);
+    await waitFor(() => expect(document.activeElement).toBe(heading));
   });
 
   it('keeps normal completion behavior unchanged', async () => {
@@ -452,7 +452,7 @@ describe('GeneratingStep error recovery', () => {
     await screen.findByRole('alert');
 
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+    await waitFor(() => expect(cancelAnimationFrame).toHaveBeenCalledWith(42));
   });
 
   it('does not schedule progress animation frames when reduced motion is preferred', async () => {
