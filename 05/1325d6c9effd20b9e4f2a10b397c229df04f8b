@@ -1,0 +1,29 @@
+drizzle/migrations/0011_print_job_terminal_claim_tokens.sql
+  s_d4e6b520326bd7::t_7993bfa8c5b4b3 1
+src/db/print-jobs.ts
+  s_d4e6b520326bd7::t_febc1c6c5331ff 101,111-121,240-241,247-248,253-259,263-273
+src/pages/api/print-agent/jobs/[jobId]/release.ts
+  s_d4e6b520326bd7::t_7e932126dcad58 1-15
+test/print-jobs-api.spec.ts
+  s_d4e6b520326bd7::t_f0ee5e33bfc40d 8,19,28,157-184
+test/print-jobs-db.spec.ts
+  s_d4e6b520326bd7::t_6bef1880aa95d6 10,199-200,206-241
+test/print-jobs-sqlite.spec.ts
+  s_d4e6b520326bd7::t_2dea7bdf3faade 4,17,136-173,185-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "051325d6c9effd20b9e4f2a10b397c229df04f8b",
+  "prompts": {},
+  "sessions": {
+    "s_d4e6b520326bd7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa2955db0ffeUEbKgW5dPuDZRC",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
