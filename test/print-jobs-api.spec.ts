@@ -28,6 +28,7 @@ import { PrintJobConflictError, PrintJobNotFoundError } from '../src/db/print-jo
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const jobId = '0123456789abcdef0123456789abcdef';
+const claimToken = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const publicJob = { id: jobId, status: 'pending', printedAt: null };
 
 describe('print job APIs', () => {
@@ -73,7 +74,7 @@ describe('print job APIs', () => {
   });
 
   it('accepts claim limits within the inclusive range', async () => {
-    claimPrintJobs.mockResolvedValue([]);
+    claimPrintJobs.mockResolvedValue([{ ...publicJob, claimToken }]);
     const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -81,6 +82,7 @@ describe('print job APIs', () => {
     }) });
 
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ jobs: [{ ...publicJob, claimToken }] });
     expect(claimPrintJobs).toHaveBeenCalledWith(fakeEnv.DB, 'demo-event', 20);
   });
 
@@ -118,7 +120,7 @@ describe('print job APIs', () => {
     const invalid = await acknowledgeJob({
       params: { jobId },
       request: new Request('https://booth.test/api/print-agent/jobs/x/ack', {
-        method: 'POST', body: JSON.stringify({ status: 'failed', error: '   ' }),
+        method: 'POST', body: JSON.stringify({ status: 'failed', error: '   ', claimToken }),
       }),
     });
     expect(invalid.status).toBe(400);
@@ -128,11 +130,25 @@ describe('print job APIs', () => {
     const valid = await acknowledgeJob({
       params: { jobId },
       request: new Request('https://booth.test/api/print-agent/jobs/x/ack', {
-        method: 'POST', body: JSON.stringify({ status: 'printed' }),
+        method: 'POST', body: JSON.stringify({ status: 'printed', claimToken }),
       }),
     });
     expect(valid.status).toBe(200);
-    expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'printed' });
+    expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'printed', claimToken });
+  });
+
+  it('requires a valid claim token for acknowledgements', async () => {
+    for (const value of [undefined, '', 'not-a-token']) {
+      const response = await acknowledgeJob({
+        params: { jobId },
+        request: new Request('https://booth.test/api/print-agent/jobs/x/ack', {
+          method: 'POST', body: JSON.stringify({ status: 'printed', claimToken: value }),
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Invalid claimToken.', field: 'claimToken' });
+    }
+    expect(acknowledgePrintJob).not.toHaveBeenCalled();
   });
 
   it('accepts a 500-character failure message and rejects 501 characters', async () => {
@@ -140,19 +156,19 @@ describe('print job APIs', () => {
     const request = (error: string) => acknowledgeJob({
       params: { jobId },
       request: new Request('https://booth.test/api/print-agent/jobs/x/ack', {
-        method: 'POST', body: JSON.stringify({ status: 'failed', error }),
+        method: 'POST', body: JSON.stringify({ status: 'failed', error, claimToken }),
       }),
     });
 
     expect((await request('x'.repeat(500))).status).toBe(200);
-    expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'failed', error: 'x'.repeat(500) });
+    expect(acknowledgePrintJob).toHaveBeenCalledWith(fakeEnv.DB, jobId, { status: 'failed', error: 'x'.repeat(500), claimToken });
     expect((await request('x'.repeat(501))).status).toBe(400);
   });
 
   it('maps missing and invalid transitions without exposing database failures', async () => {
     acknowledgePrintJob.mockRejectedValueOnce(new PrintJobNotFoundError()).mockRejectedValueOnce(new PrintJobConflictError('Job is not printing.'));
     const request = () => new Request('https://booth.test/api/print-agent/jobs/x/ack', {
-      method: 'POST', body: JSON.stringify({ status: 'printed' }),
+      method: 'POST', body: JSON.stringify({ status: 'printed', claimToken }),
     });
 
     expect((await acknowledgeJob({ params: { jobId }, request: request() })).status).toBe(404);

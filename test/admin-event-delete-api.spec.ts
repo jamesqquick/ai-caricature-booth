@@ -14,6 +14,7 @@ vi.mock('../src/db/events', async () => {
 });
 
 import { DELETE } from '../src/pages/api/admin/events/[slug]';
+import { EventDeletionConflictError } from '../src/db/events';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -59,5 +60,22 @@ describe('event deletion API', () => {
       'events/7/watermarks/right.png',
       'sessions/session-1/selfie.jpg',
     ]);
+  });
+
+  it('returns a typed conflict without deleting R2 objects when print history exists', async () => {
+    loadEventBySlug.mockResolvedValue({ id: 7, slug: 'demo-event' });
+    deleteEventWithSessions.mockRejectedValue(new EventDeletionConflictError());
+
+    const response = await DELETE({
+      request: new Request('https://booth.test/api/admin/events/demo-event', {
+        method: 'DELETE',
+        headers: { 'x-booth-admin-email': 'admin@example.com' },
+      }),
+      params: { slug: 'demo-event' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'This event has print job history and cannot be deleted.' });
+    expect(fakeEnv.SELFIES.delete).not.toHaveBeenCalled();
   });
 });

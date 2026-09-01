@@ -21,6 +21,7 @@ const row = {
   created_at: 100,
   printed_at: null,
   error_msg: null,
+  claim_token: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 };
 
 function statement(query: string, result: unknown) {
@@ -130,10 +131,11 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    await queueAdminPrintJob(database, row.session_id);
+    const job = await queueAdminPrintJob(database, row.session_id);
 
     expect(statements[0].query).toContain("pj.status IN ('pending', 'printing')");
     expect(statements[0].query).not.toContain("'printed')");
+    expect(job).not.toHaveProperty('claimToken');
   });
 
   it('selects and transitions event-scoped pending jobs in one update statement', async () => {
@@ -156,7 +158,8 @@ describe('print job data layer', () => {
     expect(prepared[0].values).toEqual(['demo-event', 3]);
     expect(jobs).toHaveLength(3);
     expect(jobs.map((job) => job.id)).toEqual([row.id, sameTime.id, newer.id]);
-    expect(jobs[0]).toMatchObject({ eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge' });
+    expect(jobs[0]).toMatchObject({ eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge', claimToken: row.claim_token });
+    expect(prepared[0].query).toContain("claim_token = lower(hex(randomblob(16)))");
   });
 
   it('only acknowledges printing jobs and applies terminal fields safely', async () => {
@@ -169,11 +172,13 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    const job = await acknowledgePrintJob(database, row.id, { status: 'printed' });
+    const job = await acknowledgePrintJob(database, row.id, { status: 'printed', claimToken: row.claim_token });
 
-    expect(statements[0].query).toContain("WHERE id = ? AND status = 'printing'");
+    expect(statements[0].query).toContain("WHERE id = ? AND status = 'printing' AND claim_token = ?");
     expect(statements[0].query).toContain('printed_at = unixepoch()');
     expect(statements[0].query).toContain('error_msg = NULL');
+    expect(statements[0].query).toContain('claim_token = NULL');
+    expect(statements[0].values).toEqual([row.id, row.claim_token]);
     expect(job).toMatchObject({ status: 'printed', printedAt: 200, error: null });
     expect(job).not.toHaveProperty('postcardKey');
   });
@@ -188,10 +193,10 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    const job = await acknowledgePrintJob(database, row.id, { status: 'failed', error: 'Paper jam' });
+    const job = await acknowledgePrintJob(database, row.id, { status: 'failed', error: 'Paper jam', claimToken: row.claim_token });
 
-    expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?");
-    expect(statements[0].values).toEqual(['Paper jam', row.id]);
+    expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?, claim_token = NULL");
+    expect(statements[0].values).toEqual(['Paper jam', row.id, row.claim_token]);
     expect(job).toMatchObject({ status: 'failed', printedAt: null, error: 'Paper jam' });
     expect(job).not.toHaveProperty('postcardKey');
   });
@@ -206,7 +211,7 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    await retryAdminPrintJob(database, row.session_id, row.id);
+    const job = await retryAdminPrintJob(database, row.session_id, row.id);
 
     expect(statements[0].query).toContain('session_id = ?');
     expect(statements[0].query).toContain("status IN ('failed', 'printing')");
@@ -215,6 +220,8 @@ describe('print job data layer', () => {
     expect(statements[0].query).toContain("status = 'pending'");
     expect(statements[0].query).toContain('printed_at = NULL');
     expect(statements[0].query).toContain('error_msg = NULL');
+    expect(statements[0].query).toContain('claim_token = NULL');
+    expect(job).not.toHaveProperty('claimToken');
   });
 
   it('reports an admin queue conflict when an active job blocks insertion', async () => {

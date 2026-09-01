@@ -77,6 +77,9 @@ describe('admin event editing', () => {
               async all() {
                 return { results: [{ id: 'session-1', selfie_key: 'sessions/session-1/selfie.jpg', caricature_key: null, postcard_key: null }] };
               },
+              async first() {
+                return null;
+              },
             };
           },
         };
@@ -92,11 +95,39 @@ describe('admin event editing', () => {
       sessions: [{ id: 'session-1', objectKeys: ['sessions/session-1/selfie.jpg'] }],
     });
     expect(statements.map(({ query }) => query)).toEqual(expect.arrayContaining([
+      expect.stringContaining('SELECT id FROM print_jobs WHERE event_id = ?'),
       expect.stringContaining('SELECT id, selfie_key, caricature_key, postcard_key'),
       expect.stringContaining('DELETE FROM sessions WHERE event_id = ?'),
       expect.stringContaining('DELETE FROM event_scenes WHERE event_id = ?'),
       expect.stringContaining('DELETE FROM events WHERE id = ?'),
     ]));
+  });
+
+  it('preserves event history when print jobs exist', async () => {
+    let batched = false;
+    const database = {
+      prepare(query: string) {
+        return {
+          bind() {
+            return {
+              async first() {
+                return query.includes('FROM print_jobs') ? { id: 'job-1' } : null;
+              },
+            };
+          },
+        };
+      },
+      async batch() {
+        batched = true;
+        return [];
+      },
+    } as unknown as D1Database;
+
+    await expect(deleteEventWithSessions(database, 7)).rejects.toMatchObject({
+      name: 'EventDeletionConflictError',
+      message: 'This event has print job history and cannot be deleted.',
+    });
+    expect(batched).toBe(false);
   });
 
   it('wires the reusable event delete control into the page header', async () => {

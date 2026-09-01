@@ -20,6 +20,7 @@ type JobState = {
   created_at: number;
   printed_at: number | null;
   error_msg: string | null;
+  claim_token?: string | null;
 };
 
 class StatefulStatement {
@@ -46,6 +47,7 @@ class StatefulD1 {
   readonly eventSlugs = new Map<number, string>();
   readonly jobs: JobState[] = [];
   private nextId = 1;
+  private nextClaimToken = 1;
 
   prepare(query: string) {
     return new StatefulStatement(this, query);
@@ -81,6 +83,7 @@ class StatefulD1 {
       job.status = 'printing';
       job.printed_at = null;
       job.error_msg = null;
+      job.claim_token = String(this.nextClaimToken++).padStart(32, '0');
     }
     return claimed.map((job) => ({ ...job }));
   }

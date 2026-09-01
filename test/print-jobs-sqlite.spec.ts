@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { claimPrintJobs, createAttendeePrintJob } from '../src/db/print-jobs';
+import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, PrintJobConflictError, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
   '0001_events.sql',
@@ -13,6 +13,7 @@ const migrationUrls = [
   '0007_simplify_event_scenes.sql',
   '0008_print_jobs.sql',
   '0009_literal_event_copy.sql',
+  '0010_print_job_claim_tokens.sql',
 ].map((name) => new URL(`../drizzle/migrations/${name}`, import.meta.url));
 
 function asD1(sqlite: DatabaseSync) {
@@ -97,7 +98,56 @@ describe('print job SQLite integration', () => {
       expect(first).toHaveLength(2);
       expect(second).toHaveLength(2);
       expect(first.some((job) => second.some((other) => other.id === job.id))).toBe(false);
+      expect(first.every((job) => /^[0-9a-f]{32}$/.test(job.claimToken))).toBe(true);
+      expect(new Set(first.map((job) => job.claimToken)).size).toBe(2);
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM print_jobs WHERE status = 'pending'").get()).toEqual({ count: 0 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('rejects a stale acknowledgement after an admin retry and reclaim', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId);
+      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      await retryAdminPrintJob(database, sessionId, pending.id);
+      const [secondClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+
+      expect(secondClaim.claimToken).not.toBe(firstClaim.claimToken);
+      await expect(acknowledgePrintJob(database, pending.id, {
+        status: 'printed',
+        claimToken: firstClaim.claimToken,
+      })).rejects.toBeInstanceOf(PrintJobConflictError);
+
+      const printing = sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id);
+      expect(printing).toEqual({ status: 'printing', claim_token: secondClaim.claimToken });
+
+      await acknowledgePrintJob(database, pending.id, { status: 'printed', claimToken: secondClaim.claimToken });
+      expect(sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'printed', claim_token: null });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('adds the claim token column and session/status index without constraining imported statuses', async () => {
+    const sqlite = new DatabaseSync(':memory:');
+    try {
+      for (const migrationUrl of migrationUrls.slice(0, -1)) sqlite.exec(await readFile(migrationUrl, 'utf8'));
+      insertCompletedSession(sqlite);
+      sqlite.prepare(`
+        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, status)
+        VALUES ('legacy', ?, 1, 'postcard.jpg', '/legacy', 'Legacy', 'imported')
+      `).run(sessionId);
+
+      sqlite.exec(await readFile(migrationUrls.at(-1)!, 'utf8'));
+
+      expect(sqlite.prepare("SELECT status, claim_token FROM print_jobs WHERE id = 'legacy'").get())
+        .toEqual({ status: 'imported', claim_token: null });
+      expect(sqlite.prepare("SELECT name FROM pragma_index_list('print_jobs') WHERE name = 'print_jobs_session_status_idx'").get())
+        .toEqual({ name: 'print_jobs_session_status_idx' });
     } finally {
       sqlite.close();
     }
