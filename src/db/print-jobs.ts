@@ -1,0 +1,286 @@
+export const PRINT_JOB_STATUSES = ['pending', 'printing', 'printed', 'failed'] as const;
+export type PrintJobStatus = (typeof PRINT_JOB_STATUSES)[number];
+
+export type PublicPrintJob = {
+  id: string;
+  status: PrintJobStatus;
+  printedAt: number | null;
+};
+
+export type AdminPrintJob = PublicPrintJob & {
+  sessionId: string;
+  eventId: number;
+  sceneName: string;
+  postcardUrl: string;
+  createdAt: number;
+  error: string | null;
+};
+
+export type AgentPrintJob = Pick<AdminPrintJob, 'id' | 'sessionId' | 'eventId' | 'sceneName' | 'postcardUrl' | 'createdAt'> & {
+  eventSlug: string;
+};
+
+export type PrintJobField = 'eventId' | 'sessionId' | 'jobId' | 'eventSlug' | 'limit' | 'status' | 'error' | 'action';
+
+export class PrintJobValidationError extends Error {
+  name = 'PrintJobValidationError';
+
+  constructor(public readonly field: PrintJobField, message: string) {
+    super(message);
+  }
+}
+
+export class PrintJobNotFoundError extends Error {
+  name = 'PrintJobNotFoundError';
+
+  constructor(message = 'Print job not found.') {
+    super(message);
+  }
+}
+
+export class PrintJobConflictError extends Error {
+  name = 'PrintJobConflictError';
+}
+
+type PrintJobRow = {
+  id: string;
+  session_id: string;
+  event_id: number;
+  event_slug?: string;
+  postcard_url: string;
+  scene_name: string;
+  status: PrintJobStatus;
+  created_at: number;
+  printed_at: number | null;
+  error_msg: string | null;
+};
+
+type Acknowledgement = { status: 'printed' } | { status: 'failed'; error: string };
+
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const JOB_ID_PATTERN = /^[0-9a-f]{32}$/i;
+const EVENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_ERROR_LENGTH = 500;
+
+export function parseEventId(value: string | undefined) {
+  if (!value || !/^\d+$/.test(value)) throw new PrintJobValidationError('eventId', 'Invalid eventId.');
+  const eventId = Number(value);
+  if (!Number.isSafeInteger(eventId) || eventId < 1) throw new PrintJobValidationError('eventId', 'Invalid eventId.');
+  return eventId;
+}
+
+export function parseSessionId(value: string | undefined) {
+  if (!value || !SESSION_ID_PATTERN.test(value)) throw new PrintJobValidationError('sessionId', 'Invalid sessionId.');
+  return value;
+}
+
+export function parseJobId(value: string | undefined) {
+  if (!value || !JOB_ID_PATTERN.test(value)) throw new PrintJobValidationError('jobId', 'Invalid jobId.');
+  return value.toLowerCase();
+}
+
+export function parseClaimInput(input: unknown) {
+  const body = asObject(input);
+  const eventSlug = typeof body.eventSlug === 'string' ? body.eventSlug.trim() : '';
+  if (!EVENT_SLUG_PATTERN.test(eventSlug) || eventSlug.length > 120) {
+    throw new PrintJobValidationError('eventSlug', 'Invalid eventSlug.');
+  }
+  const requestedLimit = body.limit === undefined ? 1 : body.limit;
+  if (typeof requestedLimit !== 'number' || !Number.isInteger(requestedLimit)) {
+    throw new PrintJobValidationError('limit', 'limit must be an integer.');
+  }
+  return { eventSlug, limit: Math.min(20, Math.max(1, requestedLimit)) };
+}
+
+export function parseAcknowledgement(input: unknown): Acknowledgement {
+  const body = asObject(input);
+  if (body.status === 'printed') return { status: 'printed' };
+  if (body.status !== 'failed') throw new PrintJobValidationError('status', 'status must be printed or failed.');
+  const error = typeof body.error === 'string' ? body.error.trim() : '';
+  if (!error || error.length > MAX_ERROR_LENGTH) {
+    throw new PrintJobValidationError('error', `error must be between 1 and ${MAX_ERROR_LENGTH} characters.`);
+  }
+  return { status: 'failed', error };
+}
+
+export function parseAdminMutation(input: unknown) {
+  const body = asObject(input);
+  if (body.action === 'queue') return { action: 'queue' } as const;
+  if (body.action === 'retry') return { action: 'retry', jobId: parseJobId(typeof body.jobId === 'string' ? body.jobId : undefined) } as const;
+  throw new PrintJobValidationError('action', 'action must be queue or retry.');
+}
+
+function asObject(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new PrintJobValidationError('action', 'Request body must be a JSON object.');
+  }
+  return input as Record<string, unknown>;
+}
+
+function publicJob(row: PrintJobRow): PublicPrintJob {
+  return { id: row.id, status: row.status, printedAt: row.printed_at };
+}
+
+function adminJob(row: PrintJobRow): AdminPrintJob {
+  return {
+    ...publicJob(row),
+    sessionId: row.session_id,
+    eventId: row.event_id,
+    sceneName: row.scene_name,
+    postcardUrl: row.postcard_url,
+    createdAt: row.created_at,
+    error: row.error_msg,
+  };
+}
+
+function postcardUrl(eventId: number, sessionId: string) {
+  return `/api/events/${eventId}/sessions/${sessionId}/postcard`;
+}
+
+export async function createAttendeePrintJob(database: D1Database, eventId: number, sessionId: string): Promise<PublicPrintJob> {
+  const url = postcardUrl(eventId, sessionId);
+  const inserted = await database.prepare(`
+    INSERT INTO print_jobs (session_id, event_id, postcard_key, postcard_url, scene_name)
+    SELECT s.id, s.event_id, s.postcard_key, ?, COALESCE(NULLIF(s.scene_name, ''), s.scene_id)
+    FROM sessions s
+    WHERE s.id = ?
+      AND s.event_id = ?
+      AND s.status = 'completed'
+      AND s.postcard_key IS NOT NULL
+      AND s.postcard_key <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM print_jobs pj
+        WHERE pj.session_id = s.id
+          AND pj.event_id = s.event_id
+          AND pj.status IN ('pending', 'printing', 'printed')
+      )
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(url, sessionId, eventId).first<PrintJobRow>();
+  if (inserted) return publicJob(inserted);
+
+  const existing = await database.prepare(`
+    SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    FROM print_jobs
+    WHERE session_id = ? AND event_id = ? AND status IN ('pending', 'printing', 'printed')
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `).bind(sessionId, eventId).first<PrintJobRow>();
+  if (existing) return publicJob(existing);
+  throw new PrintJobNotFoundError('Completed session not found.');
+}
+
+export async function loadAttendeePrintJob(database: D1Database, eventId: number, sessionId: string, jobId: string): Promise<PublicPrintJob> {
+  const row = await database.prepare(`
+    SELECT id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+    FROM print_jobs
+    WHERE id = ? AND session_id = ? AND event_id = ?
+    LIMIT 1
+  `).bind(jobId, sessionId, eventId).first<PrintJobRow>();
+  if (!row) throw new PrintJobNotFoundError();
+  return publicJob(row);
+}
+
+export async function claimPrintJobs(database: D1Database, eventSlug: string, limit: number): Promise<AgentPrintJob[]> {
+  const candidates = await database.prepare(`
+    SELECT pj.id, pj.session_id, pj.event_id, e.slug AS event_slug, pj.postcard_url,
+           pj.scene_name, pj.status, pj.created_at, pj.printed_at, pj.error_msg
+    FROM print_jobs pj
+    INNER JOIN events e ON e.id = pj.event_id
+    WHERE pj.status = 'pending' AND e.slug = ?
+    ORDER BY pj.created_at ASC, pj.id ASC
+    LIMIT ?
+  `).bind(eventSlug, limit).all<PrintJobRow>();
+  if (candidates.results.length === 0) return [];
+
+  const updates = candidates.results.map((candidate) => database.prepare(`
+    UPDATE print_jobs
+    SET status = 'printing', printed_at = NULL, error_msg = NULL
+    WHERE id = ? AND status = 'pending'
+    RETURNING id
+  `).bind(candidate.id));
+  const results = await database.batch<{ id: string }>(updates);
+
+  return candidates.results.flatMap((candidate, index) => {
+    if (!results[index]?.results.some((result) => result.id === candidate.id)) return [];
+    return [{
+      id: candidate.id,
+      sessionId: candidate.session_id,
+      eventId: candidate.event_id,
+      eventSlug: candidate.event_slug ?? eventSlug,
+      sceneName: candidate.scene_name,
+      postcardUrl: candidate.postcard_url,
+      createdAt: candidate.created_at,
+    }];
+  });
+}
+
+export async function acknowledgePrintJob(database: D1Database, jobId: string, acknowledgement: Acknowledgement): Promise<AdminPrintJob> {
+  const row = acknowledgement.status === 'printed'
+    ? await database.prepare(`
+        UPDATE print_jobs
+        SET status = 'printed', printed_at = unixepoch(), error_msg = NULL
+        WHERE id = ? AND status = 'printing'
+        RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+      `).bind(jobId).first<PrintJobRow>()
+    : await database.prepare(`
+        UPDATE print_jobs
+        SET status = 'failed', printed_at = NULL, error_msg = ?
+        WHERE id = ? AND status = 'printing'
+        RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+      `).bind(acknowledgement.error, jobId).first<PrintJobRow>();
+  if (row) return adminJob(row);
+  return await throwMissingOrConflict(database, jobId, 'Print job is not printing.');
+}
+
+export async function queueAdminPrintJob(database: D1Database, sessionId: string): Promise<AdminPrintJob> {
+  const row = await database.prepare(`
+    INSERT INTO print_jobs (session_id, event_id, postcard_key, postcard_url, scene_name)
+    SELECT s.id, s.event_id, s.postcard_key,
+           '/api/events/' || s.event_id || '/sessions/' || s.id || '/postcard',
+           COALESCE(NULLIF(s.scene_name, ''), s.scene_id)
+    FROM sessions s
+    WHERE s.id = ?
+      AND s.status = 'completed'
+      AND s.postcard_key IS NOT NULL
+      AND s.postcard_key <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM print_jobs pj
+        WHERE pj.session_id = s.id AND pj.status IN ('pending', 'printing')
+      )
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(sessionId).first<PrintJobRow>();
+  if (row) return adminJob(row);
+
+  const active = await database.prepare(`
+    SELECT id FROM print_jobs WHERE session_id = ? AND status IN ('pending', 'printing') LIMIT 1
+  `).bind(sessionId).first<{ id: string }>();
+  if (active) throw new PrintJobConflictError('This session already has an active print job.');
+  throw new PrintJobNotFoundError('Completed session not found.');
+}
+
+export async function retryAdminPrintJob(database: D1Database, sessionId: string, jobId: string): Promise<AdminPrintJob> {
+  const row = await database.prepare(`
+    UPDATE print_jobs
+    SET status = 'pending', printed_at = NULL, error_msg = NULL
+    WHERE id = ?
+      AND session_id = ?
+      AND status IN ('failed', 'printing')
+      AND NOT EXISTS (
+        SELECT 1 FROM print_jobs active
+        WHERE active.session_id = print_jobs.session_id
+          AND active.id <> print_jobs.id
+          AND active.status IN ('pending', 'printing')
+      )
+    RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
+  `).bind(jobId, sessionId).first<PrintJobRow>();
+  if (row) return adminJob(row);
+  return await throwMissingOrConflict(database, jobId, 'Only failed or stuck printing jobs can be retried.', sessionId);
+}
+
+async function throwMissingOrConflict(database: D1Database, jobId: string, message: string, sessionId?: string): Promise<never> {
+  const row = await database.prepare(`
+    SELECT id FROM print_jobs WHERE id = ?${sessionId ? ' AND session_id = ?' : ''} LIMIT 1
+  `).bind(...(sessionId ? [jobId, sessionId] : [jobId])).first<{ id: string }>();
+  if (!row) throw new PrintJobNotFoundError();
+  throw new PrintJobConflictError(message);
+}
