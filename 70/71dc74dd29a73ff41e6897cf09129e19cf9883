@@ -1,0 +1,29 @@
+src/components/steps/CameraStep.tsx
+  s_8993827b25ec22::t_31540baaa4b05a 170-171
+src/components/steps/GeneratingStep.tsx
+  s_fb5dc35a954d86::t_2d2e182af2eaa6 38,41-42,59,101,124,136,168-173,176-180,193,236-237,242,249-250,264-267,272,277,281,290,304,321,334,336,339-341,349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7071dc74dd29a73ff41e6897cf09129e19cf9883",
+  "prompts": {},
+  "sessions": {
+    "s_8993827b25ec22": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa1debd16ffeTF94b2n0Ded067",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_fb5dc35a954d86": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_faf74c11affeCpY5c3130w569u",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
