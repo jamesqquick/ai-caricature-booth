@@ -17,6 +17,7 @@
     "db:seed:local": "wrangler d1 execute ai-caricature-booth-db --local --file drizzle/seed.local.sql",
     "test": "vitest run --exclude 'print-agent/**' && pnpm --filter @ai-caricature-booth/print-agent test",
     "print-agent:start": "pnpm --filter @ai-caricature-booth/print-agent start",
+    "print-agent:resolve": "pnpm --filter @ai-caricature-booth/print-agent resolve",
     "print-agent:typecheck": "pnpm --filter @ai-caricature-booth/print-agent typecheck"
   },
   "dependencies": {

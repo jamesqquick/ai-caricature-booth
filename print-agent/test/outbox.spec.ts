@@ -20,7 +20,7 @@ describe("FileAckOutbox", () => {
     expect(await readdir(directory)).toEqual(["acks.json"]);
   });
 
-  it("persists a pre-submission marker and atomically replaces it with a printed acknowledgement", async () => {
+  it("persists a submission-boundary marker and atomically replaces it with a printed acknowledgement", async () => {
     const directory = await mkdtemp(join(tmpdir(), "print-agent-outbox-"));
     const path = join(directory, "state", "print-state.json");
     const outbox = new FileAckOutbox(path);

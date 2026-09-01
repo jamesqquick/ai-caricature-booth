@@ -293,7 +293,7 @@ describe("PrintPoller", () => {
     expect(logs).not.toContain(job.claimToken);
   });
 
-  it("halts on restart when a pre-submission marker remains", async () => {
+  it("halts on restart when a submission-boundary marker remains", async () => {
     const directory = await mkdtemp(join(tmpdir(), "print-agent-poller-"));
     const outbox = new FileAckOutbox(join(directory, "state.json"));
     const claim = { id: job.id, claimToken: job.claimToken };
