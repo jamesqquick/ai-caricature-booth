@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GENERATION_FAILURE_CODES, generationFailureContent } from '../src/lib/generation-errors';
+import type { GenerationStatus } from '../src/lib/generation-progress';
 
 const actionMocks = vi.hoisted(() => ({
   startGeneration: vi.fn(),
@@ -19,6 +20,24 @@ const scene = {
 const photoDataUrl = 'data:image/jpeg;base64,cGhvdG8=';
 const firstIdempotencyKey = '00000000-0000-4000-8000-000000000001';
 const secondIdempotencyKey = '00000000-0000-4000-8000-000000000002';
+const actionTimeoutMs = 15_000;
+
+function astroActionError(code: 'BAD_REQUEST' | 'NOT_FOUND', message: string) {
+  return {
+    type: 'AstroActionError',
+    code,
+    status: code === 'BAD_REQUEST' ? 400 : 404,
+    message,
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 function startResult(sessionId = firstIdempotencyKey) {
   return {
@@ -27,7 +46,7 @@ function startResult(sessionId = firstIdempotencyKey) {
   };
 }
 
-function statusResult(status: 'uploading' | 'completed' | 'errored', failureCode: unknown = null) {
+function statusResult(status: GenerationStatus, failureCode: unknown = null) {
   return {
     data: { status, failureCode, postcardUrl: null },
     error: undefined,
@@ -55,6 +74,18 @@ async function showConnectionIssue(overrides: Partial<React.ComponentProps<typeo
 
   await waitFor(() => expect(actionMocks.getGeneration).toHaveBeenCalledTimes(1));
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await screen.findByRole('alert');
+}
+
+async function showConnectionIssueAfterKnownPhase(overrides: Partial<React.ComponentProps<typeof GeneratingStep>> = {}) {
+  actionMocks.startGeneration.mockResolvedValue(startResult());
+  actionMocks.getGeneration
+    .mockResolvedValueOnce(statusResult('generating'))
+    .mockRejectedValue(new Error('POLL_SENTINEL: raw response and validation dump'));
+  renderGenerating(overrides);
+
+  await waitFor(() => expect(actionMocks.getGeneration).toHaveBeenCalledTimes(1));
+  await act(async () => vi.advanceTimersByTimeAsync(5_000));
   await screen.findByRole('alert');
 }
 
@@ -132,6 +163,54 @@ describe('GeneratingStep error recovery', () => {
     expect(alert.textContent).not.toContain('provider details');
   });
 
+  it.each([
+    ['BAD_REQUEST', 'BAD_REQUEST_SECRET: invalid session details'],
+    ['NOT_FOUND', 'NOT_FOUND_SECRET: missing booth details'],
+  ] as const)('treats Astro %s start errors as permanent without disclosing details', async (code, sentinel) => {
+    actionMocks.startGeneration.mockResolvedValue({
+      data: undefined,
+      error: astroActionError(code, sentinel),
+    });
+
+    renderGenerating();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain("This photo request can't continue.");
+    expect(alert.textContent).toContain('Choose another photo to start a fresh request.');
+    expect(alert.textContent).not.toContain(sentinel);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Choose another photo' })).toBeTruthy();
+  });
+
+  it('times out a never-resolving start and retries with the same key', async () => {
+    actionMocks.startGeneration.mockImplementation(() => new Promise(() => {}));
+
+    renderGenerating();
+    await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledOnce());
+    await act(async () => vi.advanceTimersByTimeAsync(actionTimeoutMs));
+
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledTimes(2));
+    const keys = actionMocks.startGeneration.mock.calls.map(([form]) => (form as FormData).get('idempotencyKey'));
+    expect(keys).toEqual([firstIdempotencyKey, firstIdempotencyKey]);
+  });
+
+  it('ignores a start result that settles after its timeout', async () => {
+    const lateStart = deferred<ReturnType<typeof startResult>>();
+    actionMocks.startGeneration.mockReturnValue(lateStart.promise);
+
+    renderGenerating();
+    await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledOnce());
+    await act(async () => vi.advanceTimersByTimeAsync(actionTimeoutMs));
+    const alert = await screen.findByRole('alert');
+
+    await act(async () => lateStart.resolve(startResult()));
+
+    expect(screen.getByRole('alert')).toBe(alert);
+    expect(actionMocks.getGeneration).not.toHaveBeenCalled();
+  });
+
   it('shows connection recovery after three failed polls without disclosing thrown details', async () => {
     await showConnectionIssue();
 
@@ -145,11 +224,47 @@ describe('GeneratingStep error recovery', () => {
     expect(screen.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('Paused for recovery');
   });
 
-  it('checks the existing session after a connection loss without starting or uploading again', async () => {
+  it('counts three never-resolving polls as consecutive failures', async () => {
+    actionMocks.startGeneration.mockResolvedValue(startResult());
+    actionMocks.getGeneration.mockImplementation(() => new Promise(() => {}));
+    renderGenerating();
+
+    await waitFor(() => expect(actionMocks.getGeneration).toHaveBeenCalledOnce());
+    await act(async () => vi.advanceTimersByTimeAsync((actionTimeoutMs * 3) + 3_000));
+
+    await screen.findByRole('alert');
+    expect(actionMocks.getGeneration).toHaveBeenCalledTimes(3);
+    expect(screen.getByText('We lost the connection.')).toBeTruthy();
+  });
+
+  it('ignores a poll result that settles after its timeout', async () => {
+    const latePoll = deferred<ReturnType<typeof statusResult>>();
     const onComplete = vi.fn();
-    await showConnectionIssue({ onComplete });
+    actionMocks.startGeneration.mockResolvedValue(startResult());
+    actionMocks.getGeneration
+      .mockReturnValueOnce(latePoll.promise)
+      .mockRejectedValue(new Error('POLL_SENTINEL'));
+    renderGenerating({ onComplete });
+
+    await waitFor(() => expect(actionMocks.getGeneration).toHaveBeenCalledOnce());
+    await act(async () => vi.advanceTimersByTimeAsync(actionTimeoutMs + 3_000));
+    const alert = await screen.findByRole('alert');
+
+    await act(async () => latePoll.resolve(statusResult('completed')));
+
+    expect(screen.getByRole('alert')).toBe(alert);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('checks the existing session without resetting progress or uploading again', async () => {
+    const onComplete = vi.fn();
+    const checkedStatus = deferred<ReturnType<typeof statusResult>>();
+    await showConnectionIssueAfterKnownPhase({ onComplete });
+    const progress = screen.getByRole('progressbar');
+    expect(progress.getAttribute('aria-valuenow')).toBe('72');
+    expect(screen.getByRole('listitem', { name: 'Creating your caricature, paused' })).toBeTruthy();
     actionMocks.getGeneration.mockReset();
-    actionMocks.getGeneration.mockResolvedValue(statusResult('completed'));
+    actionMocks.getGeneration.mockReturnValue(checkedStatus.promise);
     vi.mocked(fetch).mockClear();
 
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
@@ -157,6 +272,12 @@ describe('GeneratingStep error recovery', () => {
 
     expect(actionMocks.startGeneration).toHaveBeenCalledTimes(1);
     expect(fetch).not.toHaveBeenCalled();
+    expect(progress.getAttribute('aria-valuenow')).toBe('72');
+    expect(progress.getAttribute('aria-valuetext')).toBe('Checking status');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const statusHeading = screen.getByRole('heading', { name: 'Checking status.' });
+    expect(document.activeElement).toBe(statusHeading);
+    await act(async () => checkedStatus.resolve(statusResult('completed')));
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
     expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey);
   });
@@ -213,6 +334,8 @@ describe('GeneratingStep error recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => expect(actionMocks.startGeneration).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Creating your caricature.' }));
     const keys = actionMocks.startGeneration.mock.calls.map(([form]) => (form as FormData).get('idempotencyKey'));
     expect(keys).toEqual([firstIdempotencyKey, firstIdempotencyKey]);
   });
