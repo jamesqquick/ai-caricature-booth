@@ -15,7 +15,9 @@
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply ai-caricature-booth-db --local",
     "db:seed:local": "wrangler d1 execute ai-caricature-booth-db --local --file drizzle/seed.local.sql",
-    "test": "vitest run"
+    "test": "vitest run --exclude 'print-agent/**' && pnpm --filter @ai-caricature-booth/print-agent test",
+    "print-agent:start": "pnpm --filter @ai-caricature-booth/print-agent start",
+    "print-agent:typecheck": "pnpm --filter @ai-caricature-booth/print-agent typecheck"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.2.1",

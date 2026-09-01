@@ -13,6 +13,8 @@ tmp/
 
 # dependencies
 node_modules/
+print-agent/output/
+print-agent/spool/
 
 # logs
 npm-debug.log*

@@ -1,3 +1,6 @@
+packages:
+  - print-agent
+
 allowBuilds:
   esbuild: true
   workerd: true
