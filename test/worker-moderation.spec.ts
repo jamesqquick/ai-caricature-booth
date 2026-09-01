@@ -44,7 +44,7 @@ function createStep() {
     async do<T>(name: string, configOrCallback: unknown, callback?: (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T>) {
       const config = typeof configOrCallback === 'function' ? {} : configOrCallback as { retries?: { limit?: number } };
       const run = typeof configOrCallback === 'function' ? configOrCallback as (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T> : callback!;
-      const attempts = 1 + (config.retries?.limit ?? 0);
+      const attempts = Math.max(1, config.retries?.limit ?? 1);
       calls.push(name);
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
@@ -132,7 +132,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toThrow(diagnostic);
 
-    expect(moderateImage).toHaveBeenCalledTimes(3);
+    expect(moderateImage).toHaveBeenCalledTimes(2);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'moderation_unavailable',
@@ -141,17 +141,16 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
   });
 
-  it('does not mark moderation errored when the final retry succeeds', async () => {
+  it('does not mark moderation errored when the final attempt succeeds', async () => {
     vi.mocked(moderateImage)
       .mockRejectedValueOnce(new Error('Moderation attempt 1 failed.'))
-      .mockRejectedValueOnce(new Error('Moderation attempt 2 failed.'))
       .mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
 
     await workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never);
 
-    expect(moderateImage).toHaveBeenCalledTimes(3);
+    expect(moderateImage).toHaveBeenCalledTimes(2);
     expect(transitionSession).not.toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', expect.anything());
   });
 
@@ -187,7 +186,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toBe(postcardError);
 
-    expect(buildPostcard).toHaveBeenCalledTimes(3);
+    expect(buildPostcard).toHaveBeenCalledTimes(2);
     expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'composition_failed',
     });
@@ -195,18 +194,17 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
   });
 
-  it('does not mark composition errored when the final retry succeeds', async () => {
+  it('does not mark composition errored when the final attempt succeeds', async () => {
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(buildPostcard)
       .mockRejectedValueOnce(new Error('Composition attempt 1 failed.'))
-      .mockRejectedValueOnce(new Error('Composition attempt 2 failed.'))
       .mockResolvedValue({ ok: true, status: 200, body: new Uint8Array([4, 5, 6]) } as never);
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
 
     await workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never);
 
-    expect(buildPostcard).toHaveBeenCalledTimes(3);
+    expect(buildPostcard).toHaveBeenCalledTimes(2);
     expect(transitionSession).not.toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', expect.anything());
   });
 
