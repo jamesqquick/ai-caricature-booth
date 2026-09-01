@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('cloudflare:workers', () => ({
   WorkflowEntrypoint: class {
@@ -83,6 +83,10 @@ function createWorkflow(env: unknown) {
 }
 
 describe('CaricatureWorkflow moderation gate', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(transitionSession).mockResolvedValue(undefined as never);
@@ -101,7 +105,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(env.SELFIES.delete).toHaveBeenCalledWith(selfieKey);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: "We couldn't use this photo after the safety check. Try a different photo.",
+      error_code: 'photo_rejected',
     });
   });
 
@@ -115,22 +119,26 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: "We couldn't check your photo. Please try again.",
+      error_code: 'moderation_unavailable',
     });
   });
 
   it('fails safely after all moderation attempts are exhausted', async () => {
-    vi.mocked(moderateImage).mockRejectedValue(new Error('Workers AI unavailable'));
+    const diagnostic = 'moderation-sentinel-4f763c';
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(moderateImage).mockRejectedValue(new Error(diagnostic));
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
 
-    await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toThrow('Workers AI unavailable');
+    await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toThrow(diagnostic);
 
     expect(moderateImage).toHaveBeenCalledTimes(2);
     expect(generateCaricature).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: "We couldn't check your photo. Please try again.",
+      error_code: 'moderation_unavailable',
     });
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+    expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
   });
 
   it('continues to generation only after a safe verdict', async () => {
@@ -155,7 +163,9 @@ describe('CaricatureWorkflow moderation gate', () => {
   });
 
   it('marks the session errored after postcard composition exhausts its configured attempts', async () => {
-    const postcardError = new Error('Images binding unavailable');
+    const diagnostic = 'composition-sentinel-d64e91';
+    const postcardError = new Error(diagnostic);
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(buildPostcard).mockRejectedValue(postcardError);
     const { env } = createEnvironment();
@@ -165,7 +175,28 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(buildPostcard).toHaveBeenCalledTimes(2);
     expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
-      error_msg: "We couldn't finish your postcard. Please try again.",
+      error_code: 'composition_failed',
     });
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+    expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
+  });
+
+  it('logs image-generation diagnostics but persists only the stable failure code', async () => {
+    const diagnostic = 'generation-sentinel-e8ca25';
+    const generationError = new Error(diagnostic);
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(generateCaricature).mockRejectedValue(generationError);
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: 'instance-1', payload } as never, createStep() as never)).rejects.toBe(generationError);
+
+    expect(generateCaricature).toHaveBeenCalledTimes(1);
+    expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
+      error_code: 'generation_failed',
+    });
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+    expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
   });
 });

@@ -5,6 +5,7 @@ import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
+import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
 
 export type CaricaturePayload = {
@@ -37,8 +38,8 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       watermarkKey,
       watermarkWidth,
     } = event.payload;
-    const markErrored = async (error: unknown) => {
-      await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: error instanceof Error ? error.message : String(error) });
+    const markErrored = async (errorCode: GenerationFailureCode) => {
+      await transitionSession(this.env.DB, sessionId, 'errored', { error_code: errorCode });
     };
     await step.do('mark-moderating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
       await transitionSession(this.env.DB, sessionId, 'moderating', { workflow_instance_id: event.instanceId });
@@ -53,7 +54,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         const verdict = await moderateImage(this.env.AI, new Uint8Array(await selfie.arrayBuffer()));
         if (!verdict.safe) {
           await deleteRejectedSelfie(this.env.SELFIES, selfieKey);
-          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "We couldn't use this photo after the safety check. Try a different photo." });
+          await markErrored('photo_rejected');
           console.info(JSON.stringify({ message: 'photo moderation completed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'unsafe' }));
           return false;
         }
@@ -61,8 +62,8 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         return true;
       } catch (error) {
         if (ctx.attempt >= 2) {
-          await transitionSession(this.env.DB, sessionId, 'errored', { error_msg: "We couldn't check your photo. Please try again." });
-          console.error(JSON.stringify({ message: 'photo moderation failed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'service-error' }));
+          console.error(JSON.stringify({ message: 'photo moderation failed', sessionId, elapsedMs: Date.now() - startedAt, outcome: 'service-error', ...errorDiagnostic(error) }));
+          await markErrored('moderation_unavailable');
         }
         throw error;
       }
@@ -91,8 +92,8 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key });
         return key;
       } catch (error) {
-        console.error(JSON.stringify({ message: 'caricature generation failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
-        await markErrored("We couldn't create your caricature. Please try again.");
+        console.error(JSON.stringify({ message: 'caricature generation failed', sessionId, ...errorDiagnostic(error) }));
+        await markErrored('generation_failed');
         throw error;
       }
     });
@@ -112,8 +113,8 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
         return key;
       } catch (error) {
         if (ctx.attempt >= (ctx.config.retries?.limit ?? 1)) {
-          console.error(JSON.stringify({ message: 'postcard composition failed', sessionId, error: error instanceof Error ? error.message : String(error) }));
-          await markErrored("We couldn't finish your postcard. Please try again.");
+          console.error(JSON.stringify({ message: 'postcard composition failed', sessionId, ...errorDiagnostic(error) }));
+          await markErrored('composition_failed');
         }
         throw error;
       }
@@ -128,6 +129,12 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     });
     return { sessionId, postcardKey };
   }
+}
+
+function errorDiagnostic(error: unknown) {
+  return error instanceof Error
+    ? { errorName: error.name, errorMessage: error.message }
+    : { errorType: typeof error };
 }
 
 async function deleteRejectedSelfie(bucket: R2Bucket, key: string) {
