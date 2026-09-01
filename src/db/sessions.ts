@@ -51,12 +51,12 @@ export async function loadSession(database: D1Database, id: string) {
 
 export async function createPendingSession(
   database: D1Database,
-  input: Pick<SessionRecord, 'id' | 'event_id' | 'scene_id' | 'scene_name' | 'selfie_key' | 'selfie_sha256'>,
+  input: Pick<SessionRecord, 'id' | 'event_id' | 'scene_id' | 'scene_name' | 'selfie_key' | 'selfie_sha256' | 'workflow_instance_id'>,
 ) {
   const db = createDb(database);
   const result = await db.run(sql`
-    INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, selfie_sha256, updated_at)
-    VALUES (${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.scene_name}, ${input.selfie_key}, ${input.selfie_sha256}, unixepoch())
+    INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, selfie_sha256, workflow_instance_id, updated_at)
+    VALUES (${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.scene_name}, ${input.selfie_key}, ${input.selfie_sha256}, ${input.workflow_instance_id}, unixepoch())
     ON CONFLICT(id) DO NOTHING
   `);
   return { session: await loadSession(database, input.id), created: result.meta.changes === 1 };
@@ -88,7 +88,7 @@ export async function transitionSession(
         scene_name = COALESCE(${fields.scene_name ?? null}, scene_name),
         caricature_key = COALESCE(${fields.caricature_key ?? null}, caricature_key),
         postcard_key = COALESCE(${fields.postcard_key ?? null}, postcard_key),
-        workflow_instance_id = COALESCE(${fields.workflow_instance_id ?? null}, workflow_instance_id),
+        workflow_instance_id = COALESCE(workflow_instance_id, ${fields.workflow_instance_id ?? null}),
         error_code = ${fields.error_code ?? null},
         error_msg = ${fields.error_msg ?? null},
         completed_at = CASE WHEN ${nextStatus} = 'completed' THEN unixepoch() ELSE completed_at END,

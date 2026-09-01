@@ -291,7 +291,7 @@ describe('event scene queries', () => {
 });
 
 describe('event scene runtime wiring', () => {
-  it('snapshots the selected scene name when creating a session', async () => {
+  it('snapshots the selected scene name and workflow ID when creating a session', async () => {
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec(`
       CREATE TABLE sessions (
@@ -321,10 +321,28 @@ describe('event scene runtime wiring', () => {
       scene_name: 'Event Scene',
       selfie_key: 'sessions/session-1/selfie.jpg',
       selfie_sha256: 'sha256',
+      workflow_instance_id: 'workflow-1',
     });
 
     expect(result.created).toBe(true);
-    expect(result.session).toMatchObject({ scene_id: 'event-scene', scene_name: 'Event Scene' });
+    expect(result.session).toMatchObject({
+      scene_id: 'event-scene',
+      scene_name: 'Event Scene',
+      workflow_instance_id: 'workflow-1',
+    });
+
+    const conflict = await createPendingSession(asD1(sqlite), {
+      id: 'session-1',
+      event_id: 1,
+      scene_id: 'event-scene',
+      scene_name: 'Event Scene',
+      selfie_key: 'sessions/session-1/selfie.jpg',
+      selfie_sha256: 'sha256',
+      workflow_instance_id: 'workflow-2',
+    });
+
+    expect(conflict.created).toBe(false);
+    expect(conflict.session).toMatchObject({ workflow_instance_id: 'workflow-1' });
   });
 
   it('loads route scenes from D1 and passes them into Photobooth', async () => {

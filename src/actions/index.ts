@@ -71,7 +71,16 @@ export const server = {
         if (!scene) throw new ActionError({ code: 'BAD_REQUEST', message: 'That scene is not available for this booth.' });
 
         const selfieKey = `sessions/${idempotencyKey}/selfie.jpg`;
-        const claim = await createPendingSession(env.DB, { id: idempotencyKey, event_id: event.id, scene_id: scene.id, scene_name: scene.name, selfie_key: selfieKey, selfie_sha256: selfieSha256 });
+        const workflowInstanceId = crypto.randomUUID();
+        const claim = await createPendingSession(env.DB, {
+          id: idempotencyKey,
+          event_id: event.id,
+          scene_id: scene.id,
+          scene_name: scene.name,
+          selfie_key: selfieKey,
+          selfie_sha256: selfieSha256,
+          workflow_instance_id: workflowInstanceId,
+        });
         if (!claim.session) throw new ActionError({ code: 'INTERNAL_SERVER_ERROR', message: "Couldn't start your postcard. Please try again." });
         if (!claim.created) {
           if (claim.session.event_id !== event.id || claim.session.scene_id !== scene.id || claim.session.selfie_sha256 !== selfieSha256) {
@@ -130,9 +139,10 @@ async function ensureWorkflow(
 ) {
   if (session.status === 'pending' || session.status === 'completed' || session.status === 'errored') return;
   if (!(await env.SELFIES.head(session.selfie_key))) return;
+  const workflowInstanceId = session.workflow_instance_id ?? session.id;
   try {
     await env.CARICATURE_WORKFLOW.create({
-      id: session.id,
+      id: workflowInstanceId,
       params: {
         sessionId: session.id,
         eventId: session.event_id,
@@ -150,7 +160,7 @@ async function ensureWorkflow(
     return;
   } catch (createError) {
     try {
-      const instance = await env.CARICATURE_WORKFLOW.get(session.id);
+      const instance = await env.CARICATURE_WORKFLOW.get(workflowInstanceId);
       const { status } = await instance.status();
       if (['queued', 'running', 'waiting', 'waitingForPause', 'complete'].includes(status)) return;
       if (status === 'errored' || status === 'terminated') {

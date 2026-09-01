@@ -133,8 +133,8 @@ describe('generation failure contract', () => {
       );
       INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, error_msg)
       VALUES ('legacy-session', 1, 'errored', 'scene-1', 'legacy/selfie.jpg', 'legacy attendee message');
-      INSERT INTO sessions (id, event_id, status, scene_id, selfie_key)
-      VALUES ('helper-session', 1, 'generating', 'scene-1', 'helper/selfie.jpg');
+      INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, workflow_instance_id)
+      VALUES ('helper-session', 1, 'generating', 'scene-1', 'helper/selfie.jpg', 'workflow-original');
     `);
 
     sqlite.exec(await readFile(migrationUrl, 'utf8'));
@@ -152,9 +152,13 @@ describe('generation failure contract', () => {
     expect(() => updateCode.run('invalid_failure', 'legacy-session')).toThrow();
 
     const database = asD1(sqlite);
-    await transitionSession(database, 'helper-session', 'errored', { error_code: 'composition_failed' });
+    await transitionSession(database, 'helper-session', 'errored', {
+      workflow_instance_id: 'workflow-reported',
+      error_code: 'composition_failed',
+    });
     await expect(loadSession(database, 'helper-session')).resolves.toMatchObject({
       status: 'errored',
+      workflow_instance_id: 'workflow-original',
       error_code: 'composition_failed',
     });
   });

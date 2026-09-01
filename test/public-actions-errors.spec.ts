@@ -38,6 +38,7 @@ vi.mock('../src/db/sessions', () => ({ createPendingSession, loadSession, transi
 import { server } from '../src/actions';
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
+const workflowInstanceId = '10000000-0000-4000-8000-000000000002';
 const selfieSha256 = '1a493b22d4b17319c1fae01707e77e4c93e3836b84e766722cc61189ee89e224';
 const event = {
   id: 7,
@@ -181,6 +182,33 @@ describe('public action error boundaries', () => {
     });
   });
 
+  it('uses a fresh workflow identity when a session UUID is recreated', async () => {
+    const oldInstance = {
+      status: vi.fn().mockResolvedValue({ status: 'errored' }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    const recreatedSession = { ...session, workflow_instance_id: workflowInstanceId };
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(workflowInstanceId);
+    loadSession.mockResolvedValueOnce(null).mockResolvedValue(recreatedSession);
+    createPendingSession.mockResolvedValue({ session: recreatedSession, created: true });
+    fakeEnv.CARICATURE_WORKFLOW.create.mockImplementation(async ({ id }: { id: string }) => {
+      if (id === sessionId) throw new Error('Retained workflow instance');
+    });
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(oldInstance);
+
+    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'uploading' });
+
+    expect(createPendingSession).toHaveBeenCalledWith(fakeEnv.DB, expect.objectContaining({
+      id: sessionId,
+      workflow_instance_id: workflowInstanceId,
+    }));
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: workflowInstanceId }));
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+    expect(oldInstance.restart).not.toHaveBeenCalled();
+    expect(oldInstance.resume).not.toHaveBeenCalled();
+  });
+
   it('contains workflow diagnostics from startGeneration', async () => {
     const diagnostic = 'workflow-sentinel-028ced';
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -193,6 +221,8 @@ describe('public action error boundaries', () => {
 
     expectContained(error, diagnostic);
     expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+    expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId }));
+    expect(fakeEnv.CARICATURE_WORKFLOW.get).toHaveBeenCalledWith(sessionId);
   });
 
   it('preserves expected fixed ActionError values without logging them', async () => {
