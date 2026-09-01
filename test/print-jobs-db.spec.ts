@@ -152,15 +152,17 @@ describe('print job data layer', () => {
       },
     } as unknown as D1Database;
 
-    const jobs = await claimPrintJobs(database, 'demo-event', 3);
+    const agentId = 'a'.repeat(64);
+    const jobs = await claimPrintJobs(database, 'demo-event', agentId, 3);
 
     expect(prepared).toHaveLength(1);
     expect(prepared[0].query).toMatch(/UPDATE print_jobs[\s\S]*WHERE id IN \([\s\S]*SELECT pj\.id[\s\S]*INNER JOIN events e ON e\.id = pj\.event_id[\s\S]*pj\.status = 'pending'[\s\S]*e\.slug = \?[\s\S]*ORDER BY pj\.created_at ASC, pj\.id ASC[\s\S]*LIMIT \?[\s\S]*\)[\s\S]*AND status = 'pending'[\s\S]*RETURNING/);
-    expect(prepared[0].values).toEqual(['demo-event', 3]);
+    expect(prepared[0].values).toEqual([agentId, 'demo-event', 3]);
     expect(jobs).toHaveLength(3);
     expect(jobs.map((job) => job.id)).toEqual([row.id, sameTime.id, newer.id]);
     expect(jobs[0]).toMatchObject({ eventSlug: 'demo-event', sceneName: 'Brooklyn Bridge', claimToken: row.claim_token });
     expect(prepared[0].query).toContain("claim_token = lower(hex(randomblob(16)))");
+    expect(prepared[0].query).toContain('claim_owner = ?');
   });
 
   it('only acknowledges printing jobs and applies terminal fields safely', async () => {
@@ -197,7 +199,7 @@ describe('print job data layer', () => {
     const job = await acknowledgePrintJob(database, row.id, { status: 'failed', error: 'Paper jam', claimToken: row.claim_token });
 
     expect(statements[0].query).toContain("SET status = 'failed', printed_at = NULL, error_msg = ?");
-    expect(statements[0].query).toContain('claim_token = NULL, terminal_claim_token = claim_token');
+    expect(statements[0].query).toContain('claim_token = NULL, claim_owner = NULL, terminal_claim_token = claim_token');
     expect(statements[0].values).toEqual(['Paper jam', row.id, row.claim_token]);
     expect(job).toMatchObject({ status: 'failed', printedAt: null, error: 'Paper jam' });
     expect(job).not.toHaveProperty('postcardKey');

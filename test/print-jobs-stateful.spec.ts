@@ -21,6 +21,7 @@ type JobState = {
   printed_at: number | null;
   error_msg: string | null;
   claim_token?: string | null;
+  claim_owner?: string | null;
 };
 
 class StatefulStatement {
@@ -74,7 +75,7 @@ class StatefulD1 {
   all(statement: StatefulStatement) {
     const normalized = statement.query.replace(/\s+/g, ' ').trim();
     if (!normalized.startsWith('UPDATE print_jobs') || !normalized.includes('INNER JOIN events e')) return [];
-    const [eventSlug, limit] = statement.values as [string, number];
+    const [claimOwner, eventSlug, limit] = statement.values as [string, string, number];
     const claimed = this.jobs
       .filter((job) => job.status === 'pending' && this.eventSlugs.get(job.event_id) === eventSlug)
       .sort((left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id))
@@ -84,6 +85,7 @@ class StatefulD1 {
       job.printed_at = null;
       job.error_msg = null;
       job.claim_token = String(this.nextClaimToken++).padStart(32, '0');
+      job.claim_owner = claimOwner;
     }
     return claimed.map((job) => ({ ...job }));
   }
@@ -172,8 +174,8 @@ describe('print job conditional behavior', () => {
     );
 
     const claims = await Promise.all([
-      claimPrintJobs(database as unknown as D1Database, 'demo-event', 2),
-      claimPrintJobs(database as unknown as D1Database, 'demo-event', 2),
+      claimPrintJobs(database as unknown as D1Database, 'demo-event', 'a'.repeat(64), 2),
+      claimPrintJobs(database as unknown as D1Database, 'demo-event', 'b'.repeat(64), 2),
     ]);
     const claimed = claims.flat();
 

@@ -7,6 +7,7 @@ import type { AgentConfig, ClaimIdentity, Logger, PrintJob, PrintStatus, Sleep }
 const OFFLINE_WARNING_THRESHOLD = 3;
 
 type PollerDependencies = {
+  reconcileClaims?: (claims: ClaimIdentity[]) => Promise<unknown>;
   claimJobs: () => Promise<PrintJob[]>;
   handleJob: (job: PrintJob, beforeSubmit: () => Promise<void>) => Promise<void>;
   ackJob: (job: ClaimIdentity, status: PrintStatus, error?: string) => Promise<unknown>;
@@ -31,6 +32,7 @@ export class PrintPoller {
   private readonly logger: Logger;
   private readonly printedAckAttempts: number;
   private readonly outbox: AckOutbox;
+  private startupReconciled = false;
 
   constructor(private readonly config: AgentConfig, private readonly dependencies: PollerDependencies) {
     this.sleep = dependencies.sleep ?? abortableSleep;
@@ -40,6 +42,7 @@ export class PrintPoller {
   }
 
   async pollOnce(signal?: AbortSignal): Promise<void> {
+    await this.reconcileStartup();
     if (!await this.flushOutbox()) return;
     for (let claimedCount = 0; claimedCount < this.config.batchSize; claimedCount += 1) {
       if (signal?.aborted) return;
@@ -83,6 +86,18 @@ export class PrintPoller {
       }
       if (!await this.processJob(job)) return;
     }
+  }
+
+  private async reconcileStartup(): Promise<void> {
+    if (this.startupReconciled) return;
+    let intents: PendingPrintState[];
+    try {
+      intents = await this.outbox.list();
+      await this.dependencies.reconcileClaims?.(intents.map((intent) => intent.job));
+    } catch (error) {
+      throw new FatalPrintStateError(undefined, "Worker claim ownership could not be reconciled safely at startup.", { cause: error });
+    }
+    this.startupReconciled = true;
   }
 
   async run(signal: AbortSignal): Promise<void> {

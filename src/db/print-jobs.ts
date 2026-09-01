@@ -21,7 +21,7 @@ export type AgentPrintJob = Pick<AdminPrintJob, 'id' | 'sessionId' | 'eventId' |
   claimToken: string;
 };
 
-export type PrintJobField = 'eventId' | 'sessionId' | 'jobId' | 'eventSlug' | 'limit' | 'status' | 'error' | 'claimToken' | 'action';
+export type PrintJobField = 'eventId' | 'sessionId' | 'jobId' | 'eventSlug' | 'agentId' | 'knownClaims' | 'limit' | 'status' | 'error' | 'claimToken' | 'action';
 
 export class PrintJobValidationError extends Error {
   name = 'PrintJobValidationError';
@@ -64,7 +64,9 @@ type Acknowledgement =
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const JOB_ID_PATTERN = /^[0-9a-f]{32}$/i;
 const EVENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const AGENT_ID_PATTERN = /^[0-9a-f]{64}$/;
 const MAX_ERROR_LENGTH = 500;
+const MAX_KNOWN_CLAIMS = 100;
 
 export function parseEventId(value: string | undefined) {
   if (!value || !/^\d+$/.test(value)) throw new PrintJobValidationError('eventId', 'Invalid eventId.');
@@ -89,11 +91,28 @@ export function parseClaimInput(input: unknown) {
   if (!EVENT_SLUG_PATTERN.test(eventSlug) || eventSlug.length > 120) {
     throw new PrintJobValidationError('eventSlug', 'Invalid eventSlug.');
   }
+  const agentId = parseAgentId(body.agentId);
   const requestedLimit = body.limit;
   if (typeof requestedLimit !== 'number' || !Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 20) {
     throw new PrintJobValidationError('limit', 'limit must be an integer between 1 and 20.');
   }
-  return { eventSlug, limit: requestedLimit };
+  return { eventSlug, agentId, limit: requestedLimit };
+}
+
+export function parseReconciliationInput(input: unknown) {
+  const body = asObject(input, 'agentId');
+  const agentId = parseAgentId(body.agentId);
+  if (!Array.isArray(body.knownClaims) || body.knownClaims.length > MAX_KNOWN_CLAIMS) {
+    throw new PrintJobValidationError('knownClaims', `knownClaims must be an array with at most ${MAX_KNOWN_CLAIMS} entries.`);
+  }
+  const knownClaims = body.knownClaims.map((value) => {
+    const claim = asObject(value, 'knownClaims');
+    return {
+      id: parseJobId(typeof claim.id === 'string' ? claim.id : undefined),
+      claimToken: parseClaimToken(claim.claimToken),
+    };
+  });
+  return { agentId, knownClaims };
 }
 
 export function parseAcknowledgement(input: unknown): Acknowledgement {
@@ -117,6 +136,12 @@ function parseClaimToken(value: unknown) {
   const claimToken = typeof value === 'string' ? value.toLowerCase() : '';
   if (!JOB_ID_PATTERN.test(claimToken)) throw new PrintJobValidationError('claimToken', 'Invalid claimToken.');
   return claimToken;
+}
+
+function parseAgentId(value: unknown) {
+  const agentId = typeof value === 'string' ? value.toLowerCase() : '';
+  if (!AGENT_ID_PATTERN.test(agentId)) throw new PrintJobValidationError('agentId', 'Invalid agentId.');
+  return agentId;
 }
 
 export function parseAdminMutation(input: unknown) {
@@ -204,11 +229,11 @@ export async function loadAttendeePrintJob(database: D1Database, eventId: number
   return publicJob(row);
 }
 
-export async function claimPrintJobs(database: D1Database, eventSlug: string, limit: number): Promise<AgentPrintJob[]> {
+export async function claimPrintJobs(database: D1Database, eventSlug: string, agentId: string, limit: number): Promise<AgentPrintJob[]> {
   const claimed = await database.prepare(`
     UPDATE print_jobs
     SET status = 'printing', printed_at = NULL, error_msg = NULL,
-        claim_token = lower(hex(randomblob(16)))
+        claim_token = lower(hex(randomblob(16))), claim_owner = ?
     WHERE id IN (
         SELECT pj.id
         FROM print_jobs pj
@@ -219,7 +244,7 @@ export async function claimPrintJobs(database: D1Database, eventSlug: string, li
       )
       AND status = 'pending'
     RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg, claim_token
-  `).bind(eventSlug, limit).all<AgentPrintJobRow>();
+  `).bind(agentId, eventSlug, limit).all<AgentPrintJobRow>();
 
   return claimed.results.map((job) => ({
     id: job.id,
@@ -233,19 +258,34 @@ export async function claimPrintJobs(database: D1Database, eventSlug: string, li
   })).sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
 }
 
+export async function reconcilePrintJobs(database: D1Database, agentId: string, knownClaims: Array<{ id: string; claimToken: string }>) {
+  const knownClause = knownClaims.length === 0
+    ? ''
+    : `AND NOT (${knownClaims.map(() => '(id = ? AND claim_token = ?)').join(' OR ')})`;
+  const bindings = knownClaims.flatMap((claim) => [claim.id, claim.claimToken]);
+  const released = await database.prepare(`
+    UPDATE print_jobs
+    SET status = 'pending', claim_token = NULL, claim_owner = NULL
+    WHERE status = 'printing' AND claim_owner = ?
+      ${knownClause}
+    RETURNING id
+  `).bind(agentId, ...bindings).all<{ id: string }>();
+  return { released: released.results.length };
+}
+
 export async function acknowledgePrintJob(database: D1Database, jobId: string, acknowledgement: Acknowledgement): Promise<AdminPrintJob> {
   const row = acknowledgement.status === 'printed'
     ? await database.prepare(`
         UPDATE print_jobs
         SET status = 'printed', printed_at = unixepoch(), error_msg = NULL,
-            claim_token = NULL, terminal_claim_token = claim_token
+            claim_token = NULL, claim_owner = NULL, terminal_claim_token = claim_token
         WHERE id = ? AND status = 'printing' AND claim_token = ?
         RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
       `).bind(jobId, acknowledgement.claimToken).first<PrintJobRow>()
     : await database.prepare(`
         UPDATE print_jobs
         SET status = 'failed', printed_at = NULL, error_msg = ?,
-            claim_token = NULL, terminal_claim_token = claim_token
+            claim_token = NULL, claim_owner = NULL, terminal_claim_token = claim_token
         WHERE id = ? AND status = 'printing' AND claim_token = ?
         RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
       `).bind(acknowledgement.error, jobId, acknowledgement.claimToken).first<PrintJobRow>();
@@ -263,7 +303,7 @@ export async function acknowledgePrintJob(database: D1Database, jobId: string, a
 export async function releasePrintJob(database: D1Database, jobId: string, claimToken: string): Promise<AdminPrintJob> {
   const row = await database.prepare(`
     UPDATE print_jobs
-    SET status = 'pending', claim_token = NULL
+    SET status = 'pending', claim_token = NULL, claim_owner = NULL
     WHERE id = ? AND status = 'printing' AND claim_token = ?
     RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
   `).bind(jobId, claimToken).first<PrintJobRow>();
@@ -300,7 +340,7 @@ export async function queueAdminPrintJob(database: D1Database, sessionId: string
 export async function retryAdminPrintJob(database: D1Database, sessionId: string, jobId: string): Promise<AdminPrintJob> {
   const row = await database.prepare(`
     UPDATE print_jobs
-    SET status = 'pending', printed_at = NULL, error_msg = NULL, claim_token = NULL
+    SET status = 'pending', printed_at = NULL, error_msg = NULL, claim_token = NULL, claim_owner = NULL
     WHERE id = ?
       AND session_id = ?
       AND status = 'failed'

@@ -10,6 +10,44 @@ import { QueueRequestError } from "../src/queue.js";
 import { config, job } from "./fixtures.js";
 
 describe("PrintPoller", () => {
+  it("reconciles durable claims before recovery ACKs, releases, or new claims", async () => {
+    const outbox = new MemoryAckOutbox();
+    await outbox.put({ job, status: "printed" });
+    const order: string[] = [];
+    const reconcileClaims = vi.fn(async (claims: Array<{ id: string; claimToken: string }>) => {
+      order.push("reconcile");
+      expect(claims).toEqual([{ id: job.id, claimToken: job.claimToken }]);
+    });
+    const ackJob = vi.fn(async () => { order.push("ack"); });
+    const claimJobs = vi.fn(async () => { order.push("claim"); return []; });
+
+    await new PrintPoller(config, {
+      reconcileClaims, claimJobs, handleJob: async () => undefined, ackJob,
+      releaseJob: async () => undefined, outbox, sleep: async () => undefined,
+    }).pollOnce();
+
+    expect(order).toEqual(["reconcile", "ack", "claim"]);
+    expect(reconcileClaims).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when startup reconciliation fails", async () => {
+    const outbox = new MemoryAckOutbox();
+    await outbox.put({ job, status: "claimed" });
+    const claimJobs = vi.fn(async () => [job]);
+    const ackJob = vi.fn(async () => undefined);
+    const releaseJob = vi.fn(async () => undefined);
+
+    await expect(new PrintPoller(config, {
+      reconcileClaims: async () => { throw new Error(`offline ${job.claimToken}`); },
+      claimJobs, handleJob: async () => undefined, ackJob, releaseJob, outbox,
+    }).pollOnce()).rejects.toBeInstanceOf(FatalPrintStateError);
+
+    expect(claimJobs).not.toHaveBeenCalled();
+    expect(ackJob).not.toHaveBeenCalled();
+    expect(releaseJob).not.toHaveBeenCalled();
+    expect(await outbox.list()).toEqual([{ job: { id: job.id, claimToken: job.claimToken }, status: "claimed" }]);
+  });
+
   it("claims and processes one job at a time up to the poll-cycle batch limit", async () => {
     const secondJob = { ...job, id: "c".repeat(32), claimToken: "d".repeat(32) };
     const order: string[] = [];

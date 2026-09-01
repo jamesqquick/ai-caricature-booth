@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, PrintJobConflictError, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
+import { acknowledgePrintJob, claimPrintJobs, createAttendeePrintJob, PrintJobConflictError, reconcilePrintJobs, releasePrintJob, retryAdminPrintJob } from '../src/db/print-jobs';
 
 const migrationUrls = [
   '0001_events.sql',
@@ -15,6 +15,7 @@ const migrationUrls = [
   '0009_literal_event_copy.sql',
   '0010_print_job_claim_tokens.sql',
   '0011_print_job_terminal_claim_tokens.sql',
+  '0012_print_job_claim_owners.sql',
 ].map((name) => new URL(`../drizzle/migrations/${name}`, import.meta.url));
 
 function asD1(sqlite: DatabaseSync) {
@@ -90,8 +91,8 @@ describe('print job SQLite integration', () => {
       insert.run('00000000000000000000000000000002', sessionId, '/two', 'Two', 20);
       insert.run('00000000000000000000000000000001', sessionId, '/one', 'One', 10);
 
-      const first = await claimPrintJobs(database, 'nyc-tech-week-2026', 2);
-      const second = await claimPrintJobs(database, 'nyc-tech-week-2026', 2);
+      const first = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 2);
+      const second = await claimPrintJobs(database, 'nyc-tech-week-2026', 'b'.repeat(64), 2);
 
       expect(allResults.map((rows) => rows.map((row) => row.created_at))).toEqual([[20, 10], [40, 30]]);
       expect(first.map((job) => job.createdAt)).toEqual([10, 20]);
@@ -101,6 +102,7 @@ describe('print job SQLite integration', () => {
       expect(first.some((job) => second.some((other) => other.id === job.id))).toBe(false);
       expect(first.every((job) => /^[0-9a-f]{32}$/.test(job.claimToken))).toBe(true);
       expect(new Set(first.map((job) => job.claimToken)).size).toBe(2);
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM print_jobs WHERE claim_owner IS NOT NULL").get()).toEqual({ count: 4 });
       expect(sqlite.prepare("SELECT COUNT(*) AS count FROM print_jobs WHERE status = 'pending'").get()).toEqual({ count: 0 });
     } finally {
       sqlite.close();
@@ -112,7 +114,7 @@ describe('print job SQLite integration', () => {
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId);
-      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await expect(retryAdminPrintJob(database, sessionId, pending.id)).rejects.toBeInstanceOf(PrintJobConflictError);
 
       const printing = sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id);
@@ -127,12 +129,12 @@ describe('print job SQLite integration', () => {
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId);
-      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await acknowledgePrintJob(database, pending.id, { status: 'failed', error: 'paper jam', claimToken: claim.claimToken });
 
       await expect(retryAdminPrintJob(database, sessionId, pending.id)).resolves.toMatchObject({ status: 'pending' });
-      expect(sqlite.prepare('SELECT status, claim_token, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
-        .toEqual({ status: 'pending', claim_token: null, error_msg: null });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'pending', claim_token: null, claim_owner: null, error_msg: null });
     } finally {
       sqlite.close();
     }
@@ -143,14 +145,14 @@ describe('print job SQLite integration', () => {
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId);
-      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
 
       const first = await acknowledgePrintJob(database, pending.id, { status: 'printed', claimToken: claim.claimToken });
       const repeated = await acknowledgePrintJob(database, pending.id, { status: 'printed', claimToken: claim.claimToken });
 
       expect(repeated).toEqual(first);
-      expect(sqlite.prepare('SELECT status, claim_token, terminal_claim_token FROM print_jobs WHERE id = ?').get(pending.id))
-        .toEqual({ status: 'printed', claim_token: null, terminal_claim_token: claim.claimToken });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner, terminal_claim_token FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'printed', claim_token: null, claim_owner: null, terminal_claim_token: claim.claimToken });
     } finally {
       sqlite.close();
     }
@@ -161,15 +163,45 @@ describe('print job SQLite integration', () => {
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId);
-      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      const [firstClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await releasePrintJob(database, pending.id, firstClaim.claimToken);
-      expect(sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id))
-        .toEqual({ status: 'pending', claim_token: null });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'pending', claim_token: null, claim_owner: null });
 
-      const [secondClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 1);
+      const [secondClaim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
       await expect(releasePrintJob(database, pending.id, firstClaim.claimToken)).rejects.toBeInstanceOf(PrintJobConflictError);
       expect(sqlite.prepare('SELECT status, claim_token FROM print_jobs WHERE id = ?').get(pending.id))
         .toEqual({ status: 'printing', claim_token: secondClaim.claimToken });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('releases only unknown active claims owned by the reconciling agent', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const insert = sqlite.prepare(`
+        INSERT INTO print_jobs (id, session_id, event_id, postcard_key, postcard_url, scene_name, created_at)
+        VALUES (?, ?, 1, 'postcard.jpg', ?, ?, ?)
+      `);
+      insert.run('1'.repeat(32), sessionId, '/one', 'One', 10);
+      insert.run('2'.repeat(32), sessionId, '/two', 'Two', 20);
+      insert.run('3'.repeat(32), sessionId, '/three', 'Three', 30);
+      const owner = 'a'.repeat(64);
+      const otherOwner = 'b'.repeat(64);
+      const owned = await claimPrintJobs(database, 'nyc-tech-week-2026', owner, 2);
+      const [other] = await claimPrintJobs(database, 'nyc-tech-week-2026', otherOwner, 1);
+
+      const result = await reconcilePrintJobs(database, owner, [{ id: owned[1]!.id, claimToken: owned[1]!.claimToken }]);
+
+      expect(result).toEqual({ released: 1 });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner FROM print_jobs WHERE id = ?').get(owned[0]!.id))
+        .toEqual({ status: 'pending', claim_token: null, claim_owner: null });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner FROM print_jobs WHERE id = ?').get(owned[1]!.id))
+        .toEqual({ status: 'printing', claim_token: owned[1]!.claimToken, claim_owner: owner });
+      expect(sqlite.prepare('SELECT status, claim_token, claim_owner FROM print_jobs WHERE id = ?').get(other.id))
+        .toEqual({ status: 'printing', claim_token: other.claimToken, claim_owner: otherOwner });
     } finally {
       sqlite.close();
     }
@@ -187,10 +219,12 @@ describe('print job SQLite integration', () => {
 
       sqlite.exec(await readFile(migrationUrls.at(-1)!, 'utf8'));
 
-      expect(sqlite.prepare("SELECT status, claim_token, terminal_claim_token FROM print_jobs WHERE id = 'legacy'").get())
-        .toEqual({ status: 'imported', claim_token: null, terminal_claim_token: null });
+      expect(sqlite.prepare("SELECT status, claim_token, terminal_claim_token, claim_owner FROM print_jobs WHERE id = 'legacy'").get())
+        .toEqual({ status: 'imported', claim_token: null, terminal_claim_token: null, claim_owner: null });
       expect(sqlite.prepare("SELECT name FROM pragma_index_list('print_jobs') WHERE name = 'print_jobs_session_status_idx'").get())
         .toEqual({ name: 'print_jobs_session_status_idx' });
+      expect(sqlite.prepare("SELECT name FROM pragma_index_list('print_jobs') WHERE name = 'print_jobs_claim_owner_status_idx'").get())
+        .toEqual({ name: 'print_jobs_claim_owner_status_idx' });
     } finally {
       sqlite.close();
     }

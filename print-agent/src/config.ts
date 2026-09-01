@@ -40,7 +40,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
   }
 
   return {
-    workerUrl: parsedUrl.origin + parsedUrl.pathname.replace(/\/+$/, ""),
+    workerUrl: parsedUrl.origin,
     eventSlug: eventSlug.trim(),
     printAgentToken,
     pollIntervalMs: parseInteger(env.POLL_INTERVAL_MS, "POLL_INTERVAL_MS", 5_000, 1),

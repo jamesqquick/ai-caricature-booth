@@ -44,6 +44,12 @@ describe("loadConfig", () => {
     });
   });
 
+  it("canonicalizes the Worker URL to its origin", () => {
+    expect(loadConfig({ ...validEnv, WORKER_URL: "https://booth.example.com/deployment/path///" }, [])).toMatchObject({
+      workerUrl: "https://booth.example.com",
+    });
+  });
+
   it("accepts both DNP aliases and strict integer bounds", () => {
     expect(loadConfig({ ...validEnv, BATCH_SIZE: "20", POLL_INTERVAL_MS: "1", PRINTER_DRIVER: "dnp-ds620", PRINTER_NAME: "DNP DS620" }, [])).toMatchObject({
       batchSize: 20,

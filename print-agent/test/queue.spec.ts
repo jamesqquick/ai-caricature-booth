@@ -1,20 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
-import { QueueRequestError, ackJob, claimJobs, releaseJob } from "../src/queue.js";
+import { QueueRequestError, ackJob, claimJobs, reconcileJobs, releaseJob } from "../src/queue.js";
 import { config, job } from "./fixtures.js";
 
 describe("queue client", () => {
+  const agentId = "c".repeat(64);
+
   it("claims with the hardened POST contract, bearer auth, and timeout signal", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ jobs: [job] }));
-    await expect(claimJobs(config, 1, { fetch, timeoutMs: 123 })).resolves.toEqual([job]);
+    await expect(claimJobs(config, agentId, 1, { fetch, timeoutMs: 123 })).resolves.toEqual([job]);
 
     const [url, init] = fetch.mock.calls[0]!;
     expect(url).toBe("https://booth.example.com/api/print-agent/jobs/claim");
     expect(init).toMatchObject({
       method: "POST",
       headers: { authorization: "Bearer test-token", "content-type": "application/json" },
-      body: JSON.stringify({ eventSlug: "test-event", limit: 1 }),
+      body: JSON.stringify({ eventSlug: "test-event", agentId, limit: 1 }),
     });
     expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("reconciles locally durable claim identities without exposing them in the response", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json({ released: 1 }));
+    await expect(reconcileJobs(config, agentId, [{ id: job.id, claimToken: job.claimToken }], { fetch })).resolves.toEqual({ released: 1 });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://booth.example.com/api/print-agent/jobs/reconcile",
+      expect.objectContaining({ body: JSON.stringify({ agentId, knownClaims: [{ id: job.id, claimToken: job.claimToken }] }) }),
+    );
   });
 
   it("acks with status, claim token, and optional error", async () => {
@@ -63,11 +75,11 @@ describe("queue client", () => {
       await new Promise<void>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true }));
       return new Response();
     });
-    await expect(claimJobs(config, 1, { fetch, timeoutMs: 1 })).rejects.toMatchObject({ name: "QueueRequestError", operation: "claim" });
+    await expect(claimJobs(config, agentId, 1, { fetch, timeoutMs: 1 })).rejects.toMatchObject({ name: "QueueRequestError", operation: "claim" });
 
     const longBody = "x".repeat(10_000);
     const failedFetch = vi.fn<typeof globalThis.fetch>(async () => new Response(longBody, { status: 503 }));
-    const error = await claimJobs(config, 1, { fetch: failedFetch }).catch((caught: unknown) => caught);
+    const error = await claimJobs(config, agentId, 1, { fetch: failedFetch }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(QueueRequestError);
     expect((error as Error).message.length).toBeLessThan(5_000);
     expect((error as Error).message).toContain("HTTP 503");

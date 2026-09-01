@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAgentDirectories } from "../src/paths.js";
+import { resolveAgentDirectories, resolveAgentId } from "../src/paths.js";
 import { config } from "./fixtures.js";
 
 describe("resolveAgentDirectories", () => {
@@ -23,8 +23,19 @@ describe("resolveAgentDirectories", () => {
     expect(first.stateDir).not.toContain("DNP DS620");
   });
 
-  it("uses a configured absolute state directory verbatim", () => {
-    expect(resolveAgentDirectories({ ...config, stateDir: "/private/print-state" }, "/app", "/home/operator").stateDir)
+  it("normalizes a configured absolute state directory", () => {
+    expect(resolveAgentDirectories({ ...config, stateDir: "/private/other/../print-state" }, "/app", "/home/operator").stateDir)
       .toBe("/private/print-state");
+  });
+
+  it("canonicalizes Worker origins and DNP aliases for agent and lock identity", () => {
+    const first = { ...config, workerUrl: "https://booth.example.com/path/", printerDriver: "dnp" as const, printerName: "DNP DS620" };
+    const second = { ...config, workerUrl: "https://booth.example.com/other", printerDriver: "dnp-ds620" as const, printerName: "DNP DS620" };
+
+    expect(resolveAgentId(first)).toMatch(/^[0-9a-f]{64}$/);
+    expect(resolveAgentId(first)).toBe(resolveAgentId(second));
+    expect(resolveAgentDirectories(first, "/app", "/home/operator").stateDir)
+      .toBe(resolveAgentDirectories(second, "/app", "/home/operator").stateDir);
+    expect(resolveAgentId(first)).not.toContain(config.printAgentToken);
   });
 });

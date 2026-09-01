@@ -1,4 +1,4 @@
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,5 +28,30 @@ describe("AgentLock", () => {
 
     await expect(AgentLock.acquire(secondPath)).rejects.toBeInstanceOf(AgentLockError);
     await first.release();
+  });
+
+  it("reclaims a lock owned by a dead PID", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    await writeFile(join(directory, "agent.lock"), "2147483647\n", { mode: 0o600 });
+
+    const lock = await AgentLock.acquire(directory);
+    await lock.release();
+  });
+
+  it("allows only one contender to reclaim a stale lock", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    await writeFile(join(directory, "agent.lock"), "2147483647\n", { mode: 0o600 });
+
+    const attempts = await Promise.allSettled([AgentLock.acquire(directory), AgentLock.acquire(directory)]);
+    const acquired = attempts.filter((result): result is PromiseFulfilledResult<AgentLock> => result.status === "fulfilled");
+    expect(acquired).toHaveLength(1);
+    await acquired[0]!.value.release();
+  });
+
+  it("blocks conservatively when lock ownership is malformed", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "print-agent-lock-"));
+    await writeFile(join(directory, "agent.lock"), "unknown\n", { mode: 0o600 });
+
+    await expect(AgentLock.acquire(directory)).rejects.toBeInstanceOf(AgentLockError);
   });
 });

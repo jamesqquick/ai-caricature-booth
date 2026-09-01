@@ -12,7 +12,7 @@ type RequestDependencies = {
   timeoutMs?: number;
 };
 
-type QueueOperation = "claim" | "ack" | "release";
+type QueueOperation = "claim" | "reconcile" | "ack" | "release";
 
 export class QueueRequestError extends Error {
   readonly name = "QueueRequestError";
@@ -27,14 +27,14 @@ export class QueueRequestError extends Error {
   }
 }
 
-export async function claimJobs(config: AgentConfig, limit: number, dependencies: RequestDependencies = {}): Promise<PrintJob[]> {
+export async function claimJobs(config: AgentConfig, agentId: string, limit: number, dependencies: RequestDependencies = {}): Promise<PrintJob[]> {
   const response = await request(
     "claim",
     new URL("/api/print-agent/jobs/claim", config.workerUrl),
     {
       method: "POST",
       headers: headers(config),
-      body: JSON.stringify({ eventSlug: config.eventSlug, limit }),
+      body: JSON.stringify({ eventSlug: config.eventSlug, agentId, limit }),
     },
     dependencies,
   );
@@ -43,6 +43,29 @@ export async function claimJobs(config: AgentConfig, limit: number, dependencies
     throw new QueueRequestError("claim", "Worker returned an invalid jobs payload.");
   }
   return body.jobs;
+}
+
+export async function reconcileJobs(
+  config: AgentConfig,
+  agentId: string,
+  knownClaims: ClaimIdentity[],
+  dependencies: RequestDependencies = {},
+): Promise<{ released: number }> {
+  const response = await request(
+    "reconcile",
+    new URL("/api/print-agent/jobs/reconcile", config.workerUrl),
+    {
+      method: "POST",
+      headers: headers(config),
+      body: JSON.stringify({ agentId, knownClaims }),
+    },
+    dependencies,
+  );
+  const body = await parseJson(response, "reconcile");
+  if (!isRecord(body) || !Number.isSafeInteger(body.released) || (body.released as number) < 0) {
+    throw new QueueRequestError("reconcile", "Worker returned an invalid reconciliation payload.");
+  }
+  return { released: body.released as number };
 }
 
 export async function ackJob(

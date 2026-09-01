@@ -4,6 +4,7 @@ const fakeEnv = vi.hoisted(() => ({ DB: {} }));
 const createAttendeePrintJob = vi.hoisted(() => vi.fn());
 const loadAttendeePrintJob = vi.hoisted(() => vi.fn());
 const claimPrintJobs = vi.hoisted(() => vi.fn());
+const reconcilePrintJobs = vi.hoisted(() => vi.fn());
 const acknowledgePrintJob = vi.hoisted(() => vi.fn());
 const releasePrintJob = vi.hoisted(() => vi.fn());
 const queueAdminPrintJob = vi.hoisted(() => vi.fn());
@@ -15,6 +16,7 @@ vi.mock('../src/db/print-jobs', async (importOriginal) => ({
   createAttendeePrintJob,
   loadAttendeePrintJob,
   claimPrintJobs,
+  reconcilePrintJobs,
   acknowledgePrintJob,
   releasePrintJob,
   queueAdminPrintJob,
@@ -24,6 +26,7 @@ vi.mock('../src/db/print-jobs', async (importOriginal) => ({
 import { POST as createJob } from '../src/pages/api/events/[eventId]/sessions/[sessionId]/print-jobs';
 import { GET as getJob } from '../src/pages/api/events/[eventId]/sessions/[sessionId]/print-jobs/[jobId]';
 import { POST as claimJobs } from '../src/pages/api/print-agent/jobs/claim';
+import { POST as reconcileJobs } from '../src/pages/api/print-agent/jobs/reconcile';
 import { POST as acknowledgeJob } from '../src/pages/api/print-agent/jobs/[jobId]/ack';
 import { POST as releaseJob } from '../src/pages/api/print-agent/jobs/[jobId]/release';
 import { POST as mutateAdminJob } from '../src/pages/api/admin/sessions/[sessionId]/print-jobs';
@@ -32,6 +35,7 @@ import { PrintJobConflictError, PrintJobNotFoundError } from '../src/db/print-jo
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const jobId = '0123456789abcdef0123456789abcdef';
 const claimToken = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const agentId = 'b'.repeat(64);
 const publicJob = { id: jobId, status: 'pending', printedAt: null };
 
 describe('print job APIs', () => {
@@ -81,22 +85,64 @@ describe('print job APIs', () => {
     const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ eventSlug: 'demo-event', limit: 20 }),
+      body: JSON.stringify({ eventSlug: 'demo-event', agentId, limit: 20 }),
     }) });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ jobs: [{ ...publicJob, claimToken }] });
-    expect(claimPrintJobs).toHaveBeenCalledWith(fakeEnv.DB, 'demo-event', 20);
+    expect(claimPrintJobs).toHaveBeenCalledWith(fakeEnv.DB, 'demo-event', agentId, 20);
   });
 
   it.each([0, -1, 1.5, 21, '2'])('rejects invalid claim limit %j', async (limit) => {
     const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
-      method: 'POST', body: JSON.stringify({ eventSlug: 'demo-event', limit }),
+      method: 'POST', body: JSON.stringify({ eventSlug: 'demo-event', agentId, limit }),
     }) });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'limit must be an integer between 1 and 20.', field: 'limit' });
     expect(claimPrintJobs).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', 'not-an-agent-id'])('rejects invalid claim agent ID %j', async (value) => {
+    const response = await claimJobs({ request: new Request('https://booth.test/api/print-agent/jobs/claim', {
+      method: 'POST', body: JSON.stringify({ eventSlug: 'demo-event', agentId: value, limit: 1 }),
+    }) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid agentId.', field: 'agentId' });
+    expect(claimPrintJobs).not.toHaveBeenCalled();
+  });
+
+  it('reconciles exact locally durable claims without returning claim identities', async () => {
+    reconcilePrintJobs.mockResolvedValue({ released: 2 });
+    const knownClaims = [{ id: jobId, claimToken }];
+    const response = await reconcileJobs({ request: new Request('https://booth.test/api/print-agent/jobs/reconcile', {
+      method: 'POST', body: JSON.stringify({ agentId, knownClaims }),
+    }) });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ released: 2 });
+    expect(reconcilePrintJobs).toHaveBeenCalledWith(fakeEnv.DB, agentId, knownClaims);
+  });
+
+  it('rejects malformed reconciliation claims before querying the database', async () => {
+    const response = await reconcileJobs({ request: new Request('https://booth.test/api/print-agent/jobs/reconcile', {
+      method: 'POST', body: JSON.stringify({ agentId, knownClaims: [{ id: jobId, claimToken: 'secret' }] }),
+    }) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid claimToken.', field: 'claimToken' });
+    expect(reconcilePrintJobs).not.toHaveBeenCalled();
+  });
+
+  it('bounds reconciliation input before querying the database', async () => {
+    const response = await reconcileJobs({ request: new Request('https://booth.test/api/print-agent/jobs/reconcile', {
+      method: 'POST', body: JSON.stringify({ agentId, knownClaims: Array.from({ length: 101 }, () => ({ id: jobId, claimToken })) }),
+    }) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'knownClaims must be an array with at most 100 entries.', field: 'knownClaims' });
+    expect(reconcilePrintJobs).not.toHaveBeenCalled();
   });
 
   it('returns a typed 400 for malformed JSON', async () => {

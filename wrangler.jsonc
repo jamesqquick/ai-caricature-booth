@@ -8,6 +8,9 @@
     "ACCESS_AUD": "f62b95fcf95dce07fb61b7d64381fc36317d10aca666a829c095745c07f83972",
     "ACCESS_TEAM_DOMAIN": "https://cfcommunity.cloudflareaccess.com"
   },
+  "secrets": {
+    "required": ["PRINT_AGENT_TOKEN", "REPLICATE_API_TOKEN"]
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
