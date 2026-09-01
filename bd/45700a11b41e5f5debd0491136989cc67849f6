@@ -1,0 +1,25 @@
+package.json
+  s_a3bdf8141a85c3::t_1462318af3c16b 20
+print-agent/package.json
+  s_a3bdf8141a85c3::t_72af7957db083c 10
+print-agent/src/recover-cli.ts
+  s_a3bdf8141a85c3::t_e5aa2db7f28384 1-7
+test/admin-event-create.spec.ts
+  s_a3bdf8141a85c3::t_88f3a0545cb566 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bd45700a11b41e5f5debd0491136989cc67849f6",
+  "prompts": {},
+  "sessions": {
+    "s_a3bdf8141a85c3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa1f1dfacffeWRDtH7JfxNFSOo",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
