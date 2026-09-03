@@ -1,0 +1,37 @@
+---
+import BoothLayout from "../layouts/BoothLayout.astro";
+---
+
+<BoothLayout
+  title="Something went wrong · Caricature Booth"
+  description="The page could not be loaded. Please try again."
+  noIndex
+>
+  <main class="grid min-h-[calc(100dvh-5rem)] place-items-center px-6 py-16">
+    <section class="w-full max-w-xl text-center">
+      <p class="font-label text-xl font-extrabold uppercase tracking-[.14em] text-primary">
+        500
+      </p>
+      <h1 class="mt-5 font-display text-[clamp(3rem,8vw,6rem)] font-semibold leading-[.9] tracking-[-.07em]">
+        Something went wrong.
+      </h1>
+      <p class="mx-auto mt-7 max-w-md text-lg leading-[1.65] text-muted-foreground">
+        We could not load this page. Please try again, or return home.
+      </p>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a
+          class="inline-flex min-h-14 items-center justify-center rounded-full bg-primary px-6 text-base font-extrabold text-primary-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:bg-primary-hover"
+          href=""
+        >
+          Try this page again
+        </a>
+        <a
+          class="inline-flex min-h-14 items-center justify-center rounded-full border border-border px-6 text-base font-extrabold text-foreground no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary"
+          href="/"
+        >
+          Back to home
+        </a>
+      </div>
+    </section>
+  </main>
+</BoothLayout>

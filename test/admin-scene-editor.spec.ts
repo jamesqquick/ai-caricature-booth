@@ -208,9 +208,97 @@ describe('admin scene endpoints', () => {
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toMatchObject({ fields: { description: expect.any(String) } });
   });
+
+  it('keeps thrown database details out of read and mutation errors', async () => {
+    const sentinel = 'database-host-secret-sentinel-7f13c2';
+    fakeEnv.DB = {
+      prepare() {
+        throw new Error(sentinel);
+      },
+    } as unknown as D1Database;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const readResponse = await listScenes({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes', { headers: adminHeaders }),
+      params: { slug: 'active-event' },
+    });
+    const mutationResponse = await createScene({
+      request: jsonRequest('/api/admin/events/active-event/scenes', 'POST', validScene),
+      params: { slug: 'active-event' },
+    });
+    const readBody = await readResponse.json();
+    const mutationBody = await mutationResponse.json();
+
+    expect(readResponse.status).toBe(500);
+    expect(readBody).toEqual({ error: "Couldn't load scenes." });
+    expect(mutationResponse.status).toBe(500);
+    expect(mutationBody).toEqual({ error: "Couldn't save the scene." });
+    expect(JSON.stringify([readBody, mutationBody])).not.toContain(sentinel);
+    expect(consoleError).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('event activation and editor wiring', () => {
+  it('uses bounded feedback codes in form redirects without disclosing error details', async () => {
+    const validationResponse = await updateAdminEvent({
+      request: new Request('https://booth.test/api/admin/events/draft-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-booth-admin-email': 'admin@example.com' },
+        body: new URLSearchParams({ name: '', slug: 'draft-event', status: 'draft' }),
+      }),
+      params: { slug: 'draft-event' },
+    });
+    const validationLocation = validationResponse.headers.get('Location') ?? '';
+
+    expect(validationResponse.status).toBe(303);
+    expect(new URL(validationLocation).searchParams.get('error')).toBe('validation');
+    expect(validationLocation).not.toContain('Event+details+are+invalid');
+
+    const conflictResponse = await updateAdminEvent({
+      request: new Request('https://booth.test/api/admin/events/draft-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-booth-admin-email': 'admin@example.com' },
+        body: new URLSearchParams({ name: 'Draft Event', slug: 'active-event', status: 'draft' }),
+      }),
+      params: { slug: 'draft-event' },
+    });
+    expect(new URL(conflictResponse.headers.get('Location') ?? '').searchParams.get('error')).toBe('slug-conflict');
+
+    const sqlite = createDatabase();
+    sqlite.exec('DELETE FROM event_scenes WHERE event_id = 2');
+    const activationResponse = await updateAdminEvent({
+      request: new Request('https://booth.test/api/admin/events/draft-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-booth-admin-email': 'admin@example.com' },
+        body: new URLSearchParams({ name: 'Draft Event', slug: 'draft-event', status: 'active' }),
+      }),
+      params: { slug: 'draft-event' },
+    });
+    expect(new URL(activationResponse.headers.get('Location') ?? '').searchParams.get('error')).toBe('activation');
+
+    const sentinel = 'database-host-secret-sentinel-b812e4';
+    fakeEnv.DB = {
+      prepare() {
+        throw new Error(sentinel);
+      },
+    } as unknown as D1Database;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failureResponse = await updateAdminEvent({
+      request: new Request('https://booth.test/api/admin/events/draft-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-booth-admin-email': 'admin@example.com' },
+        body: new URLSearchParams({ name: 'Draft Event', slug: 'draft-event', status: 'draft' }),
+      }),
+      params: { slug: 'draft-event' },
+    });
+    const failureLocation = failureResponse.headers.get('Location') ?? '';
+
+    expect(failureResponse.status).toBe(303);
+    expect(new URL(failureLocation).searchParams.get('error')).toBe('save-failed');
+    expect(failureLocation).not.toContain(sentinel);
+    expect(consoleError).toHaveBeenCalledWith('Admin event update failed', expect.objectContaining({ message: sentinel }));
+  });
+
   it('rejects creating an active event because a new event has no scenes', async () => {
     await expect(createEvent(fakeEnv.DB, {
       name: 'New Event', slug: 'new-event', status: 'active',

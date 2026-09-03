@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
-import type { Scene } from '../data/scenes';
+import { actions } from 'astro:actions';
+import type { PublicScene } from '../data/scenes';
 import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
 import { eventAccentForeground } from '../lib/event-accent';
 import { Stepper } from './Stepper';
@@ -20,7 +21,7 @@ type Props = {
   kioskIdleSubhead: string;
   scenePickerHeading: string;
   accentColor: string;
-  scenes: Scene[];
+  scenes: PublicScene[];
 };
 
 export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor, scenes }: Props) {
@@ -31,6 +32,7 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
   const accentForeground = eventAccentForeground(accentColor);
   const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}?source=generation`);
+  const chooseAnotherPhoto = () => dispatch({ type: 'retake-photo' });
 
   useEffect(() => {
     if (previousStepRef.current === state.step) return;
@@ -39,7 +41,7 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   }, [state.step]);
 
   return (
-    <main className="booth-event relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-hidden bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--event-accent)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)] max-[800px]:overflow-auto" style={{ '--event-accent': accentColor, '--event-accent-foreground': accentForeground } as CSSProperties}>
+    <main className="booth-event relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--event-accent)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)]" style={{ '--event-accent': accentColor, '--event-accent-foreground': accentForeground } as CSSProperties}>
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-10 opacity-[0.16]" aria-hidden="true" />
       <Stepper
         steps={stepLabels}
@@ -69,6 +71,8 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
             photoDataUrl={state.photoDataUrl}
             eventSlug={eventSlug}
             onComplete={finishGeneration}
+            onChooseAnotherPhoto={chooseAnotherPhoto}
+            generationActions={actions}
           />
         )}
       </section>

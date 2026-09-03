@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Scene } from '../data/scenes';
+import type { PublicScene, Scene } from '../data/scenes';
 import type { SceneInput } from '../lib/event-validation';
 import { createDb } from './index';
 
@@ -15,10 +15,10 @@ export class SceneConflictError extends Error {
   }
 }
 
-export async function loadScenesByEvent(database: D1Database, eventId: number): Promise<Scene[]> {
+export async function loadScenesByEvent(database: D1Database, eventId: number): Promise<PublicScene[]> {
   const db = createDb(database);
-  return db.all<Scene>(sql`
-    SELECT id, name, description, prompt
+  return db.all<PublicScene>(sql`
+    SELECT id, name, description
     FROM event_scenes
     WHERE event_id = ${eventId}
     ORDER BY sort_order ASC, id ASC

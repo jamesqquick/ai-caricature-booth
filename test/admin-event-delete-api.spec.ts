@@ -40,7 +40,12 @@ describe('event deletion API', () => {
       deleted: true,
       sessions: [{
         id: 'session-1',
-        objectKeys: ['sessions/session-1/selfie.jpg', 'sessions/other/postcard.jpg'],
+        objectKeys: [
+          'sessions/session-1/selfie.jpg',
+          'sessions/session-1/workflow-1/caricature.jpg',
+          'sessions/session-1/workflow-1/postcard.jpg',
+          'sessions/other/postcard.jpg',
+        ],
       }],
     });
 
@@ -58,6 +63,8 @@ describe('event deletion API', () => {
     expect(fakeEnv.SELFIES.delete).toHaveBeenCalledWith([
       'events/7/watermarks/right.png',
       'sessions/session-1/selfie.jpg',
+      'sessions/session-1/workflow-1/caricature.jpg',
+      'sessions/session-1/workflow-1/postcard.jpg',
     ]);
   });
 });
