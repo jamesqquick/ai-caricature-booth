@@ -213,11 +213,38 @@ describe('print job SQLite integration', () => {
     try {
       insertCompletedSession(sqlite);
       const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
-      await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
 
       await expect(resolveOrphanedPrintJob(database, sessionId, pending.id, outcome)).resolves.toMatchObject({ status, error });
       expect(sqlite.prepare('SELECT status, claim_token, claim_owner, terminal_claim_token, error_msg FROM print_jobs WHERE id = ?').get(pending.id))
-        .toEqual({ status, claim_token: null, claim_owner: null, terminal_claim_token: null, error_msg: error });
+        .toEqual({
+          status,
+          claim_token: null,
+          claim_owner: null,
+          terminal_claim_token: outcome === 'printed' ? claim.claimToken : null,
+          error_msg: error,
+        });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('accepts a delayed printed acknowledgement after an operator confirms the orphan printed', async () => {
+    const { sqlite, database } = await createDatabase();
+    try {
+      insertCompletedSession(sqlite);
+      const pending = await createAttendeePrintJob(database, 1, sessionId, attendeeRequestKey);
+      const [claim] = await claimPrintJobs(database, 'nyc-tech-week-2026', 'a'.repeat(64), 1);
+
+      const resolved = await resolveOrphanedPrintJob(database, sessionId, pending.id, 'printed');
+      const acknowledged = await acknowledgePrintJob(database, pending.id, {
+        status: 'printed',
+        claimToken: claim.claimToken,
+      });
+
+      expect(acknowledged).toEqual(resolved);
+      expect(sqlite.prepare('SELECT status, terminal_claim_token FROM print_jobs WHERE id = ?').get(pending.id))
+        .toEqual({ status: 'printed', terminal_claim_token: claim.claimToken });
     } finally {
       sqlite.close();
     }

@@ -466,7 +466,8 @@ export async function resolveOrphanedPrintJob(
   const row = await database.prepare(`
     UPDATE print_jobs
     SET status = ?, printed_at = ${printed ? 'unixepoch()' : 'NULL'}, error_msg = ?,
-        claim_token = NULL, claim_owner = NULL, terminal_claim_token = NULL
+        claim_token = NULL, claim_owner = NULL,
+        terminal_claim_token = ${printed ? 'claim_token' : 'NULL'}
     WHERE id = ? AND session_id = ? AND status = 'printing'
     RETURNING id, session_id, event_id, postcard_url, scene_name, status, created_at, printed_at, error_msg
   `).bind(printed ? 'printed' : 'failed', error, jobId, sessionId).first<PrintJobRow>();
