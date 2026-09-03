@@ -14,11 +14,11 @@ const migrationUrls = [
   '0007_simplify_event_scenes.sql',
   '0008_print_jobs.sql',
   '0009_literal_event_copy.sql',
-  '0010_print_job_claim_tokens.sql',
-  '0011_print_job_terminal_claim_tokens.sql',
-  '0012_print_job_claim_owners.sql',
-  '0013_print_job_request_keys.sql',
-  '0014_print_job_requests.sql',
+  '0011_print_job_claim_tokens.sql',
+  '0012_print_job_terminal_claim_tokens.sql',
+  '0013_print_job_claim_owners.sql',
+  '0014_print_job_request_keys.sql',
+  '0015_print_job_requests.sql',
 ].map((name) => new URL(`../drizzle/migrations/${name}`, import.meta.url));
 
 function asD1(sqlite: DatabaseSync) {

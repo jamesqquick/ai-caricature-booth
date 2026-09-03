@@ -1,9 +1,15 @@
 import { transform } from '@astrojs/compiler';
+import react from '@astrojs/react';
+import { getViteConfig } from 'astro/config';
+import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
+import { createServer, type InlineConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { loadEventScene, loadScenesByEvent } from '../src/db/scenes';
 import { createPendingSession } from '../src/db/sessions';
+import { toPublicScene } from '../src/data/scenes';
 
 const migrationUrl = new URL('../drizzle/migrations/0006_event_scenes.sql', import.meta.url);
 const simplifyMigrationUrl = new URL('../drizzle/migrations/0007_simplify_event_scenes.sql', import.meta.url);
@@ -18,11 +24,79 @@ function createSceneDatabase() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(`
     PRAGMA foreign_keys = ON;
-     CREATE TABLE events (id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, tagline TEXT NOT NULL DEFAULT '');
-     INSERT INTO events (id, slug) VALUES (1, 'first-event'), (2, 'second-event');
+     CREATE TABLE events (
+       id INTEGER PRIMARY KEY,
+       slug TEXT NOT NULL UNIQUE,
+       name TEXT NOT NULL DEFAULT '',
+       status TEXT NOT NULL DEFAULT 'active',
+       accent_color TEXT NOT NULL DEFAULT '#000000',
+       watermark_image_key TEXT,
+       watermark_image_key_left TEXT,
+       tagline TEXT NOT NULL DEFAULT '',
+       kiosk_idle_subhead TEXT NOT NULL DEFAULT '',
+       scene_picker_heading TEXT NOT NULL DEFAULT '',
+       scene_style_preamble TEXT,
+       scene_constraints TEXT,
+       created_at INTEGER NOT NULL DEFAULT 0,
+       created_by TEXT,
+       watermark_w INTEGER,
+       watermark_left_w INTEGER
+     );
+     INSERT INTO events (id, slug, name) VALUES
+       (1, 'first-event', 'First Event'),
+       (2, 'second-event', 'Second Event');
   `);
 
   return { sqlite, database: asD1(sqlite) };
+}
+
+async function renderEventPage(database: D1Database) {
+  const envModuleId = '\0scene-test-cloudflare-workers';
+  const createViteConfig = getViteConfig(
+    {
+      logLevel: 'silent',
+      plugins: [{
+        name: 'scene-test-cloudflare-workers',
+        resolveId(id) {
+          if (id === 'cloudflare:workers') return envModuleId;
+        },
+        load(id) {
+          if (id === envModuleId) return 'export const env = globalThis.__SCENE_TEST_ENV__';
+        },
+      }],
+    },
+    {
+      configFile: false,
+      root: fileURLToPath(new URL('../', import.meta.url)),
+      integrations: [react()],
+    },
+  );
+  const viteConfig = await createViteConfig({ command: 'serve', mode: 'test' });
+  const server = await createServer({
+    ...viteConfig,
+    configFile: false,
+    server: { middlewareMode: true, hmr: { port: 24679 } },
+  } as InlineConfig);
+  const testGlobal = globalThis as typeof globalThis & { __SCENE_TEST_ENV__?: { DB: D1Database } };
+  testGlobal.__SCENE_TEST_ENV__ = { DB: database };
+
+  try {
+    const [page, { default: reactRenderer }] = await Promise.all([
+      server.ssrLoadModule('/src/pages/e/[slug].astro'),
+      server.ssrLoadModule('@astrojs/react/server.js'),
+    ]);
+    const container = await AstroContainer.create();
+    container.addServerRenderer({ renderer: reactRenderer });
+    container.addClientRenderer({ name: '@astrojs/react', entrypoint: '@astrojs/react/client.js' });
+    return await container.renderToString(page.default, {
+      params: { slug: 'first-event' },
+      request: new Request('https://booth.test/e/first-event'),
+      partial: false,
+    });
+  } finally {
+    delete testGlobal.__SCENE_TEST_ENV__;
+    await server.close();
+  }
 }
 
 function asD1(sqlite: DatabaseSync) {
@@ -142,6 +216,44 @@ describe('event scene migration', () => {
 });
 
 describe('event scene queries', () => {
+  it('projects a fresh public scene without prompt fields', () => {
+    const scene = {
+      id: 'private-scene',
+      name: 'Private Scene',
+      description: 'Attendee-safe description.',
+      prompt: 'private-prompt-sentinel-c2198a',
+    };
+
+    const publicScene = toPublicScene(scene);
+
+    expect(publicScene).toEqual({
+      id: scene.id,
+      name: scene.name,
+      description: scene.description,
+    });
+    expect(publicScene).not.toBe(scene);
+    expect(publicScene).not.toHaveProperty('prompt');
+  });
+
+  it('keeps prompts out of rendered event-page hydration while retaining them server-side', async () => {
+    const { sqlite, database } = createSceneDatabase();
+    await migrateScenes(sqlite);
+    const promptSentinel = 'private-prompt-sentinel-a61e9c';
+    sqlite.prepare(`
+      UPDATE event_scenes SET prompt = ?
+      WHERE event_id = 1 AND id = 'hot-dog-stand'
+    `).run(promptSentinel);
+
+    const page = await renderEventPage(database);
+    const serverScene = await loadEventScene(database, 1, 'hot-dog-stand');
+
+    expect(page).toContain('<astro-island');
+    expect(page).toContain('Hot Dog Stand');
+    expect(page).not.toContain(promptSentinel);
+    expect(page).not.toMatch(/&quot;prompt&quot;|"prompt"/);
+    expect(serverScene?.prompt).toBe(promptSentinel);
+  });
+
   it('loads every scene for one event in creation order', async () => {
     const { sqlite, database } = createSceneDatabase();
     await migrateScenes(sqlite);
@@ -179,7 +291,7 @@ describe('event scene queries', () => {
 });
 
 describe('event scene runtime wiring', () => {
-  it('snapshots the selected scene name when creating a session', async () => {
+  it('snapshots the selected scene name and workflow ID when creating a session', async () => {
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec(`
       CREATE TABLE sessions (
@@ -190,6 +302,14 @@ describe('event scene runtime wiring', () => {
         scene_name TEXT,
         selfie_key TEXT NOT NULL,
         selfie_sha256 TEXT NOT NULL,
+        caricature_key TEXT,
+        postcard_key TEXT,
+        workflow_instance_id TEXT,
+        error_code TEXT,
+        error_msg TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        completed_at INTEGER,
+        pipeline_ms INTEGER,
         updated_at INTEGER NOT NULL
       );
     `);
@@ -201,10 +321,28 @@ describe('event scene runtime wiring', () => {
       scene_name: 'Event Scene',
       selfie_key: 'sessions/session-1/selfie.jpg',
       selfie_sha256: 'sha256',
+      workflow_instance_id: 'workflow-1',
     });
 
     expect(result.created).toBe(true);
-    expect(result.session).toMatchObject({ scene_id: 'event-scene', scene_name: 'Event Scene' });
+    expect(result.session).toMatchObject({
+      scene_id: 'event-scene',
+      scene_name: 'Event Scene',
+      workflow_instance_id: 'workflow-1',
+    });
+
+    const conflict = await createPendingSession(asD1(sqlite), {
+      id: 'session-1',
+      event_id: 1,
+      scene_id: 'event-scene',
+      scene_name: 'Event Scene',
+      selfie_key: 'sessions/session-1/selfie.jpg',
+      selfie_sha256: 'sha256',
+      workflow_instance_id: 'workflow-2',
+    });
+
+    expect(conflict.created).toBe(false);
+    expect(conflict.session).toMatchObject({ workflow_instance_id: 'workflow-1' });
   });
 
   it('loads route scenes from D1 and passes them into Photobooth', async () => {
@@ -212,6 +350,7 @@ describe('event scene runtime wiring', () => {
 
     await expect(transform(route, { filename: 'src/pages/e/[slug].astro' })).resolves.toBeTruthy();
     expect(route).toContain('loadScenesByEvent(env.DB, event.id)');
+    expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('scenes={scenes}');
   });
 
@@ -219,6 +358,7 @@ describe('event scene runtime wiring', () => {
     const route = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/index.astro' })).resolves.toBeTruthy();
+    expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
     expect(route).toContain('scenes.slice(0, 3)');
     expect(route).toContain('scenes.slice(0, 4)');

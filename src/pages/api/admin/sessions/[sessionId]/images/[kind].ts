@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { ADMIN_IMAGE_KINDS, loadAdminSessionImageKey, type AdminImageKind } from '../../../../../../db/admin';
+import { isOwnedSessionAssetKey } from '../../../../../../lib/selfie-ownership';
 
 export const prerender = false;
 
@@ -14,10 +15,6 @@ function safeFilenamePart(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 128) || 'session';
 }
 
-function isOwnedSessionImageKey(sessionId: string, kind: AdminImageKind, key: string) {
-  return key === `sessions/${sessionId}/${kind}.jpg`;
-}
-
 function notFound() {
   return new Response('Not found', { status: 404 });
 }
@@ -29,7 +26,7 @@ export async function GET({ params, url }: { params: Record<string, string | und
 
   try {
     const imageKey = await loadAdminSessionImageKey(env.DB, sessionId, kind);
-    if (!imageKey || !isOwnedSessionImageKey(sessionId, kind, imageKey)) return notFound();
+    if (!imageKey || !isOwnedSessionAssetKey(sessionId, kind, imageKey)) return notFound();
 
     const object = await env.SELFIES.get(imageKey);
     const contentType = object?.httpMetadata?.contentType;

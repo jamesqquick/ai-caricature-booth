@@ -10,6 +10,7 @@ export type BoothAction =
   | { type: 'select-scene'; sceneId: string }
   | { type: 'open-camera' }
   | { type: 'accept-photo'; photoDataUrl: string }
+  | { type: 'retake-photo' }
   | { type: 'change-scene' }
   | { type: 'start-over'; sceneId?: string | null };
 
@@ -28,6 +29,10 @@ export function boothReducer(state: BoothState, action: BoothAction): BoothState
     case 'accept-photo':
       return state.sceneId
         ? { ...state, step: 'generating', photoDataUrl: action.photoDataUrl }
+        : state;
+    case 'retake-photo':
+      return state.step === 'generating' && state.sceneId
+        ? { step: 'camera', sceneId: state.sceneId, photoDataUrl: null }
         : state;
     case 'change-scene':
       return { step: 'scene', sceneId: state.sceneId, photoDataUrl: null };

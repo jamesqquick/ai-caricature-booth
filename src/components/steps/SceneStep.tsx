@@ -1,9 +1,9 @@
 import { ArrowRight, Check } from 'lucide-react';
-import type { Scene } from '../../data/scenes';
+import type { PublicScene } from '../../data/scenes';
 import { Button } from '../ui/button';
 
 type Props = {
-  scenes: Scene[];
+  scenes: PublicScene[];
   selectedSceneId: string | null;
   onSelect: (sceneId: string) => void;
   onContinue: () => void;

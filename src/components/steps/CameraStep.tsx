@@ -168,6 +168,7 @@ export function CameraStep({ onUsePhoto }: Props) {
 
   return (
     <div className="step-enter w-full max-w-[64rem]">
+      <h1 className="sr-only" data-step-focus tabIndex={-1}>Take your photo.</h1>
       <div className="flex flex-col items-center gap-4">
         <div className="relative aspect-[4/5] w-full max-w-[34rem] justify-self-center overflow-hidden rounded-[clamp(1.2rem,3vw,2rem)] border border-border bg-card">
           <video className="size-full object-cover scale-x-[-1]" ref={videoRef} playsInline muted autoPlay hidden={status === 'preview'} />

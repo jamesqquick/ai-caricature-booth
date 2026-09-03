@@ -1,4 +1,5 @@
 import type { AdminFilters } from '../lib/admin-filters';
+import { generationFailureContent, toGenerationFailureCode, type GenerationFailureCode } from '../lib/generation-errors';
 import type { SessionStatus } from './sessions';
 
 export type AdminSessionSummary = {
@@ -19,7 +20,10 @@ export type AdminSessionSummary = {
   hasPostcard: boolean;
 };
 
-export type AdminSessionDetail = AdminSessionSummary;
+export type AdminSessionDetail = Omit<AdminSessionSummary, 'errorMessage'> & {
+  errorCode: GenerationFailureCode | null;
+  errorMessage: string | null;
+};
 
 export const ADMIN_IMAGE_KINDS = ['selfie', 'caricature', 'postcard'] as const;
 export type AdminImageKind = (typeof ADMIN_IMAGE_KINDS)[number];
@@ -79,6 +83,10 @@ type AdminSessionRow = {
   has_selfie: number;
   has_caricature: number;
   has_postcard: number;
+};
+
+type AdminSessionDetailRow = AdminSessionRow & {
+  error_code: string | null;
 };
 
 type CountRow = { total: number };
@@ -160,6 +168,19 @@ function mapSession(row: AdminSessionRow): AdminSessionSummary {
   };
 }
 
+function mapSessionDetail(row: AdminSessionDetailRow): AdminSessionDetail {
+  const session = mapSession(row);
+  const errorCode = row.status === 'errored'
+    ? toGenerationFailureCode(row.error_code, row.error_message)
+    : null;
+
+  return {
+    ...session,
+    errorCode,
+    errorMessage: errorCode ? generationFailureContent[errorCode].message : null,
+  };
+}
+
 export async function loadAdminSession(
   database: D1Database,
   sessionId: string,
@@ -176,6 +197,7 @@ export async function loadAdminSession(
       s.created_at,
       s.updated_at,
       s.completed_at,
+      s.error_code,
       s.error_msg AS error_message,
       s.workflow_instance_id AS workflow_id,
       CASE WHEN s.selfie_key <> '' THEN 1 ELSE 0 END AS has_selfie,
@@ -185,9 +207,9 @@ export async function loadAdminSession(
     INNER JOIN events e ON e.id = s.event_id
     WHERE s.id = ?
     LIMIT 1
-  `).bind(sessionId).first<AdminSessionRow>();
+  `).bind(sessionId).first<AdminSessionDetailRow>();
 
-  return row ? mapSession(row) : null;
+  return row ? mapSessionDetail(row) : null;
 }
 
 export async function loadAdminEventOptions(database: D1Database): Promise<AdminEventOption[]> {

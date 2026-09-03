@@ -59,9 +59,29 @@ describe('startGeneration print capability', () => {
 
   it.each(['fresh', 'replay'] as const)('returns a valid printToken on the %s path', async (path) => {
     if (path === 'fresh') {
-      loadSession.mockResolvedValueOnce(null).mockResolvedValueOnce(session);
       loadActiveEventBySlug.mockResolvedValue(event);
-      createPendingSession.mockResolvedValue({ created: true, session });
+      let freshSession: Omit<typeof session, 'selfie_sha256'> & { selfie_sha256: string; workflow_instance_id: string };
+      createPendingSession.mockImplementation(async (_database, input) => {
+        freshSession = {
+          ...session,
+          status: 'pending',
+          selfie_key: input.selfie_key,
+          selfie_sha256: input.selfie_sha256,
+          workflow_instance_id: input.workflow_instance_id,
+        };
+        return { created: true, session: freshSession };
+      });
+      loadSession.mockResolvedValueOnce(null).mockImplementation(async () => freshSession);
+      fakeEnv.SELFIES.head.mockImplementation(async () => ({
+        httpMetadata: { contentType: 'image/jpeg' },
+        customMetadata: {
+          sessionId,
+          eventId: String(event.id),
+          workflowInstanceId: freshSession.workflow_instance_id,
+          assetKind: 'selfie',
+          selfieSha256: freshSession.selfie_sha256,
+        },
+      }));
     } else {
       loadSession.mockResolvedValueOnce(session).mockResolvedValueOnce(session);
       loadActiveEventById.mockResolvedValue(event);

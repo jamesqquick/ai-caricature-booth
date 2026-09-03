@@ -4,11 +4,12 @@ import SectionHeader from "../components/SectionHeader.astro";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
 import { loadScenesByEvent } from "../db/scenes";
+import { toPublicScene } from "../data/scenes";
 
 export const prerender = false;
 
 const events = await loadActiveEvents(env.DB);
-const sceneSets = await Promise.all(events.map((event) => loadScenesByEvent(env.DB, event.id)));
+const sceneSets = await Promise.all(events.map(async (event) => (await loadScenesByEvent(env.DB, event.id)).map(toPublicScene)));
 const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
 const featuredScenes = scenes.slice(0, 3);
 const galleryScenes = scenes.slice(0, 4);

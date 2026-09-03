@@ -48,6 +48,30 @@ describe('boothReducer', () => {
     });
   });
 
+  it('returns to the camera with the scene preserved and accepted photo cleared', () => {
+    const generatingState = {
+      step: 'generating' as const,
+      sceneId: 'brooklyn-bridge',
+      photoDataUrl: 'data:image/jpeg;base64,test',
+    };
+
+    expect(boothReducer(generatingState, { type: 'retake-photo' })).toEqual({
+      step: 'camera',
+      sceneId: 'brooklyn-bridge',
+      photoDataUrl: null,
+    });
+  });
+
+  it('ignores retake transitions outside generation', () => {
+    const cameraState = {
+      step: 'camera' as const,
+      sceneId: 'subway',
+      photoDataUrl: null,
+    };
+
+    expect(boothReducer(cameraState, { type: 'retake-photo' })).toBe(cameraState);
+  });
+
   it('clears the complete flow when starting over', () => {
     const reviewState = {
       step: 'generating' as const,
