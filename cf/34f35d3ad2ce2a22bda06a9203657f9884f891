@@ -1,0 +1,21 @@
+src/db/print-jobs.ts
+  s_1e0f5f56c6cece::t_a94f718ca70d7a 469-470
+test/print-jobs-sqlite.spec.ts
+  s_1e0f5f56c6cece::t_c15092cd135821 216,220-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf34f35d3ad2ce2a22bda06a9203657f9884f891",
+  "prompts": {},
+  "sessions": {
+    "s_1e0f5f56c6cece": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa6b8882fffeP92lqzi5bHoLDe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
