@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { claimWorkflowInstanceId, loadSession, transitionSession } from '../src/db/sessions';
+import { claimSessionGeneration, claimWorkflowInstanceId, loadSession, transitionSession } from '../src/db/sessions';
 import {
   GENERATION_FAILURE_CODES,
   generationFailureContent,
@@ -137,6 +137,8 @@ describe('generation failure contract', () => {
       VALUES ('helper-session', 1, 'generating', 'scene-1', 'helper/selfie.jpg', 'workflow-original');
       INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, workflow_instance_id)
       VALUES ('guarded-session', 1, 'generating', 'scene-1', 'guarded/selfie.jpg', 'workflow-current');
+      INSERT INTO sessions (id, event_id, status, scene_id, selfie_key, workflow_instance_id)
+      VALUES ('generation-claim', 1, 'moderating', 'scene-1', 'claim/selfie.jpg', 'workflow-claim');
       INSERT INTO sessions (id, event_id, status, scene_id, selfie_key)
       VALUES ('legacy-session-owner', 1, 'uploading', 'scene-1', 'legacy-owner/selfie.jpg');
     `);
@@ -182,6 +184,19 @@ describe('generation failure contract', () => {
     });
     await expect(claimWorkflowInstanceId(database, 'legacy-session-owner', 'workflow-replacement')).resolves.toMatchObject({
       workflow_instance_id: 'legacy-session-owner',
+    });
+
+    await expect(claimSessionGeneration(database, 'generation-claim', 'workflow-stale')).resolves.toMatchObject({
+      claimed: false,
+      session: { status: 'moderating' },
+    });
+    await expect(claimSessionGeneration(database, 'generation-claim', 'workflow-claim')).resolves.toMatchObject({
+      claimed: true,
+      session: { status: 'generating' },
+    });
+    await expect(claimSessionGeneration(database, 'generation-claim', 'workflow-claim')).resolves.toMatchObject({
+      claimed: false,
+      session: { status: 'generating' },
     });
   });
 });

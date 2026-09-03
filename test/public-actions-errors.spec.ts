@@ -14,6 +14,7 @@ const fakeEnv = vi.hoisted(() => ({
 }));
 const loadActiveEventById = vi.hoisted(() => vi.fn());
 const loadActiveEventBySlug = vi.hoisted(() => vi.fn());
+const loadEventById = vi.hoisted(() => vi.fn());
 const loadEventScene = vi.hoisted(() => vi.fn());
 const claimWorkflowInstanceId = vi.hoisted(() => vi.fn());
 const createPendingSession = vi.hoisted(() => vi.fn());
@@ -33,7 +34,7 @@ vi.mock('astro:actions', () => ({
   defineAction: (definition: unknown) => definition,
 }));
 vi.mock('cloudflare:workers', () => ({ env: fakeEnv }));
-vi.mock('../src/db/events', () => ({ loadActiveEventById, loadActiveEventBySlug }));
+vi.mock('../src/db/events', () => ({ loadActiveEventById, loadActiveEventBySlug, loadEventById }));
 vi.mock('../src/db/scenes', () => ({ loadEventScene }));
 vi.mock('../src/db/sessions', () => ({ claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession }));
 
@@ -82,6 +83,7 @@ const validJpeg = new Uint8Array([
 ]);
 
 type TestAction = { handler: (input: Record<string, unknown>) => Promise<unknown> };
+type TestSession = NonNullable<Awaited<ReturnType<typeof loadSession>>>;
 
 const startGeneration = (server.startGeneration as unknown as TestAction).handler;
 const getGeneration = (server.getGeneration as unknown as TestAction).handler;
@@ -122,6 +124,7 @@ describe('public action error boundaries', () => {
     let currentSession: Record<string, unknown> = session;
     loadActiveEventById.mockResolvedValue(event);
     loadActiveEventBySlug.mockResolvedValue(event);
+    loadEventById.mockResolvedValue(event);
     loadEventScene.mockResolvedValue(scene);
     createPendingSession.mockResolvedValue({ session, created: false });
     loadSession.mockImplementation(async () => currentSession);
@@ -416,7 +419,6 @@ describe('public action error boundaries', () => {
 
   it.each([
     ['moderating', 'create'],
-    ['generating', 'restart'],
     ['compositing', 'resume'],
   ])('recovers a metadata-less legacy selfie in %s after its bytes match D1', async (status, recovery) => {
     const legacySession = { ...session, status, workflow_instance_id: sessionId };
@@ -443,6 +445,121 @@ describe('public action error boundaries', () => {
     expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId }));
     if (recovery === 'restart') expect(instance.restart).toHaveBeenCalledTimes(1);
     if (recovery === 'resume') expect(instance.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when a completed workflow leaves its session nonterminal', async () => {
+    let currentSession: TestSession = { ...session, status: 'compositing', workflow_instance_id: sessionId };
+    const instance = {
+      status: vi.fn().mockResolvedValue({ status: 'complete' }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status };
+      return currentSession;
+    });
+    fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(getGeneration({ sessionId })).resolves.toEqual({
+      status: 'errored',
+      failureCode: 'unknown_failure',
+      postcardUrl: null,
+    });
+
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: 'unknown_failure',
+      error_msg: null,
+    }, sessionId);
+    expect(instance.restart).not.toHaveBeenCalled();
+    expect(instance.resume).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a completed workflow after its event is archived', async () => {
+    let currentSession: TestSession = { ...session, status: 'compositing', workflow_instance_id: sessionId };
+    const archivedEvent = { ...event, status: 'archived' };
+    const instance = {
+      status: vi.fn().mockResolvedValue({ status: 'complete' }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadActiveEventById.mockResolvedValue(null);
+    loadEventById.mockResolvedValue(archivedEvent);
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status };
+      return currentSession;
+    });
+    fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(getGeneration({ sessionId })).resolves.toEqual({
+      status: 'errored',
+      failureCode: 'unknown_failure',
+      postcardUrl: null,
+    });
+
+    expect(loadEventById).toHaveBeenCalledWith(fakeEnv.DB, event.id);
+    expect(loadActiveEventById).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['restart', 'errored'],
+    ['resume', 'paused'],
+  ])('does not %s a workflow after its session becomes terminal', async (_operation, workflowStatus) => {
+    let currentSession: TestSession = { ...session, status: 'generating', workflow_instance_id: sessionId };
+    const instance = {
+      status: vi.fn().mockImplementation(async () => {
+        currentSession = { ...currentSession, status: 'errored', error_code: 'unknown_failure' };
+        return { status: workflowStatus };
+      }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadSession.mockImplementation(async () => currentSession);
+    fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(getGeneration({ sessionId })).resolves.toEqual({
+      status: 'errored',
+      failureCode: 'unknown_failure',
+      postcardUrl: null,
+    });
+
+    expect(instance.restart).not.toHaveBeenCalled();
+    expect(instance.resume).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['generating', 'generation_failed'],
+    ['compositing', 'composition_failed'],
+  ] as const)('fails a %s session closed instead of restarting paid work', async (status, failureCode) => {
+    let currentSession: TestSession = { ...session, status, workflow_instance_id: sessionId };
+    const instance = {
+      status: vi.fn().mockResolvedValue({ status: 'errored' }),
+      restart: vi.fn(),
+      resume: vi.fn(),
+    };
+    loadSession.mockImplementation(async () => currentSession);
+    transitionSession.mockImplementation(async (_database, _sessionId, nextStatus, fields, expectedWorkflowInstanceId) => {
+      if (currentSession.workflow_instance_id === expectedWorkflowInstanceId) currentSession = { ...currentSession, ...fields, status: nextStatus };
+      return currentSession;
+    });
+    fakeEnv.CARICATURE_WORKFLOW.create.mockRejectedValue(new Error('Instance already exists.'));
+    fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
+
+    await expect(getGeneration({ sessionId })).resolves.toEqual({
+      status: 'errored',
+      failureCode,
+      postcardUrl: null,
+    });
+
+    expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
+      error_code: failureCode,
+      error_msg: null,
+    }, sessionId);
+    expect(instance.restart).not.toHaveBeenCalled();
   });
 
   it('fails a legacy recovery closed when object bytes do not match D1', async () => {

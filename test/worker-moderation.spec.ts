@@ -10,13 +10,13 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 vi.mock('@astrojs/cloudflare/handler', () => ({ handle: vi.fn() }));
-vi.mock('../src/db/sessions', () => ({ loadSession: vi.fn(), transitionSession: vi.fn() }));
+vi.mock('../src/db/sessions', () => ({ claimSessionGeneration: vi.fn(), loadSession: vi.fn(), transitionSession: vi.fn() }));
 vi.mock('../src/lib/moderation', () => ({ moderateImage: vi.fn() }));
 vi.mock('../src/lib/postcard', () => ({ buildPostcard: vi.fn() }));
 vi.mock('../src/lib/replicate', () => ({ generateCaricature: vi.fn() }));
 
 import { CaricatureWorkflow } from '../src/worker';
-import { loadSession, transitionSession } from '../src/db/sessions';
+import { claimSessionGeneration, loadSession, transitionSession } from '../src/db/sessions';
 import { moderateImage } from '../src/lib/moderation';
 import { buildPostcard } from '../src/lib/postcard';
 import { generateCaricature } from '../src/lib/replicate';
@@ -64,7 +64,7 @@ const sessionRecord = {
   updated_at: 1,
 };
 
-function createStep() {
+function createStep(attemptOverrides: Record<string, number> = {}) {
   const calls: string[] = [];
   const configs = new Map<string, { retries?: { limit?: number } }>();
   const step = {
@@ -73,7 +73,7 @@ function createStep() {
     async do<T>(name: string, configOrCallback: unknown, callback?: (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T>) {
       const config = typeof configOrCallback === 'function' ? {} : configOrCallback as { retries?: { limit?: number } };
       const run = typeof configOrCallback === 'function' ? configOrCallback as (ctx: { attempt: number; config: { retries?: { limit: number } } }) => Promise<T> : callback!;
-      const attempts = config.retries?.limit ?? 1;
+      const attempts = attemptOverrides[name] ?? config.retries?.limit ?? 1;
       if (attempts < 1) throw new Error(`Invalid total attempt limit for ${name}: ${attempts}`);
       calls.push(name);
       configs.set(name, config);
@@ -142,7 +142,15 @@ describe('CaricatureWorkflow moderation gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(loadSession).mockResolvedValue(sessionRecord);
-    vi.mocked(transitionSession).mockResolvedValue(undefined as never);
+    vi.mocked(claimSessionGeneration).mockResolvedValue({
+      session: { ...sessionRecord, status: 'generating' },
+      claimed: true,
+    });
+    vi.mocked(transitionSession).mockImplementation(async (_database, _sessionId, status, fields) => ({
+      ...sessionRecord,
+      ...fields,
+      status,
+    }));
     vi.mocked(buildPostcard).mockResolvedValue({ ok: true, status: 200, body: new Uint8Array([4, 5, 6]) } as never);
     vi.mocked(generateCaricature).mockResolvedValue(new Uint8Array([7, 8, 9]));
   });
@@ -253,7 +261,7 @@ describe('CaricatureWorkflow moderation gate', () => {
         },
       },
     );
-    expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'generating', expect.anything(), workflowInstanceId);
+    expect(claimSessionGeneration).toHaveBeenCalledWith(expect.anything(), sessionId, workflowInstanceId);
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'compositing', {
       scene_name: payload.sceneName,
       caricature_key: caricatureKey,
@@ -316,6 +324,70 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(JSON.stringify(vi.mocked(transitionSession).mock.calls)).not.toContain(diagnostic);
   });
 
+  it('does not repeat paid generation when a failed workflow step is replayed', async () => {
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(claimSessionGeneration)
+      .mockResolvedValueOnce({ session: { ...sessionRecord, status: 'generating' }, claimed: true })
+      .mockResolvedValue({ session: { ...sessionRecord, status: 'generating' }, claimed: false });
+    vi.mocked(generateCaricature).mockRejectedValue(new Error('Replicate response was lost.'));
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run(
+      { instanceId: workflowInstanceId, payload } as never,
+      createStep({ 'generate-caricature': 2 }) as never,
+    )).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(claimSessionGeneration).toHaveBeenCalledTimes(2);
+    expect(generateCaricature).toHaveBeenCalledTimes(1);
+    expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
+      error_code: 'generation_failed',
+    }, workflowInstanceId);
+  });
+
+  it('does not compose when the generating-to-compositing transition is rejected', async () => {
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(transitionSession).mockImplementation(async (_database, _sessionId, status, fields) => ({
+      ...sessionRecord,
+      ...fields,
+      status: status === 'compositing' ? 'generating' : status,
+    }));
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(generateCaricature).toHaveBeenCalledTimes(1);
+    expect(buildPostcard).not.toHaveBeenCalled();
+  });
+
+  it('does not report success when the completion transition is rejected', async () => {
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    vi.mocked(transitionSession).mockImplementation(async (_database, _sessionId, status, fields) => ({
+      ...sessionRecord,
+      ...fields,
+      status: status === 'completed' ? 'compositing' : status,
+    }));
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(buildPostcard).toHaveBeenCalledTimes(1);
+    expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'completed', expect.objectContaining({
+      postcard_key: postcardKey,
+    }), workflowInstanceId);
+  });
+
   it('exits before workflow steps when the session belongs to a newer workflow', async () => {
     vi.mocked(loadSession).mockResolvedValue({
       ...sessionRecord,
@@ -348,6 +420,27 @@ describe('CaricatureWorkflow moderation gate', () => {
     }));
     vi.mocked(moderateImage).mockImplementation(async () => {
       ownsSession = false;
+      return { safe: true, reasons: [], raw: '', elapsedMs: 10 };
+    });
+    const { env } = createEnvironment();
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(moderateImage).toHaveBeenCalledTimes(1);
+    expect(generateCaricature).not.toHaveBeenCalled();
+    expect(buildPostcard).not.toHaveBeenCalled();
+    expect(env.SELFIES.put).not.toHaveBeenCalled();
+  });
+
+  it('stops before generation when the owned session becomes terminal after moderation', async () => {
+    let currentSession: NonNullable<Awaited<ReturnType<typeof loadSession>>> = sessionRecord;
+    vi.mocked(loadSession).mockImplementation(async () => currentSession);
+    vi.mocked(moderateImage).mockImplementation(async () => {
+      currentSession = { ...sessionRecord, status: 'errored', error_code: 'unknown_failure' };
       return { safe: true, reasons: [], raw: '', elapsedMs: 10 };
     });
     const { env } = createEnvironment();
@@ -422,6 +515,29 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(env.SELFIES.put).not.toHaveBeenCalled();
   });
 
+  it('does not generate after the session becomes terminal while reading the selfie', async () => {
+    let currentSession: NonNullable<Awaited<ReturnType<typeof loadSession>>> = sessionRecord;
+    vi.mocked(loadSession).mockImplementation(async () => currentSession);
+    vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
+    const { env, selfie } = createEnvironment();
+    selfie.arrayBuffer
+      .mockResolvedValueOnce(new Uint8Array([1, 2, 3]).buffer)
+      .mockImplementationOnce(async () => {
+        currentSession = { ...sessionRecord, status: 'errored', error_code: 'unknown_failure' };
+        return new Uint8Array([1, 2, 3]).buffer;
+      });
+    const workflow = createWorkflow(env);
+
+    await expect(workflow.run({ instanceId: workflowInstanceId, payload } as never, createStep() as never)).resolves.toEqual({
+      sessionId,
+      postcardKey: null,
+    });
+
+    expect(generateCaricature).not.toHaveBeenCalled();
+    expect(buildPostcard).not.toHaveBeenCalled();
+    expect(env.SELFIES.put).not.toHaveBeenCalled();
+  });
+
   it('does not store generated output after losing ownership', async () => {
     let ownsSession = true;
     vi.mocked(loadSession).mockImplementation(async () => ({
@@ -467,6 +583,9 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(buildPostcard).not.toHaveBeenCalled();
     expect(env.SELFIES.put).not.toHaveBeenCalledWith(postcardKey, expect.anything(), expect.anything());
+    expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
+      error_code: 'unknown_failure',
+    }, workflowInstanceId);
   });
 
   it('recovers a legacy in-flight selfie by hashing its bytes when metadata is absent', async () => {

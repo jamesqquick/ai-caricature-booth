@@ -1,7 +1,7 @@
 import { ActionError, defineAction } from 'astro:actions';
 import { z } from 'astro/zod';
 import { env } from 'cloudflare:workers';
-import { loadActiveEventById, loadActiveEventBySlug, type EventRecord } from '../db/events';
+import { loadActiveEventById, loadActiveEventBySlug, loadEventById, type EventRecord } from '../db/events';
 import { loadEventScene } from '../db/scenes';
 import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord } from '../db/sessions';
 import { toGenerationFailureCode } from '../lib/generation-errors';
@@ -145,7 +145,7 @@ export const server = {
         let session = await loadSession(env.DB, sessionId);
         if (!session) throw new ActionError({ code: 'NOT_FOUND', message: 'This postcard session was not found. Start over.' });
         if (!['completed', 'errored'].includes(session.status)) {
-          const event = await loadActiveEventById(env.DB, session.event_id);
+          const event = await loadEventById(env.DB, session.event_id);
           const scene = event ? await loadEventScene(env.DB, event.id, session.scene_id) : null;
           if (event && scene) session = await ensureWorkflow(session, scene, event);
         }
@@ -224,14 +224,30 @@ async function ensureWorkflow(
       if (current.status === 'pending' || current.status === 'completed' || current.status === 'errored') return current;
       const instance = await env.CARICATURE_WORKFLOW.get(workflowInstanceId);
       const { status } = await instance.status();
-      if (['queued', 'running', 'waiting', 'waitingForPause', 'complete'].includes(status)) return current;
+      if (['queued', 'running', 'waiting', 'waitingForPause'].includes(status)) return current;
+      if (status === 'complete') {
+        await transitionSession(env.DB, ownedSession.id, 'errored', {
+          error_code: 'unknown_failure',
+          error_msg: null,
+        }, workflowInstanceId);
+        return loadClaimedSession(claim);
+      }
       if (status === 'errored' || status === 'terminated') {
-        await loadClaimedSession(claim);
+        const latest = await loadClaimedSession(claim);
+        if (latest.status === 'completed' || latest.status === 'errored') return latest;
+        if (latest.status === 'generating' || latest.status === 'compositing') {
+          await transitionSession(env.DB, ownedSession.id, 'errored', {
+            error_code: latest.status === 'generating' ? 'generation_failed' : 'composition_failed',
+            error_msg: null,
+          }, workflowInstanceId);
+          return loadClaimedSession(claim);
+        }
         await instance.restart();
         return loadClaimedSession(claim);
       }
       if (status === 'paused') {
-        await loadClaimedSession(claim);
+        const latest = await loadClaimedSession(claim);
+        if (latest.status === 'completed' || latest.status === 'errored') return latest;
         await instance.resume();
         return loadClaimedSession(claim);
       }

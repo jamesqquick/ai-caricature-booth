@@ -74,6 +74,21 @@ export async function claimWorkflowInstanceId(database: D1Database, id: string, 
   return loadSession(database, id);
 }
 
+export async function claimSessionGeneration(database: D1Database, id: string, workflowInstanceId: string) {
+  const db = createDb(database);
+  const result = await db.run(sql`
+    UPDATE sessions
+    SET status = 'generating',
+        error_code = NULL,
+        error_msg = NULL,
+        updated_at = unixepoch()
+    WHERE id = ${id}
+      AND status = 'moderating'
+      AND workflow_instance_id = ${workflowInstanceId}
+  `);
+  return { session: await loadSession(database, id), claimed: result.meta.changes === 1 };
+}
+
 export async function transitionSession(
   database: D1Database,
   id: string,

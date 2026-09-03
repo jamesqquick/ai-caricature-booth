@@ -1,6 +1,6 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
-import { loadSession, transitionSession } from './db/sessions';
+import { claimSessionGeneration, loadSession, transitionSession, type SessionRecord } from './db/sessions';
 import { buildPostcard } from './lib/postcard';
 import { moderateImage } from './lib/moderation';
 import { generateCaricature } from './lib/replicate';
@@ -44,7 +44,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       watermarkWidth,
     } = event.payload;
     const stopped = { sessionId, postcardKey: null };
-    const ownsSession = () => ownsWorkflowSession(this.env.DB, sessionId, event.instanceId);
+    const ownsSession = () => ownsActiveWorkflowSession(this.env.DB, sessionId, event.instanceId);
     const session = await loadSession(this.env.DB, sessionId);
     const ownedSelfieSha256 = selfieSha256 ?? session?.selfie_sha256;
     if (
@@ -64,11 +64,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     const markErrored = async (errorCode: GenerationFailureCode) => {
       await transitionSession(this.env.DB, sessionId, 'errored', { error_code: errorCode }, event.instanceId);
     };
-    await step.do('mark-moderating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'moderating', {}, event.instanceId);
-      return true;
+    const moderatingSession = await step.do<SessionRecord | undefined>('mark-moderating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
+      return transitionSession(this.env.DB, sessionId, 'moderating', {}, event.instanceId);
     });
-    if (!(await ownsSession())) return stopped;
+    if (!isOwnedSessionAtStatus(moderatingSession, event.instanceId, 'moderating')) return stopped;
 
     let moderationOutcome: 'safe' | 'unsafe' | 'stale';
     const moderationStartedAt = Date.now();
@@ -101,20 +100,20 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
 
     if (moderationOutcome !== 'safe' || !(await ownsSession())) return stopped;
 
-    await step.do('mark-generating', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'generating', {}, event.instanceId);
-      return true;
-    });
-    if (!(await ownsSession())) return stopped;
-
     let caricatureKey: string | null;
     try {
       caricatureKey = await step.do<string | null>('generate-caricature', { retries: { limit: 1, delay: '1 second' }, timeout: '3 minutes' }, async () => {
+        const generationClaim = await claimSessionGeneration(this.env.DB, sessionId, event.instanceId);
+        if (!generationClaim.claimed) {
+          if (isOwnedSessionAtStatus(generationClaim.session, event.instanceId, 'generating')) await markErrored('generation_failed');
+          return null;
+        }
         if (!(await ownsSession())) return null;
         const selfie = await this.env.SELFIES.get(selfieKey);
         if (!selfie) throw new Error('Approved selfie was not found.');
         const selfieBytes = await readOwnedSelfieBytes(selfie, selfieKey, selfieOwnership);
         if (!selfieBytes) return null;
+        if (!(await ownsSession())) return null;
         const prompt = composeGenerationPrompt({
           preamble: eventPromptPreamble,
           scenePrompt,
@@ -128,7 +127,11 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
           httpMetadata: { contentType: 'image/jpeg' },
           customMetadata: { sessionId, eventId: String(eventId), workflowInstanceId: event.instanceId, assetKind: 'caricature', sceneId },
         });
-        await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key }, event.instanceId);
+        const compositingSession = await transitionSession(this.env.DB, sessionId, 'compositing', { scene_name: sceneName, caricature_key: key }, event.instanceId);
+        if (
+          !isOwnedSessionAtStatus(compositingSession, event.instanceId, 'compositing')
+          || compositingSession?.caricature_key !== key
+        ) return null;
         return key;
       });
     } catch (error) {
@@ -150,7 +153,10 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
           eventId,
           workflowInstanceId: event.instanceId,
           assetKind: 'caricature',
-        })) return null;
+        })) {
+          await markErrored('unknown_failure');
+          return null;
+        }
         console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
         const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
         if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
@@ -171,20 +177,29 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
     }
     if (!postcardKey || !(await ownsSession())) return stopped;
 
-    await step.do('mark-completed', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
-      await transitionSession(this.env.DB, sessionId, 'completed', {
+    const completedSession = await step.do<SessionRecord | undefined>('mark-completed', { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } }, async () => {
+      return transitionSession(this.env.DB, sessionId, 'completed', {
         postcard_key: postcardKey,
         pipeline_ms: Math.max(0, Date.now() - workflowStartedAt),
       }, event.instanceId);
-      return true;
     });
+    if (
+      !isOwnedSessionAtStatus(completedSession, event.instanceId, 'completed')
+      || completedSession?.postcard_key !== postcardKey
+    ) return stopped;
     return { sessionId, postcardKey };
   }
 }
 
-async function ownsWorkflowSession(database: D1Database, sessionId: string, workflowInstanceId: string) {
+async function ownsActiveWorkflowSession(database: D1Database, sessionId: string, workflowInstanceId: string) {
   const session = await loadSession(database, sessionId);
-  return session?.workflow_instance_id === workflowInstanceId;
+  return session?.workflow_instance_id === workflowInstanceId
+    && session.status !== 'completed'
+    && session.status !== 'errored';
+}
+
+function isOwnedSessionAtStatus(session: SessionRecord | undefined, workflowInstanceId: string, status: SessionRecord['status']) {
+  return session?.workflow_instance_id === workflowInstanceId && session.status === status;
 }
 
 function errorDiagnostic(error: unknown) {
