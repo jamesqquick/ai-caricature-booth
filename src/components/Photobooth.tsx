@@ -3,6 +3,7 @@ import { actions } from 'astro:actions';
 import type { PublicScene } from '../data/scenes';
 import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
 import { eventAccentForeground } from '../lib/event-accent';
+import { completeGenerationNavigation } from '../lib/print-capability-storage';
 import { Stepper } from './Stepper';
 import { CameraStep } from './steps/CameraStep';
 import { GeneratingStep } from './steps/GeneratingStep';
@@ -31,7 +32,7 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
   const accentForeground = eventAccentForeground(accentColor);
-  const finishGeneration = (sessionId: string) => window.location.assign(`/p/${sessionId}?source=generation`);
+  const finishGeneration = (sessionId: string, printToken: string) => completeGenerationNavigation(sessionId, printToken);
   const chooseAnotherPhoto = () => dispatch({ type: 'retake-photo' });
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import { getViteConfig } from 'astro/config';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { createServer } from 'vite';
+import { createServer, type InlineConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 async function render500Page(error: Error) {
@@ -16,7 +16,7 @@ async function render500Page(error: Error) {
     ...viteConfig,
     configFile: false,
     server: { middlewareMode: true, hmr: { port: 24680 } },
-  });
+  } as InlineConfig);
 
   try {
     const page = await server.ssrLoadModule('/src/pages/500.astro');

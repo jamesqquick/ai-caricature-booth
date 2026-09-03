@@ -7,6 +7,7 @@ import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
 import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
+import { authenticatePrintAgent, isPrintAgentPath } from './lib/print-agent-auth';
 import { hasExactSessionAssetOwnership, readOwnedSelfieBytes, workflowSessionAssetKey } from './lib/selfie-ownership';
 
 export type CaricaturePayload = {
@@ -226,6 +227,10 @@ const astro = { fetch: handle } satisfies ExportedHandler<Env>;
 export default {
   async fetch(request: Request, env, context) {
     const pathname = new URL(request.url).pathname;
+    if (isPrintAgentPath(pathname)) {
+      const authResponse = await authenticatePrintAgent(request, env.PRINT_AGENT_TOKEN);
+      return authResponse ?? astro.fetch(request, env, context);
+    }
     if (!isAdminPath(pathname)) return astro.fetch(request, env, context);
 
     const verifiedRequest = await withVerifiedAdminIdentity(request, context.access, env, import.meta.env.DEV);

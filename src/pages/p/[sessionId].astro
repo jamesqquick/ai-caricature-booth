@@ -6,6 +6,7 @@ import EventNotFound from "../../components/EventNotFound.astro";
 import { loadEventById } from "../../db/events";
 import { loadSession } from "../../db/sessions";
 import { ReviewTimeoutPrompt } from "../../components/ReviewTimeoutPrompt";
+import { AttendeePrintControl } from "../../components/AttendeePrintControl";
 import { isGenerationReview } from "../../lib/review-entry";
 
 export const prerender = false;
@@ -78,7 +79,7 @@ const title = isAvailable
                class="block aspect-[3/2] h-auto w-full object-contain"
              />
            </figure>
-           <div class="mt-5 flex justify-center gap-3 max-[600px]:flex-col max-[600px]:gap-2">
+           <div class="mt-5 flex flex-wrap justify-center gap-3 max-[600px]:flex-col max-[600px]:gap-2">
              <a
                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-transparent bg-[oklch(78%_.14_210)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] no-underline transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[1deg] hover:border-[oklch(84%_.12_210)] hover:bg-[oklch(84%_.12_210)] hover:shadow-[0_.75rem_2rem_oklch(62%_.14_210_/.25)] active:translate-y-0 max-[600px]:w-full"
                href={`${postcardUrl}?download=1`}
@@ -107,6 +108,7 @@ const title = isAvailable
               </svg>
               <span>Share</span>
             </button>
+             <AttendeePrintControl client:load eventId={session!.event_id} sessionId={sessionId} />
              <a
                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[oklch(82%_.17_85)] bg-[oklch(82%_.17_85)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] no-underline transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-.5deg] hover:border-[oklch(88%_.15_85)] hover:bg-[oklch(88%_.15_85)] hover:shadow-[0_.75rem_2rem_oklch(65%_.17_85_/.25)] active:translate-y-0 max-[600px]:w-full"
               href={`/e/${event!.slug}`}
@@ -137,17 +139,18 @@ const title = isAvailable
   const status = document.querySelector<HTMLElement>("[data-share-status]");
   if (shareButton && status) {
     shareButton.addEventListener("click", async () => {
+      const canonicalUrl = new URL(window.location.pathname, window.location.origin).toString();
       const shareData = {
         title: document.title,
         text: "View my caricature postcard.",
-        url: window.location.href,
+        url: canonicalUrl,
       };
       try {
         if (navigator.share) {
           await navigator.share(shareData);
           status.textContent = "Postcard shared.";
         } else {
-          await navigator.clipboard.writeText(window.location.href);
+          await navigator.clipboard.writeText(canonicalUrl);
           status.textContent = "Postcard link copied.";
         }
       } catch (error) {

@@ -1,5 +1,7 @@
 # Admin Dashboard Implementation Plan
 
+> **Historical plan:** This document records the original admin dashboard implementation and is superseded for current print-job behavior by [Admin dashboard operations](admin-dashboard-operations.md). Statements below that placed print jobs or retries out of scope describe the plan at that time, not the current system.
+
 > **For agentic workers:** Implement exactly one top-level unchecked task per session. Use the `subagent-driven-development` or `executing-plans` skill when available. After the task passes its listed verification, change its checkbox from `[ ]` to `[x]`, add concise completion notes, and stop.
 
 **Goal:** Build a Cloudflare Access-gated admin workspace for event configuration, generation monitoring, private image inspection, and useful generation statistics.
@@ -34,7 +36,7 @@ If a task is blocked, leave it unchecked and document the blocker in **Completio
 - Operational updates use 15-second short polling. Preserve the last good data when a poll fails and show that data may be stale.
 - Statistics and job rows use the same filter contract so their counts cannot disagree.
 - Private R2 access is session-scoped by image kind. Never accept or expose an arbitrary bucket key.
-- Print jobs, email delivery, retries, and destructive actions are out of scope until the application has explicit domain models and semantics for them.
+- At the time of this plan, print jobs, email delivery, retries, and destructive actions were out of scope until the application had explicit domain models and semantics for them. Print jobs and guarded retry/reprint controls now exist; use the current operations guide.
 - Event configuration grows incrementally: core settings, copy/branding, watermarks, then scenes/prompts.
 
 ## Current Data Constraints

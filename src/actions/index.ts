@@ -3,7 +3,7 @@ import { z } from 'astro/zod';
 import { env } from 'cloudflare:workers';
 import { loadActiveEventById, loadActiveEventBySlug, loadEventById, type EventRecord } from '../db/events';
 import { loadEventScene } from '../db/scenes';
-import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord } from '../db/sessions';
+import { claimWorkflowInstanceId, createPendingSession, loadSession, transitionSession, type SessionRecord, type SessionStatus } from '../db/sessions';
 import { toGenerationFailureCode } from '../lib/generation-errors';
 import { assertJpeg, MAX_SELFIE_BYTES } from '../lib/image-validation';
 import {
@@ -13,6 +13,7 @@ import {
   workflowSessionAssetKey,
 } from '../lib/selfie-ownership';
 import type { Scene } from '../data/scenes';
+import { issuePrintCapability } from '../lib/print-capability';
 
 const START_GENERATION_ERROR = "Couldn't start your postcard. Please try again.";
 
@@ -80,7 +81,7 @@ export const server = {
           }
           const current = await loadClaimedSession(generationClaim(ownedSession));
           const ensured = await ensureWorkflow(current, scene, event);
-          return { sessionId: existing.id, status: ensured.status };
+          return await generationStartResult(existing.id, event.id, ensured.status);
         }
 
         const event = await loadActiveEventBySlug(env.DB, eventSlug);
@@ -114,7 +115,7 @@ export const server = {
           }
           const current = await loadClaimedSession(generationClaim(ownedSession));
           const ensured = await ensureWorkflow(current, scene, event);
-          return { sessionId: claim.session.id, status: ensured.status };
+          return await generationStartResult(claim.session.id, event.id, ensured.status);
         }
 
         await ensureSelfieUploaded(idempotencyKey, event.id, workflowInstanceId, selfieKey, selfieSha256, bytes);
@@ -127,7 +128,7 @@ export const server = {
           workflow_instance_id: workflowInstanceId,
         });
         const ensured = await ensureWorkflow(current, scene, event);
-        return { sessionId: idempotencyKey, status: ensured.status };
+        return await generationStartResult(idempotencyKey, event.id, ensured.status);
       } catch (error) {
         throwPublicActionError('startGeneration', sessionId, error, "Couldn't start your postcard. Please try again.");
       }
@@ -161,6 +162,14 @@ export const server = {
     },
   }),
 };
+
+async function generationStartResult(sessionId: string, eventId: number, status: SessionStatus) {
+  return {
+    sessionId,
+    status,
+    printToken: await issuePrintCapability(env.PRINT_CAPABILITY_SECRET, { sessionId, eventId }),
+  };
+}
 
 async function ensureWorkflow(
   session: NonNullable<Awaited<ReturnType<typeof loadSession>>>,

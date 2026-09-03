@@ -134,7 +134,20 @@ type EventSessionAssetRow = {
   postcard_key: string | null;
 };
 
+export class EventDeletionConflictError extends Error {
+  name = 'EventDeletionConflictError';
+
+  constructor() {
+    super('This event has print job history and cannot be deleted.');
+  }
+}
+
 export async function deleteEventWithSessions(database: D1Database, id: number) {
+  const printJob = await database.prepare(
+    'SELECT id FROM print_jobs WHERE event_id = ? LIMIT 1',
+  ).bind(id).first<{ id: string }>();
+  if (printJob) throw new EventDeletionConflictError();
+
   const sessionResult = await database.prepare(`
     SELECT id, selfie_key, caricature_key, postcard_key
     FROM sessions

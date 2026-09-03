@@ -29,7 +29,7 @@ describe('event creation validation', () => {
 
   it('reports field-level errors', () => {
     expect(() => validateCreateEvent({ name: '', slug: 'Not Valid', status: 'live' }))
-      .toThrowError(EventValidationError);
+      .toThrow(EventValidationError);
     try {
       validateCreateEvent({ name: '', slug: 'Not Valid', status: 'live' });
     } catch (error) {

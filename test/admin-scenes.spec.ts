@@ -5,7 +5,7 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { createServer } from 'vite';
+import { createServer, type InlineConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { loadEventScene, loadScenesByEvent } from '../src/db/scenes';
 import { createPendingSession } from '../src/db/sessions';
@@ -76,7 +76,7 @@ async function renderEventPage(database: D1Database) {
     ...viteConfig,
     configFile: false,
     server: { middlewareMode: true, hmr: { port: 24679 } },
-  });
+  } as InlineConfig);
   const testGlobal = globalThis as typeof globalThis & { __SCENE_TEST_ENV__?: { DB: D1Database } };
   testGlobal.__SCENE_TEST_ENV__ = { DB: database };
 

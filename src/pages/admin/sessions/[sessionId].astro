@@ -1,11 +1,13 @@
 ---
 import { env } from 'cloudflare:workers';
 import { ImagePreview } from '../../../components/admin/ImagePreview';
+import { PrintHistory } from '../../../components/admin/PrintHistory';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import SessionImages from '../../../components/admin/SessionImages.astro';
 import SessionTimeline from '../../../components/admin/SessionTimeline.astro';
 import StatusBadge from '../../../components/admin/StatusBadge.astro';
 import { loadAdminSession } from '../../../db/admin';
+import { loadAdminPrintJobs, type AdminPrintJob } from '../../../db/print-jobs';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 
 export const prerender = false;
@@ -13,10 +15,16 @@ export const prerender = false;
 const sessionId = Astro.params.sessionId ?? '';
 const isValidSessionId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId);
 let session: Awaited<ReturnType<typeof loadAdminSession>> = null;
+let printJobs: AdminPrintJob[] = [];
 let loadFailed = false;
 if (isValidSessionId) {
   try {
-    session = await loadAdminSession(env.DB, sessionId);
+    const [loadedSession, loadedPrintJobs] = await Promise.all([
+      loadAdminSession(env.DB, sessionId),
+      loadAdminPrintJobs(env.DB, sessionId),
+    ]);
+    session = loadedSession;
+    printJobs = loadedPrintJobs;
   } catch (error) {
     console.error('Admin session detail load failed', error);
     loadFailed = true;
@@ -93,6 +101,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
         </section>
       )}
 
+      <PrintHistory client:load sessionId={session.id} hasPostcard={session.hasPostcard} initialJobs={printJobs} />
       <SessionTimeline session={session} />
       <SessionImages session={session} />
       <a class="mt-8 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin">Back to dashboard</a>

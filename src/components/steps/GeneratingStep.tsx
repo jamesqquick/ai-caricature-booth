@@ -13,7 +13,7 @@ type Props = {
   scene: PublicScene;
   photoDataUrl: string;
   eventSlug: string;
-  onComplete: (sessionId: string) => void;
+  onComplete: (sessionId: string, printToken: string) => void;
   onChooseAnotherPhoto: () => void;
   generationActions: GenerationActions;
 };
@@ -24,7 +24,7 @@ type ActionResult<T> = {
 };
 
 export type GenerationActions = {
-  startGeneration: (form: FormData) => Promise<ActionResult<{ sessionId: string; status: GenerationStatus }>>;
+  startGeneration: (form: FormData) => Promise<ActionResult<{ sessionId: string; status: GenerationStatus; printToken: string }>>;
   getGeneration: (input: { sessionId: string }) => Promise<ActionResult<{
     status: GenerationStatus;
     failureCode?: unknown;
@@ -34,7 +34,7 @@ export type GenerationActions = {
 
 type GenerationIssue =
   | { kind: 'terminal'; code: GenerationFailureCode }
-  | { kind: 'connection_lost'; sessionId: string }
+  | { kind: 'connection_lost'; sessionId: string; printToken: string }
   | { kind: 'request_permanent' }
   | { kind: 'start_failure'; idempotencyKey: string };
 
@@ -42,7 +42,7 @@ type RecoveryStatus = 'idle' | 'running' | 'checking';
 
 type GenerationRun =
   | { kind: 'start'; idempotencyKey: string; nonce: number }
-  | { kind: 'poll'; sessionId: string; nonce: number };
+  | { kind: 'poll'; sessionId: string; printToken: string; nonce: number };
 
 const issueContent = {
   terminal: {
@@ -159,7 +159,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
   useEffect(() => {
     const controller = new AbortController();
 
-    async function poll(sessionId: string) {
+    async function poll(sessionId: string, printToken: string) {
       let pollFailures = 0;
       while (!controller.signal.aborted) {
         let status: Awaited<ReturnType<GenerationActions['getGeneration']>> | typeof actionTimedOut | null = null;
@@ -182,7 +182,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
           pollFailures += 1;
           if (pollFailures >= 3) {
             recoveryPendingRef.current = false;
-            setIssue({ kind: 'connection_lost', sessionId });
+            setIssue({ kind: 'connection_lost', sessionId, printToken });
             return;
           }
           if (!await waitForDelay(pollFailures * 1000, controller.signal)) return;
@@ -196,7 +196,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
           setProgress(100);
           setIsComplete(true);
           if (!await waitForDelay(1000, controller.signal)) return;
-          completeGeneration(sessionId);
+          completeGeneration(sessionId, printToken);
           return;
         }
         if (status.data.status === 'errored') {
@@ -212,7 +212,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
 
     async function start() {
       if (run.kind === 'poll') {
-        await poll(run.sessionId);
+        await poll(run.sessionId, run.printToken);
         return;
       }
 
@@ -231,7 +231,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
           setIssue({ kind: 'start_failure', idempotencyKey: run.idempotencyKey });
           return;
         }
-        if (started.error || !started.data) {
+        if (started.error || !started.data || typeof started.data.printToken !== 'string') {
           recoveryPendingRef.current = false;
           setIssue(isPermanentActionError(started.error)
             ? { kind: 'request_permanent' }
@@ -242,7 +242,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
         setRecoveryStatus('idle');
         const startedPhase = phaseForGenerationStatus(started.data.status);
         if (startedPhase) setActivePhase(startedPhase);
-        await poll(started.data.sessionId);
+        await poll(started.data.sessionId, started.data.printToken);
       } catch (error) {
         if (!controller.signal.aborted) {
           recoveryPendingRef.current = false;
@@ -285,10 +285,10 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
   const checkGeneration = () => {
     if (issue?.kind !== 'connection_lost' || recoveryPendingRef.current) return;
     recoveryPendingRef.current = true;
-    const { sessionId } = issue;
+    const { sessionId, printToken } = issue;
     setIssue(null);
     setRecoveryStatus('checking');
-    setRun((current) => ({ kind: 'poll', sessionId, nonce: current.nonce + 1 }));
+    setRun((current) => ({ kind: 'poll', sessionId, printToken, nonce: current.nonce + 1 }));
   };
 
   const activeIndex = generationPhases.findIndex(({ id }) => id === activePhase);

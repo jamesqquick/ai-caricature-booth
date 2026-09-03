@@ -13,6 +13,8 @@ Refreshing the page resets the booth UI. The approved JPEG is validated and uplo
 
 ```sh
 pnpm install
+pnpm db:migrate:local
+pnpm db:seed:local
 pnpm astro dev --background
 ```
 
@@ -20,13 +22,50 @@ Use `pnpm astro dev status`, `pnpm astro dev logs`, and `pnpm astro dev stop` to
 
 Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not expose `navigator.mediaDevices` in most browsers.
 
-Apply the local D1 migration and seed data with:
+`db:migrate:local` applies schema migrations only. It does not load sample sessions. Run `db:seed:local` separately when you need the local dashboard fixtures, including `/e/nyc-tech-week-2026` and `/e/cloudflare-connect-2026`.
+
+## Deployment
+
+Set the Worker secrets through Wrangler's secure prompt. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization and must be an independent random value, not a copy of `PRINT_AGENT_TOKEN`, `REPLICATE_API_TOKEN`, or any Access secret. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print either value.
 
 ```sh
-pnpm db:migrate:local
+pnpm exec wrangler secret put PRINT_AGENT_TOKEN
+pnpm exec wrangler secret put PRINT_CAPABILITY_SECRET
+pnpm exec wrangler secret put REPLICATE_API_TOKEN
+pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
+pnpm build
+pnpm exec wrangler deploy
 ```
 
-The seed includes `/e/nyc-tech-week-2026` and `/e/cloudflare-connect-2026`.
+Run `pnpm exec wrangler whoami` first if Wrangler is not authenticated. Apply remote migrations before deploying code that depends on them. Do not run `drizzle/seed.local.sql` against the remote database.
+
+## Print agent
+
+Install dependencies from the repository root with `pnpm install`. Configure the print agent in `print-agent/.env` or its service environment without committing secret values:
+
+```dotenv
+WORKER_URL=https://booth.example.com
+EVENT_SLUG=event-slug
+PRINT_AGENT_TOKEN=replace-through-your-secret-manager
+PRINTER_DRIVER=mock
+PRINT_AGENT_STATE_DIR=/absolute/stable/path/to/print-agent-state
+```
+
+Use `PRINTER_DRIVER=dnp` or `dnp-ds620` with `PRINTER_NAME` set to the exact CUPS queue name for physical printing. Optional `POLL_INTERVAL_MS` and `BATCH_SIZE` values default to `5000` and `5`. Start one agent process for an installation:
+
+```sh
+pnpm print-agent:start
+```
+
+Mock mode writes generated PDFs to `print-agent/spool/print-<job-id>-<uuid>.pdf`. Every processed job also creates `print-agent/output/print-<job-id>-<uuid>.pdf` before submission. The application job ID supports incident correlation while the UUID preserves a unique artifact for each attempt. Production services should use a stable checkout/install path and an absolute `PRINT_AGENT_STATE_DIR` owned only by the service account.
+
+`PRINT_CAPABILITY_SECRET` belongs only in the Worker environment. Do not add it to `print-agent/.env`; the print agent authenticates with `PRINT_AGENT_TOKEN`, which is a separate credential.
+
+If startup reports an unresolved `submitting` marker, stop the agent and follow [Submitting marker recovery](docs/admin-dashboard-operations.md#submitting-marker-recovery). The recovery command never polls or prints:
+
+```sh
+pnpm print-agent:resolve -- --job-id <32-character-job-id> --outcome printed|not-submitted --confirm
+```
 
 ## Admin Access
 
@@ -38,12 +77,13 @@ Astro development builds inject `local-admin@localhost` only for loopback reques
 
 Workers Static Assets does not propagate `ExecutionContext.access` to the user Worker. The JWT fallback handles that deployment path without trusting unsigned identity headers. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned with the self-hosted Access application whenever that application is replaced. The `assets.run_worker_first` rules ensure admin paths cannot bypass the Worker through a matching static asset.
 
-See [Admin dashboard operations](docs/admin-dashboard-operations.md) for Access setup, event operations, status definitions, image privacy, and troubleshooting.
+See [Admin dashboard operations](docs/admin-dashboard-operations.md) for Access setup, event and print operations, status definitions, image privacy, local state, recovery, and troubleshooting.
 
 ## Verification
 
 ```sh
 pnpm test
+pnpm print-agent:typecheck
 pnpm check
 pnpm build
 ```

@@ -21,6 +21,7 @@ const photoDataUrl = 'data:image/jpeg;base64,cGhvdG8=';
 const firstIdempotencyKey = '00000000-0000-4000-8000-000000000001';
 const secondIdempotencyKey = '00000000-0000-4000-8000-000000000002';
 const actionTimeoutMs = 15_000;
+const printTokenFor = (sessionId: string) => `print-token:${sessionId}`;
 
 function astroActionError(code: 'BAD_REQUEST' | 'NOT_FOUND' | 'CONTENT_TOO_LARGE', message: string) {
   return {
@@ -41,7 +42,7 @@ function deferred<T>() {
 
 function startResult(sessionId = firstIdempotencyKey) {
   return {
-    data: { sessionId, status: 'uploading' },
+    data: { sessionId, status: 'uploading', printToken: printTokenFor(sessionId) },
     error: undefined,
   };
 }
@@ -305,7 +306,7 @@ describe('GeneratingStep error recovery', () => {
     await waitFor(() => expect(document.activeElement).toBe(statusHeading));
     await act(async () => checkedStatus.resolve(statusResult('completed')));
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
-    expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey);
+    expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey, printTokenFor(firstIdempotencyKey));
   });
 
   it('starts only one replacement poll loop after rapid repeated checks', async () => {
@@ -346,7 +347,7 @@ describe('GeneratingStep error recovery', () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([photoDataUrl, photoDataUrl]);
 
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
-    expect(onComplete).toHaveBeenCalledWith(secondIdempotencyKey);
+    expect(onComplete).toHaveBeenCalledWith(secondIdempotencyKey, printTokenFor(secondIdempotencyKey));
   });
 
   it('starts only one replacement generation after rapid repeated retries', async () => {
@@ -416,7 +417,7 @@ describe('GeneratingStep error recovery', () => {
     await waitFor(() => expect(actionMocks.getGeneration).toHaveBeenCalledOnce());
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
 
-    expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey);
+    expect(onComplete).toHaveBeenCalledWith(firstIdempotencyKey, printTokenFor(firstIdempotencyKey));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

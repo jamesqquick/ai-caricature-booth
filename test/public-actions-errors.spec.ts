@@ -11,6 +11,7 @@ const fakeEnv = vi.hoisted(() => ({
     create: vi.fn(),
     get: vi.fn(),
   },
+  PRINT_CAPABILITY_SECRET: 'test-print-capability-secret',
 }));
 const loadActiveEventById = vi.hoisted(() => vi.fn());
 const loadActiveEventBySlug = vi.hoisted(() => vi.fn());
@@ -297,7 +298,7 @@ describe('public action error boundaries', () => {
     });
     fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(oldInstance);
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'uploading' });
+    await expect(startGeneration(startInput())).resolves.toMatchObject({ sessionId, status: 'uploading', printToken: expect.any(String) });
 
     expect(createPendingSession).toHaveBeenCalledWith(fakeEnv.DB, expect.objectContaining({
       id: sessionId,
@@ -439,7 +440,7 @@ describe('public action error boundaries', () => {
       fakeEnv.CARICATURE_WORKFLOW.get.mockResolvedValue(instance);
     }
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status });
+      await expect(startGeneration(startInput())).resolves.toMatchObject({ sessionId, status, printToken: expect.any(String) });
 
     expect(fakeEnv.SELFIES.get).toHaveBeenCalledWith(session.selfie_key);
     expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId }));
@@ -576,7 +577,7 @@ describe('public action error boundaries', () => {
       arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
     });
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'errored' });
+    await expect(startGeneration(startInput())).resolves.toMatchObject({ sessionId, status: 'errored', printToken: expect.any(String) });
 
     expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {
       error_code: 'unknown_failure',
@@ -602,7 +603,7 @@ describe('public action error boundaries', () => {
     fakeEnv.SELFIES.head.mockResolvedValue(conflictingObject);
     fakeEnv.SELFIES.get.mockResolvedValue(conflictingObject);
 
-    await expect(startGeneration(startInput())).resolves.toEqual({ sessionId, status: 'errored' });
+    await expect(startGeneration(startInput())).resolves.toMatchObject({ sessionId, status: 'errored', printToken: expect.any(String) });
 
     expect(arrayBuffer).not.toHaveBeenCalled();
     expect(transitionSession).toHaveBeenCalledWith(fakeEnv.DB, sessionId, 'errored', {

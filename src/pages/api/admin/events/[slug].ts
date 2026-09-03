@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { deleteEventWithSessions, EventActivationError, loadEventBySlug, updateEvent, updateEventPrompts } from '../../../../db/events';
+import { deleteEventWithSessions, EventActivationError, EventDeletionConflictError, loadEventBySlug, updateEvent, updateEventPrompts } from '../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../lib/admin-access';
 import type { EventFeedbackCode } from '../../../../lib/admin-event-feedback';
 import { EventSlugConflictError, EventValidationError, validateEventPrompts, validateEventUpdate } from '../../../../lib/event-validation';
@@ -115,6 +115,9 @@ export async function DELETE({ request, params }: RouteContext) {
     await deleteEventObjects(ownedEventObjects(event, result.sessions));
     return Response.json({ deleted: true, redirectTo: '/admin/events' });
   } catch (error) {
+    if (error instanceof EventDeletionConflictError) {
+      return Response.json({ error: error.message }, { status: 409 });
+    }
     console.error('Admin event deletion failed', error);
      return Response.json({ error: "Couldn't delete the event." }, { status: 500 });
   }
