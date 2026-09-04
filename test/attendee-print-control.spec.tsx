@@ -64,6 +64,7 @@ describe('AttendeePrintControl', () => {
     expect(await screen.findByRole('button', { name: 'Printing postcard' })).toBeTruthy();
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
     expect(await screen.findByRole('button', { name: 'Sent to printer' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('The printer accepted your postcard.');
     expect(toast.success).toHaveBeenCalledWith('The printer accepted your postcard.');
     expect(toast.message).toHaveBeenCalledWith('Sending your postcard to the printer.');
     expect(toast.message).toHaveBeenCalledWith('Your postcard is queued for printing.');
@@ -84,6 +85,7 @@ describe('AttendeePrintControl', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
     const retry = await screen.findByRole('button', { name: 'Try print again' });
+    expect(screen.getByRole('status').textContent).toContain('The print failed');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The print failed. You can send a fresh print request.'));
     fireEvent.click(retry);
 
@@ -104,6 +106,7 @@ describe('AttendeePrintControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
 
     expect(await screen.findByRole('button', { name: 'Check print request' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toMatch(/couldn't (?:request|read)|unavailable/i);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/couldn't (?:request|read)|unavailable/i)));
   });
 
@@ -129,6 +132,7 @@ describe('AttendeePrintControl', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
     fireEvent.click(screen.getByRole('button', { name: 'Check print request' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/connection/i);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/connection/i)));
   });
 

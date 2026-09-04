@@ -217,6 +217,11 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
         </svg>
         <span>{buttonLabel}</span>
       </button>
+      {error ? (
+        <span className="sr-only" role="alert">{error}</span>
+      ) : (
+        <span className="sr-only" role="status" aria-live="polite">{statusCopy[state]}</span>
+      )}
     </div>
   );
 }
