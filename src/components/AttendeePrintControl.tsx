@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import type { PrintJobStatus } from '../db/print-jobs';
 import { fetchWithDeadline, RequestDeadlineError } from '../lib/fetch-with-deadline';
 import { setPrintActive } from '../lib/print-activity';
@@ -142,6 +143,20 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
     };
   }, [endpoint, jobId, state, storageKey]);
 
+  useEffect(() => {
+    if (state === 'submitting' || state === 'pending' || state === 'printing') {
+      toast.message(statusCopy[state]);
+    } else if (state === 'printed') {
+      toast.success(statusCopy[state]);
+    } else if (state === 'failed') {
+      toast.error(statusCopy[state]);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
+
   const requestPrint = async () => {
     if (!printToken || requestInFlight.current || state === 'pending' || state === 'printing' || state === 'printed') return;
     requestInFlight.current = true;
@@ -203,9 +218,9 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
         <span>{buttonLabel}</span>
       </button>
       {error ? (
-        <span className="order-last m-0 basis-full pt-1 text-center text-[.82rem] text-destructive" role="alert">{error}</span>
+        <span className="sr-only" role="alert">{error}</span>
       ) : (
-        <span className="order-last m-0 basis-full pt-1 text-center text-[.82rem] text-muted-foreground" role="status" aria-live="polite">{statusCopy[state]}</span>
+        <span className="sr-only" role="status" aria-live="polite">{statusCopy[state]}</span>
       )}
     </div>
   );
