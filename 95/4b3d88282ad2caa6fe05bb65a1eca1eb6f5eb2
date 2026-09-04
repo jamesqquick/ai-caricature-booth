@@ -1,0 +1,19 @@
+src/components/admin/AdminNavbar.astro
+  s_cd34524601b146::t_2fea2b0ac13e58 19,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "954b3d88282ad2caa6fe05bb65a1eca1eb6f5eb2",
+  "prompts": {},
+  "sessions": {
+    "s_cd34524601b146": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f92f18ab0ffeGhUWGJD7jh2VeP",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
