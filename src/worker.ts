@@ -106,7 +106,17 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       caricatureKey = await step.do<string | null>('generate-caricature', { retries: { limit: 1, delay: '1 second' }, timeout: '3 minutes' }, async () => {
         const generationClaim = await claimSessionGeneration(this.env.DB, sessionId, event.instanceId);
         if (!generationClaim.claimed) {
-          if (isOwnedSessionAtStatus(generationClaim.session, event.instanceId, 'generating')) await markErrored('generation_failed');
+          if (isOwnedSessionAtStatus(generationClaim.session, event.instanceId, 'generating')) {
+            console.error(JSON.stringify({
+              message: 'caricature generation failed',
+              sessionId,
+              workflowInstanceId: event.instanceId,
+              stage: 'generate-caricature',
+              reason: 'generation-claim-not-acquired',
+              currentStatus: generationClaim.session.status,
+            }));
+            await markErrored('generation_failed');
+          }
           return null;
         }
         if (!(await ownsSession())) return null;
@@ -155,6 +165,13 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
           workflowInstanceId: event.instanceId,
           assetKind: 'caricature',
         })) {
+          console.error(JSON.stringify({
+            message: 'postcard composition failed',
+            sessionId,
+            workflowInstanceId: event.instanceId,
+            stage: 'compose-postcard',
+            reason: 'generated-caricature-ownership-mismatch',
+          }));
           await markErrored('unknown_failure');
           return null;
         }

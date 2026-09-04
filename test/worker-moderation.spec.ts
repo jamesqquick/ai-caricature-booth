@@ -325,6 +325,7 @@ describe('CaricatureWorkflow moderation gate', () => {
   });
 
   it('does not repeat paid generation when a failed workflow step is replayed', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(claimSessionGeneration)
       .mockResolvedValueOnce({ session: { ...sessionRecord, status: 'generating' }, claimed: true })
@@ -346,6 +347,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'generation_failed',
     }, workflowInstanceId);
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('generation-claim-not-acquired');
   });
 
   it('does not compose when the generating-to-compositing transition is rejected', async () => {
@@ -571,6 +573,7 @@ describe('CaricatureWorkflow moderation gate', () => {
       assetKind: 'caricature',
     }],
   ])('rejects generated caricature ownership with %s before composition', async (_label, customMetadata) => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     const { env, caricature } = createEnvironment();
     caricature.customMetadata = customMetadata as typeof caricature.customMetadata;
@@ -586,6 +589,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'unknown_failure',
     }, workflowInstanceId);
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('generated-caricature-ownership-mismatch');
   });
 
   it('recovers a legacy in-flight selfie by hashing its bytes when metadata is absent', async () => {
