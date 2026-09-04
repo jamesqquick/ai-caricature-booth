@@ -203,8 +203,10 @@ describe('CaricatureWorkflow moderation gate', () => {
   });
 
   it('does not mark moderation errored when the final attempt succeeds', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const diagnostic = 'moderation-attempt-sentinel-4f763c';
     vi.mocked(moderateImage)
-      .mockRejectedValueOnce(new Error('Moderation attempt 1 failed.'))
+      .mockRejectedValueOnce(new Error(diagnostic))
       .mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
@@ -213,6 +215,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(moderateImage).toHaveBeenCalledTimes(2);
     expect(transitionSession).not.toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', expect.anything());
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
   });
 
   it('continues to generation only after a safe verdict', async () => {
@@ -292,9 +295,11 @@ describe('CaricatureWorkflow moderation gate', () => {
   });
 
   it('does not mark composition errored when the final attempt succeeds', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const diagnostic = 'composition-attempt-sentinel-d64e91';
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(buildPostcard)
-      .mockRejectedValueOnce(new Error('Composition attempt 1 failed.'))
+      .mockRejectedValueOnce(new Error(diagnostic))
       .mockResolvedValue({ ok: true, status: 200, body: new Uint8Array([4, 5, 6]) } as never);
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
@@ -303,6 +308,7 @@ describe('CaricatureWorkflow moderation gate', () => {
 
     expect(buildPostcard).toHaveBeenCalledTimes(2);
     expect(transitionSession).not.toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', expect.anything());
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
   });
 
   it('logs image-generation diagnostics but persists only the stable failure code', async () => {
@@ -325,11 +331,13 @@ describe('CaricatureWorkflow moderation gate', () => {
   });
 
   it('does not repeat paid generation when a failed workflow step is replayed', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const diagnostic = 'generation-attempt-sentinel-e8ca25';
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     vi.mocked(claimSessionGeneration)
       .mockResolvedValueOnce({ session: { ...sessionRecord, status: 'generating' }, claimed: true })
       .mockResolvedValue({ session: { ...sessionRecord, status: 'generating' }, claimed: false });
-    vi.mocked(generateCaricature).mockRejectedValue(new Error('Replicate response was lost.'));
+    vi.mocked(generateCaricature).mockRejectedValue(new Error(diagnostic));
     const { env } = createEnvironment();
     const workflow = createWorkflow(env);
 
@@ -346,6 +354,8 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(transitionSession).toHaveBeenLastCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'generation_failed',
     }, workflowInstanceId);
+    expect(JSON.stringify(errorLog.mock.calls)).toContain(diagnostic);
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('generation-claim-not-acquired');
   });
 
   it('does not compose when the generating-to-compositing transition is rejected', async () => {
@@ -571,6 +581,7 @@ describe('CaricatureWorkflow moderation gate', () => {
       assetKind: 'caricature',
     }],
   ])('rejects generated caricature ownership with %s before composition', async (_label, customMetadata) => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(moderateImage).mockResolvedValue({ safe: true, reasons: [], raw: '', elapsedMs: 10 });
     const { env, caricature } = createEnvironment();
     caricature.customMetadata = customMetadata as typeof caricature.customMetadata;
@@ -586,6 +597,7 @@ describe('CaricatureWorkflow moderation gate', () => {
     expect(transitionSession).toHaveBeenCalledWith(expect.anything(), sessionId, 'errored', {
       error_code: 'unknown_failure',
     }, workflowInstanceId);
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('generated-caricature-ownership-mismatch');
   });
 
   it('recovers a legacy in-flight selfie by hashing its bytes when metadata is absent', async () => {

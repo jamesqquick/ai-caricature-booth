@@ -184,6 +184,13 @@ async function ensureWorkflow(
   }
   const claim = generationClaim(ownedSession);
   const failSelfieOwnership = async () => {
+    console.error(JSON.stringify({
+      message: 'workflow start failed',
+      sessionId: ownedSession.id,
+      workflowInstanceId,
+      stage: 'ensure-workflow',
+      reason: 'selfie-ownership-mismatch',
+    }));
     await transitionSession(env.DB, ownedSession.id, 'errored', {
       error_code: 'unknown_failure',
       error_msg: null,
@@ -235,6 +242,15 @@ async function ensureWorkflow(
       const { status } = await instance.status();
       if (['queued', 'running', 'waiting', 'waitingForPause'].includes(status)) return current;
       if (status === 'complete') {
+        console.error(JSON.stringify({
+          message: 'workflow recovery failed',
+          sessionId: ownedSession.id,
+          workflowInstanceId,
+          stage: current.status,
+          workflowStatus: status,
+          reason: 'workflow-completed-without-terminal-session',
+          ...errorDiagnostic(createError),
+        }));
         await transitionSession(env.DB, ownedSession.id, 'errored', {
           error_code: 'unknown_failure',
           error_msg: null,
@@ -245,6 +261,15 @@ async function ensureWorkflow(
         const latest = await loadClaimedSession(claim);
         if (latest.status === 'completed' || latest.status === 'errored') return latest;
         if (latest.status === 'generating' || latest.status === 'compositing') {
+          console.error(JSON.stringify({
+            message: 'workflow recovery failed',
+            sessionId: ownedSession.id,
+            workflowInstanceId,
+            stage: latest.status,
+            workflowStatus: status,
+            reason: 'workflow-ended-before-session-completed',
+            ...errorDiagnostic(createError),
+          }));
           await transitionSession(env.DB, ownedSession.id, 'errored', {
             error_code: latest.status === 'generating' ? 'generation_failed' : 'composition_failed',
             error_msg: null,

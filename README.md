@@ -15,10 +15,10 @@ Refreshing the page resets the booth UI. The approved JPEG is validated and uplo
 pnpm install
 pnpm db:migrate:local
 pnpm db:seed:local
-pnpm astro dev --background
+pnpm dev
 ```
 
-Use `pnpm astro dev status`, `pnpm astro dev logs`, and `pnpm astro dev stop` to manage the background server.
+The server logs are printed in the terminal. Stop it with `Ctrl-C`.
 
 Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not expose `navigator.mediaDevices` in most browsers.
 

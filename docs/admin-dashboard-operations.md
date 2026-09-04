@@ -33,10 +33,10 @@ The Worker validates `ExecutionContext.access` when it is available. It otherwis
 
 ## Local testing
 
-Run the Astro development server in background mode:
+Run the Astro development server in the foreground so server logs stay visible:
 
 ```sh
-pnpm astro dev --background
+pnpm dev
 ```
 
 Loopback requests from `localhost`, `127.0.0.1`, and `[::1]` receive the development-only `local-admin@localhost` identity. This bypass is excluded from production builds and does not apply to LAN hostnames or non-loopback addresses.
@@ -54,7 +54,7 @@ Apply local migrations and optional sample data separately before starting Astro
 ```sh
 pnpm db:migrate:local
 pnpm db:seed:local
-pnpm astro dev --background
+pnpm dev
 ```
 
 Migrations change the schema and may migrate existing production rows. They do not run `drizzle/seed.local.sql`.

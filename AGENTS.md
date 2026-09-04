@@ -1,12 +1,12 @@
 ## Development
 
-When starting the dev server, use background mode:
+When starting the dev server, keep it in the foreground so server logs stay visible:
 
 ```
-astro dev --background
+pnpm dev
 ```
 
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+Stop it with `Ctrl-C`.
 
 ## Documentation
 

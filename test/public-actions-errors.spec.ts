@@ -449,6 +449,7 @@ describe('public action error boundaries', () => {
   });
 
   it('fails closed when a completed workflow leaves its session nonterminal', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let currentSession: TestSession = { ...session, status: 'compositing', workflow_instance_id: sessionId };
     const instance = {
       status: vi.fn().mockResolvedValue({ status: 'complete' }),
@@ -475,6 +476,7 @@ describe('public action error boundaries', () => {
     }, sessionId);
     expect(instance.restart).not.toHaveBeenCalled();
     expect(instance.resume).not.toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('workflow-completed-without-terminal-session');
   });
 
   it('reconciles a completed workflow after its event is archived', async () => {
@@ -536,6 +538,7 @@ describe('public action error boundaries', () => {
     ['generating', 'generation_failed'],
     ['compositing', 'composition_failed'],
   ] as const)('fails a %s session closed instead of restarting paid work', async (status, failureCode) => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let currentSession: TestSession = { ...session, status, workflow_instance_id: sessionId };
     const instance = {
       status: vi.fn().mockResolvedValue({ status: 'errored' }),
@@ -561,9 +564,11 @@ describe('public action error boundaries', () => {
       error_msg: null,
     }, sessionId);
     expect(instance.restart).not.toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('workflow-ended-before-session-completed');
   });
 
   it('fails a legacy recovery closed when object bytes do not match D1', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let currentSession = { ...session, status: 'moderating', workflow_instance_id: sessionId };
     loadSession.mockImplementation(async () => currentSession);
     transitionSession.mockImplementation(async (_database, _sessionId, status, fields, expectedWorkflowInstanceId) => {
@@ -585,6 +590,7 @@ describe('public action error boundaries', () => {
     }, sessionId);
     expect(fakeEnv.CARICATURE_WORKFLOW.create).not.toHaveBeenCalled();
     expect(fakeEnv.CARICATURE_WORKFLOW.get).not.toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).toContain('selfie-ownership-mismatch');
   });
 
   it('fails a legacy recovery closed for conflicting metadata without reading its bytes', async () => {
