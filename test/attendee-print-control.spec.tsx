@@ -84,7 +84,7 @@ describe('AttendeePrintControl', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
     const retry = await screen.findByRole('button', { name: 'Try print again' });
-    expect(toast.error).toHaveBeenCalledWith('The print failed. You can send a fresh print request.');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The print failed. You can send a fresh print request.'));
     fireEvent.click(retry);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -104,7 +104,7 @@ describe('AttendeePrintControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
 
     expect(await screen.findByRole('button', { name: 'Check print request' })).toBeTruthy();
-    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/couldn't (?:request|read)|unavailable/i));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/couldn't (?:request|read)|unavailable/i)));
   });
 
   it('handles network errors and aborts active polling on cleanup', async () => {
