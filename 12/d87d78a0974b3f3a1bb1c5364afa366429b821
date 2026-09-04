@@ -1,0 +1,21 @@
+src/worker.ts
+  s_ddb13f9721d65f::t_85b07cbbc1e8cc 76,78,80-98,111-127,129-156,170-174,176,178-204,245-263
+test/worker-moderation.spec.ts
+  s_ddb13f9721d65f::t_5141f0953c503f 206-207,209,218,298-299,302,311,335,340,357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "12d87d78a0974b3f3a1bb1c5364afa366429b821",
+  "prompts": {},
+  "sessions": {
+    "s_ddb13f9721d65f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f96f568d0ffeNWBAGil14ZlpdR",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
