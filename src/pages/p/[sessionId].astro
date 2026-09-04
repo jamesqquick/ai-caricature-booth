@@ -7,6 +7,7 @@ import { loadEventById } from "../../db/events";
 import { loadSession } from "../../db/sessions";
 import { ReviewTimeoutPrompt } from "../../components/ReviewTimeoutPrompt";
 import { AttendeePrintControl } from "../../components/AttendeePrintControl";
+import { Toaster } from "../../components/ui/sonner";
 import { isGenerationReview } from "../../lib/review-entry";
 
 export const prerender = false;
@@ -125,6 +126,7 @@ const title = isAvailable
             role="status"
             aria-live="polite"
           />
+          <Toaster client:load />
           {cameFromGeneration && <ReviewTimeoutPrompt client:load eventUrl={`/e/${event!.slug}`} />}
         </div>
       </main>
