@@ -1,0 +1,47 @@
+src/components/admin/MetricsOverview.astro
+  s_2127a6fbc6843e::t_9594f17c92d92e 31,34
+src/components/admin/OperationsDashboard.tsx
+  s_2127a6fbc6843e::t_9c5b9b584cd164 244,246,256,258
+src/components/ui/input.tsx
+  s_2127a6fbc6843e::t_423c42befcfc58 1-2,5-24
+src/db/events.ts
+  s_2127a6fbc6843e::t_ea0125c0dcac4c 3-10,80-167
+src/lib/event-service.ts
+  s_2127a6fbc6843e::t_c00013a5232418 1-227
+src/lib/event-validation.ts
+  s_2127a6fbc6843e::t_a8f29082cc6b08 1-2,36-60,186-330
+src/pages/admin/events/[slug].astro
+  s_19a51e78718ab5::t_d11fd533ddbc2d 6,90,96,100,104
+test/admin-metrics.spec.ts
+  s_2127a6fbc6843e::t_6218da6ddb0548 76-84
+test/event-service.spec.ts
+  s_2127a6fbc6843e::t_0436502071ac88 1-754
+test/event-watermark.spec.ts
+  s_2127a6fbc6843e::t_c6ce2c5b33ec73 1-140
+test/input.spec.tsx
+  s_2127a6fbc6843e::t_5b9aa97e792a79 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "264344f9915973d8c30938a4786bb2d481c505ed",
+  "prompts": {},
+  "sessions": {
+    "s_19a51e78718ab5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f73d031cbffenJvW2RzZW202pF",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_2127a6fbc6843e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f6e2349a5ffeU7EuB4ZQ0ToVGM",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
