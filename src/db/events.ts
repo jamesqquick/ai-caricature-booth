@@ -1,6 +1,13 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from './index';
-import { EventSlugConflictError, type CreateEventInput, type EventPromptInput, type EventUpdateInput } from '../lib/event-validation';
+import {
+  EventSlugConflictError,
+  type CreateCompleteEventInput,
+  type CreateEventInput,
+  type EventPromptInput,
+  type EventStatus,
+  type EventUpdateInput,
+} from '../lib/event-validation';
 
 export type EventRecord = {
   id: number;
@@ -68,6 +75,94 @@ export async function loadActiveEventById(database: D1Database, id: number): Pro
 export async function loadEventById(database: D1Database, id: number): Promise<EventRecord | null> {
   const db = createDb(database);
   return db.get<EventRecord>(sql`SELECT * FROM events WHERE id = ${id} LIMIT 1`);
+}
+
+export class EventIdConflictError extends Error {
+  name = 'EventIdConflictError';
+
+  constructor(public readonly eventId: number) {
+    super(`Event ID ${eventId} was allocated concurrently.`);
+  }
+}
+
+export async function allocateEventId(database: D1Database): Promise<number> {
+  const row = await database.prepare(`
+    SELECT COALESCE(MAX(id), 0) + 1 AS id
+    FROM events
+  `).first<{ id: number }>();
+  return Number(row?.id ?? 1);
+}
+
+export async function insertCompleteEvent(
+  database: D1Database,
+  id: number,
+  input: CreateCompleteEventInput,
+  createdBy: string,
+  createdAt: number,
+  watermarkKey: string | null,
+): Promise<void> {
+  const statements = [
+    database.prepare(`
+      INSERT INTO events (
+        id, slug, name, status, accent_color, watermark_image_key, tagline,
+        kiosk_idle_subhead, scene_picker_heading, scene_style_preamble,
+        scene_constraints, created_at, created_by, watermark_w
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      input.slug,
+      input.name,
+      input.status,
+      input.accentColor,
+      watermarkKey,
+      input.tagline,
+      input.kioskIdleSubhead,
+      input.scenePickerHeading,
+      input.sceneStylePreamble,
+      input.sceneConstraints,
+      createdAt,
+      createdBy,
+      input.watermark?.width ?? null,
+    ),
+    ...input.scenes.map((scene, sortOrder) => database.prepare(`
+      INSERT INTO event_scenes (
+        event_id, id, name, description, prompt, sort_order
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      scene.id,
+      scene.name,
+      scene.description,
+      scene.prompt,
+      sortOrder,
+    )),
+  ];
+
+  try {
+    await database.batch(statements);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/unique constraint failed:\s*events\.id\b|primary key constraint failed:\s*events\.id\b/i.test(message)) {
+      throw new EventIdConflictError(id);
+    }
+    if (/unique constraint failed:\s*events\.slug\b/i.test(message)) {
+      throw new EventSlugConflictError(input.slug);
+    }
+    throw error;
+  }
+}
+
+export async function loadEvents(database: D1Database, status?: EventStatus): Promise<EventRecord[]> {
+  const statement = database.prepare(`
+    SELECT *
+    FROM events
+    ${status ? 'WHERE status = ?' : ''}
+    ORDER BY created_at DESC, id DESC
+  `);
+  const result = status
+    ? await statement.bind(status).all<EventRecord>()
+    : await statement.all<EventRecord>();
+  return result.results;
 }
 
 export async function createEvent(database: D1Database, input: CreateEventInput, createdBy: string) {

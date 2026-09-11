@@ -29,13 +29,12 @@ vi.mock('../src/db/events', () => ({
 import {
   DELETE,
   GET,
-  MAX_WATERMARK_BYTES,
-  MAX_WATERMARK_DIMENSION,
   PATCH,
   PUT,
 } from '../src/pages/api/admin/events/[slug]/watermark';
 import { buildPostcard } from '../src/lib/postcard';
 import { ADMIN_EMAIL_HEADER } from '../src/lib/admin-access';
+import { MAX_WATERMARK_BYTES, MAX_WATERMARK_DIMENSION } from '../src/lib/event-watermark';
 
 const event = {
   id: 7,
@@ -389,14 +388,21 @@ describe('admin event watermark', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(editor).toContain('/watermark');
+    expect(editor).toContain("import { Input } from '../../../components/ui/input'");
     expect(editor).toContain('accept="image/png"');
     expect(editor).toContain('aspect-[3/2]');
+    expect(editor).toContain('<Input className="bg-card px-3 text-sm" id="watermark-file"');
+    expect(editor).toContain('<Input className="bg-card" id="watermark-width"');
+    expect(editor).toContain('<Input className="bg-card" id="watermark-x"');
+    expect(editor).toContain('<Input className="bg-card" id="watermark-y"');
+    expect(editor).toContain('class="grid gap-4 sm:grid-cols-3"');
     expect(editor).toContain('watermarkFile?.addEventListener(\'change\'');
     expect(editor).toContain('watermarkX?.addEventListener(\'input\'');
     expect(editor).toContain('watermarkY?.addEventListener(\'input\'');
     expect(editor).toContain('width: String(persistedPlacement.width)');
     expect(editor).toContain('if (watermarkPreview?.complete) syncWatermarkAspectRatio()');
     expect(editor).toContain('persistedPreviewSrc = `/api/admin/events/${encodedSlug}/watermark`');
+    expect(editor).not.toContain('id="watermark-status"');
     expect(action).toContain('watermarkWidth');
     expect(action).toContain('watermarkX');
     expect(action).toContain('watermarkY');

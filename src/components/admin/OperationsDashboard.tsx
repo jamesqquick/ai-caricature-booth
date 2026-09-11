@@ -241,8 +241,9 @@ export function OperationsDashboard({
         <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
           From
           <Input
-            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="rounded-lg px-3 font-sans text-sm normal-case tracking-normal"
             name="from"
+            size="sm"
             type="date"
             value={dateInputValue(filters.from)}
             onChange={(event) => updateDate('from', event.target.value)}
@@ -252,8 +253,9 @@ export function OperationsDashboard({
         <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
           To
           <Input
-            className="min-h-11 w-full rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="rounded-lg px-3 font-sans text-sm normal-case tracking-normal"
             name="to"
+            size="sm"
             type="date"
             value={dateInputValue(filters.to)}
             onChange={(event) => updateDate('to', event.target.value)}
