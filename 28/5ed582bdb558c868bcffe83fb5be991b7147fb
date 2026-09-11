@@ -1,0 +1,21 @@
+src/lib/event-validation.ts
+  s_f14bcab4382bb9::t_d505dd3dbebda0 1-2,36-60,186-330
+test/event-service.spec.ts
+  s_f14bcab4382bb9::t_c9a33445d89de1 1-754
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "285ed582bdb558c868bcffe83fb5be991b7147fb",
+  "prompts": {},
+  "sessions": {
+    "s_f14bcab4382bb9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f7329ef89ffeS1rvcyXrbznFV7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
