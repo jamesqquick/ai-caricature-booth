@@ -1,0 +1,19 @@
+test/admin-event-duplicate-page.spec.ts
+  s_2127a6fbc6843e::t_b0c2a31b512a4b 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "892187b77edd6275e07e8e159792f2b24df1c450",
+  "prompts": {},
+  "sessions": {
+    "s_2127a6fbc6843e": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f6e2349a5ffeU7EuB4ZQ0ToVGM",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
