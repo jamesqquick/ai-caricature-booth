@@ -233,7 +233,7 @@ describe('CaricatureWorkflow moderation gate', () => {
       expect.any(Uint8Array),
       'Use a bold editorial ink style. Stored event scene prompt. Stone arches and Manhattan behind the guest. Use the event palette and avoid logos. Keep the person recognizable, expressive, and centered. No text.',
     );
-    expect(buildPostcard).toHaveBeenCalledWith(env, caricature, payload.watermarkKey, payload.watermarkWidth);
+    expect(buildPostcard).toHaveBeenCalledWith(env, caricature, payload.watermarkKey, payload.watermarkWidth, null, null);
     expect(env.SELFIES.put).toHaveBeenNthCalledWith(
       1,
       caricatureKey,

@@ -4,10 +4,16 @@ import {
   loadEventBySlug,
   replaceEventWatermark,
   restoreEventWatermark,
-  updateEventWatermarkWidth,
+  updateEventWatermarkPlacement,
   type EventRecord,
 } from '../../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../../lib/admin-access';
+import {
+  DEFAULT_WATERMARK_X,
+  DEFAULT_WATERMARK_Y,
+  POSTCARD_HEIGHT,
+  POSTCARD_WIDTH,
+} from '../../../../../lib/postcard';
 
 export const prerender = false;
 
@@ -19,7 +25,7 @@ export const MAX_WATERMARK_WIDTH = 900;
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
 class WatermarkValidationError extends Error {
-  constructor(message: string, readonly status = 400) {
+  constructor(message: string, readonly status = 400, readonly field?: string) {
     super(message);
     this.name = 'WatermarkValidationError';
   }
@@ -59,13 +65,43 @@ function requireEvent(event: EventRecord | null) {
 function validateWidth(value: unknown) {
   const width = Number(value);
   if (value === null || value === '' || !Number.isInteger(width) || width < MIN_WATERMARK_WIDTH || width > MAX_WATERMARK_WIDTH) {
-    throw new WatermarkValidationError(`Width must be a whole number from ${MIN_WATERMARK_WIDTH} to ${MAX_WATERMARK_WIDTH}.`);
+    throw new WatermarkValidationError(`Width must be a whole number from ${MIN_WATERMARK_WIDTH} to ${MAX_WATERMARK_WIDTH}.`, 400, 'width');
   }
   return width;
 }
 
-function parseWidth(request: Request) {
-  return validateWidth(new URL(request.url).searchParams.get('width'));
+function validateOffset(value: unknown, field: 'x' | 'y', max: number) {
+  const offset = Number(value);
+  if (value === null || value === '' || !Number.isInteger(offset) || offset < 0 || offset > max) {
+    throw new WatermarkValidationError(`${field.toUpperCase()} offset must be a whole number from 0 to ${max}.`, 400, field);
+  }
+  return offset;
+}
+
+type WatermarkDimensions = { width: number; height: number };
+type WatermarkPlacement = { width: number; x: number; y: number };
+
+function validatePlacement(input: Record<'width' | 'x' | 'y', unknown>, dimensions: WatermarkDimensions): WatermarkPlacement {
+  const width = validateWidth(input.width);
+  const x = validateOffset(input.x, 'x', POSTCARD_WIDTH);
+  const y = validateOffset(input.y, 'y', POSTCARD_HEIGHT);
+  const renderedHeight = Math.ceil(width * dimensions.height / dimensions.width);
+
+  if (x + width > POSTCARD_WIDTH) {
+    throw new WatermarkValidationError('X offset and logo width must fit inside the postcard.', 400, 'x');
+  }
+  if (renderedHeight > POSTCARD_HEIGHT) {
+    throw new WatermarkValidationError('Logo width makes this image taller than the postcard.', 400, 'width');
+  }
+  if (y + renderedHeight > POSTCARD_HEIGHT) {
+    throw new WatermarkValidationError('Y offset and logo height must fit inside the postcard.', 400, 'y');
+  }
+  return { width, x, y };
+}
+
+function parsePlacement(request: Request, dimensions: WatermarkDimensions) {
+  const search = new URL(request.url).searchParams;
+  return validatePlacement({ width: search.get('width'), x: search.get('x'), y: search.get('y') }, dimensions);
 }
 
 async function readBoundedPng(request: Request) {
@@ -103,8 +139,8 @@ async function readBoundedPng(request: Request) {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  assertPng(bytes);
-  return bytes;
+  const dimensions = assertPng(bytes);
+  return { bytes, dimensions };
 }
 
 function assertPng(bytes: Uint8Array) {
@@ -121,6 +157,22 @@ function assertPng(bytes: Uint8Array) {
   const height = view.getUint32(20);
   if (width === 0 || height === 0 || width > MAX_WATERMARK_DIMENSION || height > MAX_WATERMARK_DIMENSION) {
     throw new WatermarkValidationError(`Watermark dimensions must be between 1 and ${MAX_WATERMARK_DIMENSION} pixels.`);
+  }
+  return { width, height };
+}
+
+async function loadStoredDimensions(event: EventRecord) {
+  if (!event.watermark_image_key || !isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+    throw new WatermarkValidationError('Upload a watermark before setting its placement.', 409);
+  }
+  const watermark = await env.SELFIES.get(event.watermark_image_key);
+  if (!watermark || watermark.httpMetadata?.contentType !== 'image/png') {
+    throw new WatermarkValidationError('The stored watermark is unavailable. Upload it again.', 409);
+  }
+  try {
+    return assertPng(new Uint8Array(await watermark.arrayBuffer()));
+  } catch {
+    throw new WatermarkValidationError('The stored watermark is invalid. Upload it again.', 409);
   }
 }
 
@@ -142,7 +194,7 @@ function errorResponse(error: unknown) {
     return Response.json({ error: error.message }, { status: 409 });
   }
   if (error instanceof WatermarkValidationError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json({ error: error.message, field: error.field }, { status: error.status });
   }
   console.error('Admin watermark request failed', error);
   return Response.json({ error: "Couldn't update the watermark." }, { status: 500 });
@@ -154,13 +206,17 @@ export async function PUT({ request, params }: RouteContext) {
 
   try {
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    const width = parseWidth(request);
-    const bytes = await readBoundedPng(request);
+    const { bytes, dimensions } = await readBoundedPng(request);
+    const placement = parsePlacement(request, dimensions);
     const key = `${ownedWatermarkPrefix(event.id)}${crypto.randomUUID()}.png`;
 
     await env.SELFIES.put(key, bytes, {
       httpMetadata: { contentType: 'image/png' },
-      customMetadata: { eventId: String(event.id) },
+      customMetadata: {
+        eventId: String(event.id),
+        imageWidth: String(dimensions.width),
+        imageHeight: String(dimensions.height),
+      },
     });
     try {
       const replaced = await replaceEventWatermark(
@@ -168,8 +224,12 @@ export async function PUT({ request, params }: RouteContext) {
         event.id,
         event.watermark_image_key,
         event.watermark_w,
+        event.watermark_x,
+        event.watermark_y,
         key,
-        width,
+        placement.width,
+        placement.x,
+        placement.y,
       );
       if (!replaced) {
         await deleteWithRetry(env.SELFIES, key);
@@ -188,9 +248,13 @@ export async function PUT({ request, params }: RouteContext) {
           env.DB,
           event.id,
           key,
-          width,
+          placement.width,
+          placement.x,
+          placement.y,
           event.watermark_image_key,
           event.watermark_w,
+          event.watermark_x,
+          event.watermark_y,
         );
         if (restored) {
           try {
@@ -202,7 +266,7 @@ export async function PUT({ request, params }: RouteContext) {
         throw error;
       }
     }
-    return Response.json({ width });
+    return Response.json(placement);
   } catch (error) {
     return errorResponse(error);
   }
@@ -237,14 +301,24 @@ export async function PATCH({ request, params }: RouteContext) {
 
   try {
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    if (!event.watermark_image_key) throw new WatermarkValidationError('Upload a watermark before setting its width.', 409);
-    const input = await request.json<{ width?: unknown }>().catch(() => {
-      throw new WatermarkValidationError('A JSON watermark width is required.');
+    const dimensions = await loadStoredDimensions(event);
+    const input = await request.json<{ width?: unknown; x?: unknown; y?: unknown }>().catch(() => {
+      throw new WatermarkValidationError('JSON watermark placement is required.');
     });
-    const width = validateWidth(input.width);
-    const updated = await updateEventWatermarkWidth(env.DB, event.id, event.watermark_image_key, width);
+    const placement = validatePlacement({ width: input.width, x: input.x, y: input.y }, dimensions);
+    const updated = await updateEventWatermarkPlacement(
+      env.DB,
+      event.id,
+      event.watermark_image_key!,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+      placement.width,
+      placement.x,
+      placement.y,
+    );
     if (!updated) throw new WatermarkConflictError();
-    return Response.json({ width });
+    return Response.json(placement);
   } catch (error) {
     return errorResponse(error);
   }
@@ -257,7 +331,14 @@ export async function DELETE({ request, params }: RouteContext) {
   try {
     const event = requireEvent(await loadEvent(params.slug ?? ''));
     if (!event.watermark_image_key) return Response.json({ removed: true });
-    const cleared = await clearEventWatermark(env.DB, event.id, event.watermark_image_key, event.watermark_w);
+    const cleared = await clearEventWatermark(
+      env.DB,
+      event.id,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+    );
     if (!cleared) throw new WatermarkConflictError();
     if (event.watermark_image_key && isEventOwnedWatermark(event.id, event.watermark_image_key)) {
       try {
@@ -268,8 +349,12 @@ export async function DELETE({ request, params }: RouteContext) {
           event.id,
           null,
           null,
+          DEFAULT_WATERMARK_X,
+          DEFAULT_WATERMARK_Y,
           event.watermark_image_key,
           event.watermark_w,
+          event.watermark_x,
+          event.watermark_y,
         );
         throw error;
       }

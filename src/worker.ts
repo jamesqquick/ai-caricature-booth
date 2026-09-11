@@ -24,6 +24,8 @@ export type CaricaturePayload = {
   selfieSha256?: string;
   watermarkKey: string | null;
   watermarkWidth: number | null;
+  watermarkX?: number | null;
+  watermarkY?: number | null;
 };
 
 export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayload> {
@@ -43,6 +45,8 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       selfieSha256,
       watermarkKey,
       watermarkWidth,
+      watermarkX,
+      watermarkY,
     } = event.payload;
     const stopped = { sessionId, postcardKey: null };
     const ownsSession = () => ownsActiveWorkflowSession(this.env.DB, sessionId, event.instanceId);
@@ -188,7 +192,7 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
             return null;
           }
           console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
-          const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
+          const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth, watermarkX ?? null, watermarkY ?? null);
           if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
           if (!(await ownsSession())) return null;
           console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));

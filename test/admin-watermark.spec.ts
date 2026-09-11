@@ -13,7 +13,7 @@ const fakeEnv = vi.hoisted(() => ({
 }));
 const loadEventBySlug = vi.hoisted(() => vi.fn());
 const replaceEventWatermark = vi.hoisted(() => vi.fn(async () => { operations.push('db:replace'); return true; }));
-const updateEventWatermarkWidth = vi.hoisted(() => vi.fn(async () => { operations.push('db:resize'); return true; }));
+const updateEventWatermarkPlacement = vi.hoisted(() => vi.fn(async () => { operations.push('db:place'); return true; }));
 const clearEventWatermark = vi.hoisted(() => vi.fn(async () => { operations.push('db:clear'); return true; }));
 const restoreEventWatermark = vi.hoisted(() => vi.fn(async () => { operations.push('db:restore'); return true; }));
 
@@ -23,7 +23,7 @@ vi.mock('../src/db/events', () => ({
   loadEventBySlug,
   replaceEventWatermark,
   restoreEventWatermark,
-  updateEventWatermarkWidth,
+  updateEventWatermarkPlacement,
 }));
 
 import {
@@ -42,6 +42,8 @@ const event = {
   slug: 'launch-night',
   watermark_image_key: 'events/7/watermarks/old.png',
   watermark_w: 540,
+  watermark_x: 56,
+  watermark_y: 56,
 };
 
 function png(width = 800, height = 300) {
@@ -53,7 +55,7 @@ function png(width = 800, height = 300) {
 }
 
 function request(method: string, body?: Uint8Array, headers: Record<string, string> = {}) {
-  return new Request('https://booth.test/api/admin/events/launch-night/watermark?width=620', {
+  return new Request('https://booth.test/api/admin/events/launch-night/watermark?width=620&x=80&y=96', {
     method,
     body: body ? body.slice().buffer as ArrayBuffer : undefined,
     headers: {
@@ -64,7 +66,7 @@ function request(method: string, body?: Uint8Array, headers: Record<string, stri
   });
 }
 
-function imageObject() {
+function imageObject(bytes = png()) {
   return {
     body: new ReadableStream({
       start(controller) {
@@ -73,6 +75,7 @@ function imageObject() {
       },
     }),
     httpMetadata: { contentType: 'image/png' },
+    arrayBuffer: vi.fn(async () => bytes.slice().buffer),
   };
 }
 
@@ -82,7 +85,7 @@ describe('admin event watermark', () => {
     operations.length = 0;
     loadEventBySlug.mockResolvedValue(event);
     replaceEventWatermark.mockImplementation(async () => { operations.push('db:replace'); return true; });
-    updateEventWatermarkWidth.mockImplementation(async () => { operations.push('db:resize'); return true; });
+    updateEventWatermarkPlacement.mockImplementation(async () => { operations.push('db:place'); return true; });
     clearEventWatermark.mockImplementation(async () => { operations.push('db:clear'); return true; });
     restoreEventWatermark.mockImplementation(async () => { operations.push('db:restore'); return true; });
   });
@@ -100,17 +103,28 @@ describe('admin event watermark', () => {
   it('uploads a validated PNG before updating D1, then deletes the prior event object', async () => {
     const bytes = png();
     const response = await PUT({ request: request('PUT', bytes), params: { slug: event.slug } });
-    const result = await response.json<{ width: number }>();
+    const result = await response.json<{ width: number; x: number; y: number }>();
     const generatedKey = fakeEnv.SELFIES.put.mock.calls[0][0];
 
     expect(response.status).toBe(200);
-    expect(result).toEqual({ width: 620 });
+    expect(result).toEqual({ width: 620, x: 80, y: 96 });
     expect(generatedKey).toMatch(/^events\/7\/watermarks\/[\w-]+\.png$/);
     expect(fakeEnv.SELFIES.put).toHaveBeenCalledWith(generatedKey, bytes, expect.objectContaining({
       httpMetadata: { contentType: 'image/png' },
-      customMetadata: { eventId: '7' },
+      customMetadata: { eventId: '7', imageWidth: '800', imageHeight: '300' },
     }));
-    expect(replaceEventWatermark).toHaveBeenCalledWith(fakeEnv.DB, 7, event.watermark_image_key, event.watermark_w, generatedKey, 620);
+    expect(replaceEventWatermark).toHaveBeenCalledWith(
+      fakeEnv.DB,
+      7,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+      generatedKey,
+      620,
+      80,
+      96,
+    );
     expect(fakeEnv.SELFIES.delete).toHaveBeenCalledWith(event.watermark_image_key);
     expect(operations).toEqual(['r2:put', 'db:replace', 'r2:delete']);
   });
@@ -186,27 +200,39 @@ describe('admin event watermark', () => {
     expect(fakeEnv.SELFIES.get).toHaveBeenCalledTimes(readsObject ? 1 : 0);
   });
 
-  it('resizes an existing watermark without replacing its object', async () => {
+  it('updates an existing watermark placement without replacing its object', async () => {
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject());
     const resizeRequest = new Request('https://booth.test/api/admin/events/launch-night/watermark', {
       method: 'PATCH',
       headers: { [ADMIN_EMAIL_HEADER]: 'admin@example.com', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ width: 700 }),
+      body: JSON.stringify({ width: 700, x: 70, y: 44 }),
     });
 
     const response = await PATCH({ request: resizeRequest, params: { slug: event.slug } });
 
     expect(response.status).toBe(200);
-    expect(updateEventWatermarkWidth).toHaveBeenCalledWith(fakeEnv.DB, 7, event.watermark_image_key, 700);
+    expect(updateEventWatermarkPlacement).toHaveBeenCalledWith(
+      fakeEnv.DB,
+      7,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+      700,
+      70,
+      44,
+    );
     expect(fakeEnv.SELFIES.put).not.toHaveBeenCalled();
     expect(fakeEnv.SELFIES.delete).not.toHaveBeenCalled();
   });
 
   it('returns 409 when resize loses an upload or delete race without restoring a stale key', async () => {
-    updateEventWatermarkWidth.mockResolvedValue(false);
+    fakeEnv.SELFIES.get.mockResolvedValue(imageObject());
+    updateEventWatermarkPlacement.mockResolvedValue(false);
     const resizeRequest = new Request('https://booth.test/api/admin/events/launch-night/watermark', {
       method: 'PATCH',
       headers: { [ADMIN_EMAIL_HEADER]: 'admin@example.com', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ width: 700 }),
+      body: JSON.stringify({ width: 700, x: 70, y: 44 }),
     });
 
     const response = await PATCH({ request: resizeRequest, params: { slug: event.slug } });
@@ -220,7 +246,14 @@ describe('admin event watermark', () => {
     const response = await DELETE({ request: request('DELETE'), params: { slug: event.slug } });
 
     expect(response.status).toBe(200);
-    expect(clearEventWatermark).toHaveBeenCalledWith(fakeEnv.DB, 7, event.watermark_image_key, event.watermark_w);
+    expect(clearEventWatermark).toHaveBeenCalledWith(
+      fakeEnv.DB,
+      7,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+    );
     expect(operations).toEqual(['db:clear', 'r2:delete']);
 
     operations.length = 0;
@@ -251,7 +284,18 @@ describe('admin event watermark', () => {
 
     expect(response.status).toBe(500);
     expect(fakeEnv.SELFIES.delete).toHaveBeenCalledTimes(4);
-    expect(restoreEventWatermark).toHaveBeenCalledWith(fakeEnv.DB, 7, generatedKey, 620, event.watermark_image_key, event.watermark_w);
+    expect(restoreEventWatermark).toHaveBeenCalledWith(
+      fakeEnv.DB,
+      7,
+      generatedKey,
+      620,
+      80,
+      96,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+    );
     expect(operations).toEqual(['r2:put', 'db:replace', 'db:restore', 'r2:delete-new']);
   });
 
@@ -262,7 +306,18 @@ describe('admin event watermark', () => {
 
     expect(response.status).toBe(500);
     expect(fakeEnv.SELFIES.delete).toHaveBeenCalledTimes(3);
-    expect(restoreEventWatermark).toHaveBeenCalledWith(fakeEnv.DB, 7, null, null, event.watermark_image_key, event.watermark_w);
+    expect(restoreEventWatermark).toHaveBeenCalledWith(
+      fakeEnv.DB,
+      7,
+      null,
+      null,
+      56,
+      56,
+      event.watermark_image_key,
+      event.watermark_w,
+      event.watermark_x,
+      event.watermark_y,
+    );
     expect(operations).toEqual(['db:clear', 'db:restore']);
   });
 
@@ -280,13 +335,15 @@ describe('admin event watermark', () => {
       },
     } as unknown as D1Database;
 
-    await actual.replaceEventWatermark(database, 7, 'old', 540, 'new', 620);
-    await actual.updateEventWatermarkWidth(database, 7, 'new', 700);
-    await actual.clearEventWatermark(database, 7, 'new', 700);
+    await actual.replaceEventWatermark(database, 7, 'old', 540, 56, 56, 'new', 620, 80, 96);
+    await actual.updateEventWatermarkPlacement(database, 7, 'new', 620, 80, 96, 700, 70, 44);
+    await actual.clearEventWatermark(database, 7, 'new', 700, 70, 44);
 
     expect(calls[0][0]).toContain('watermark_image_key IS ?');
     expect(calls[0][0]).toContain('watermark_w IS ?');
-    expect(calls[1][0]).toContain('SET watermark_w = ?');
+    expect(calls[0][0]).toContain('watermark_x = ?');
+    expect(calls[1][0]).toContain('watermark_x = ?');
+    expect(calls[1][0]).toContain('watermark_y = ?');
     expect(calls[1][0]).not.toContain('SET watermark_image_key');
     expect(calls[1][0]).toContain('watermark_image_key = ?');
     expect(calls[2][0]).toContain('watermark_image_key = ?');
@@ -315,11 +372,13 @@ describe('admin event watermark', () => {
     } as unknown as Env;
     const caricature = { body: new Uint8Array([2]) } as unknown as R2ObjectBody;
 
-    await buildPostcard(postcardEnv, caricature, 'watermark.png', 620);
-    await buildPostcard(postcardEnv, caricature, 'watermark.png', null);
+    await buildPostcard(postcardEnv, caricature, 'watermark.png', 620, 80, 96);
+    await buildPostcard(postcardEnv, caricature, 'watermark.png', null, null, null);
 
     expect(transform).toHaveBeenCalledWith({ width: 620 });
     expect(transform).toHaveBeenCalledWith({ width: 540 });
+    expect(draw).toHaveBeenCalledWith(watermarkInput, { bottom: 96, right: 80, opacity: 0.95 });
+    expect(draw).toHaveBeenCalledWith(watermarkInput, { bottom: 56, right: 56, opacity: 0.95 });
   });
 
   it('compiles the editor and propagates the selected configuration to the workflow', async () => {
@@ -331,7 +390,34 @@ describe('admin event watermark', () => {
     expect(result.diagnostics).toEqual([]);
     expect(editor).toContain('/watermark');
     expect(editor).toContain('accept="image/png"');
+    expect(editor).toContain('aspect-[3/2]');
+    expect(editor).toContain('watermarkFile?.addEventListener(\'change\'');
+    expect(editor).toContain('watermarkX?.addEventListener(\'input\'');
+    expect(editor).toContain('watermarkY?.addEventListener(\'input\'');
+    expect(editor).toContain('width: String(persistedPlacement.width)');
+    expect(editor).toContain('if (watermarkPreview?.complete) syncWatermarkAspectRatio()');
+    expect(editor).toContain('persistedPreviewSrc = `/api/admin/events/${encodedSlug}/watermark`');
     expect(action).toContain('watermarkWidth');
-    expect(worker).toContain('buildPostcard(this.env, caricature, watermarkKey, watermarkWidth)');
+    expect(action).toContain('watermarkX');
+    expect(action).toContain('watermarkY');
+    expect(worker).toContain('buildPostcard(this.env, caricature, watermarkKey, watermarkWidth, watermarkX ?? null, watermarkY ?? null)');
+  });
+
+  it('rejects placement that would move the rendered watermark outside the postcard', async () => {
+    const response = await PUT({
+      request: new Request('https://booth.test/api/admin/events/launch-night/watermark?width=900&x=901&y=0', {
+        method: 'PUT',
+        body: png().slice().buffer as ArrayBuffer,
+        headers: {
+          [ADMIN_EMAIL_HEADER]: 'admin@example.com',
+          'Content-Length': String(png().byteLength),
+          'Content-Type': 'image/png',
+        },
+      }),
+      params: { slug: event.slug },
+    });
+
+    expect(response.status).toBe(400);
+    expect(fakeEnv.SELFIES.put).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,8 @@ export type EventRecord = {
   created_at: number;
   created_by: string | null;
   watermark_w: number | null;
+  watermark_x: number;
+  watermark_y: number;
   watermark_left_w: number | null;
 };
 
@@ -182,28 +184,45 @@ export async function replaceEventWatermark(
   id: number,
   expectedKey: string | null,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   key: string,
   width: number,
+  x: number,
+  y: number,
 ) {
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = ?, watermark_w = ?
-    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
-  `).bind(key, width, id, expectedKey, expectedWidth).run();
+    SET watermark_image_key = ?, watermark_w = ?, watermark_x = ?, watermark_y = ?
+    WHERE id = ?
+      AND watermark_image_key IS ?
+      AND watermark_w IS ?
+      AND watermark_x = ?
+      AND watermark_y = ?
+  `).bind(key, width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
-export async function updateEventWatermarkWidth(
+export async function updateEventWatermarkPlacement(
   database: D1Database,
   id: number,
   expectedKey: string,
+  expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   width: number,
+  x: number,
+  y: number,
 ) {
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_w = ?
-    WHERE id = ? AND watermark_image_key = ?
-  `).bind(width, id, expectedKey).run();
+    SET watermark_w = ?, watermark_x = ?, watermark_y = ?
+    WHERE id = ?
+      AND watermark_image_key = ?
+      AND watermark_w IS ?
+      AND watermark_x = ?
+      AND watermark_y = ?
+  `).bind(width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
@@ -212,12 +231,18 @@ export async function clearEventWatermark(
   id: number,
   expectedKey: string,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
 ) {
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = NULL, watermark_w = NULL
-    WHERE id = ? AND watermark_image_key = ? AND watermark_w IS ?
-  `).bind(id, expectedKey, expectedWidth).run();
+    SET watermark_image_key = NULL, watermark_w = NULL, watermark_x = 56, watermark_y = 56
+    WHERE id = ?
+      AND watermark_image_key = ?
+      AND watermark_w IS ?
+      AND watermark_x = ?
+      AND watermark_y = ?
+  `).bind(id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
@@ -226,14 +251,22 @@ export async function restoreEventWatermark(
   id: number,
   expectedKey: string | null,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   key: string,
   width: number | null,
+  x: number,
+  y: number,
 ) {
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = ?, watermark_w = ?
-    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
-  `).bind(key, width, id, expectedKey, expectedWidth).run();
+    SET watermark_image_key = ?, watermark_w = ?, watermark_x = ?, watermark_y = ?
+    WHERE id = ?
+      AND watermark_image_key IS ?
+      AND watermark_w IS ?
+      AND watermark_x = ?
+      AND watermark_y = ?
+  `).bind(key, width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
