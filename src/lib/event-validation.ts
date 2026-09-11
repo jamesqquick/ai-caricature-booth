@@ -7,6 +7,10 @@ export type CreateEventInput = {
   status: EventStatus;
 };
 
+export type DuplicateEventInput = {
+  name: string;
+};
+
 export type EventBrandingInput = {
   tagline: string;
   kiosk_idle_subhead: string;
@@ -77,6 +81,26 @@ export function validateCreateEvent(input: Partial<Record<EventField, unknown>>)
     slug,
     status: status as EventStatus,
   };
+}
+
+export function validateDuplicateEvent(input: Record<string, unknown>): DuplicateEventInput {
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  const fields: Partial<Record<EventField, string>> = {};
+
+  if (!name) fields.name = 'Enter an event name.';
+  else if (name.length > 120) fields.name = 'Event names must be 120 characters or fewer.';
+  if (Object.keys(fields).length > 0) throw new EventValidationError(fields);
+
+  return { name };
+}
+
+export function eventSlugFromName(name: string) {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'event-copy';
 }
 
 export function validateEventUpdate(input: Partial<Record<EventField, unknown>>): EventUpdateInput {

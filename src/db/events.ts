@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from './index';
-import { EventSlugConflictError, type CreateEventInput, type EventPromptInput, type EventUpdateInput } from '../lib/event-validation';
+import { eventSlugFromName, EventSlugConflictError, type CreateEventInput, type EventPromptInput, type EventUpdateInput } from '../lib/event-validation';
 
 export type EventRecord = {
   id: number;
@@ -90,6 +90,101 @@ export async function createEvent(database: D1Database, input: CreateEventInput,
     }
     throw error;
   }
+}
+
+export class EventDuplicationConflictError extends Error {
+  name = 'EventDuplicationConflictError';
+
+  constructor() {
+    super('Could not generate a unique URL for the duplicated event.');
+  }
+}
+
+export class EventDuplicationStateError extends Error {
+  name = 'EventDuplicationStateError';
+}
+
+function isConstraintError(error: unknown) {
+  return error instanceof Error && /unique.*events\.slug|events\.slug.*unique/i.test(error.message);
+}
+
+export async function duplicateEventConfiguration(
+  database: D1Database,
+  source: EventRecord,
+  name: string,
+  createdBy: string,
+) {
+  const baseSlug = eventSlugFromName(name);
+  let duplicatedId: number | null = null;
+  let slug = baseSlug;
+
+  try {
+    for (let suffix = 1; suffix <= 100; suffix += 1) {
+      slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
+      try {
+        const [result] = await database.batch([
+          database.prepare(`
+            INSERT INTO events (
+              slug, name, status, accent_color, tagline, kiosk_idle_subhead,
+              scene_picker_heading, scene_style_preamble, scene_constraints, created_by
+            )
+            SELECT ?, ?, 'draft', accent_color, tagline, kiosk_idle_subhead,
+              scene_picker_heading, scene_style_preamble, scene_constraints, ?
+            FROM events
+            WHERE id = ?
+          `).bind(slug, name, createdBy, source.id),
+          database.prepare(`
+            INSERT INTO event_scenes (event_id, id, name, description, prompt, sort_order)
+            SELECT duplicate.id, source.id, source.name, source.description, source.prompt, source.sort_order
+            FROM event_scenes AS source
+            JOIN events AS duplicate ON duplicate.slug = ?
+            WHERE source.event_id = ?
+          `).bind(slug, source.id),
+        ]);
+        if (result.meta.changes !== 1) throw new EventDuplicationStateError('Source event no longer exists.');
+        duplicatedId = Number(result.meta.last_row_id);
+        break;
+      } catch (error) {
+        if (!isConstraintError(error)) throw error;
+      }
+    }
+
+    if (duplicatedId === null) throw new EventDuplicationConflictError();
+  } catch (error) {
+    if (duplicatedId !== null) await deleteDuplicatedEvent(database, duplicatedId);
+    throw error;
+  }
+
+  return { id: duplicatedId, name, slug, status: 'draft' as const };
+}
+
+type DuplicatedEventWatermarks = Pick<EventRecord,
+  'watermark_image_key' | 'watermark_image_key_left' | 'watermark_w' | 'watermark_left_w'>;
+
+export async function updateDuplicatedEventWatermarks(
+  database: D1Database,
+  id: number,
+  watermarks: DuplicatedEventWatermarks,
+) {
+  const result = await database.prepare(`
+    UPDATE events
+    SET watermark_image_key = ?, watermark_image_key_left = ?, watermark_w = ?, watermark_left_w = ?
+    WHERE id = ?
+  `).bind(
+    watermarks.watermark_image_key,
+    watermarks.watermark_image_key_left,
+    watermarks.watermark_w,
+    watermarks.watermark_left_w,
+    id,
+  ).run();
+  if (result.meta.changes !== 1) throw new EventDuplicationStateError('Duplicated event no longer exists.');
+}
+
+export async function deleteDuplicatedEvent(database: D1Database, id: number) {
+  await database.batch([
+    database.prepare('DELETE FROM event_scenes WHERE event_id = ?').bind(id),
+    database.prepare('DELETE FROM events WHERE id = ?').bind(id),
+  ]);
 }
 
 export async function updateEvent(database: D1Database, id: number, input: EventUpdateInput) {
