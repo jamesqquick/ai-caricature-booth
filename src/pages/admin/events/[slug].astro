@@ -74,7 +74,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <p class:list={['m-auto text-sm text-muted-foreground', event.watermark_image_key && 'hidden']} id="watermark-empty">No watermark configured.</p>
           </div>
         </div>
-        <form class="grid gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
+        <form class="grid items-start gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
             <input class="min-h-12 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground" id="watermark-file" name="watermark" type="file" accept="image/png" required={!event.watermark_image_key} />
@@ -87,7 +87,6 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <div class="flex flex-wrap items-center gap-3 sm:col-span-2">
             <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">{event.watermark_image_key ? 'Save watermark' : 'Upload watermark'}</button>
             <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" type="button">Remove watermark</button>
-            <p class="m-0 text-sm text-muted-foreground" id="watermark-status" role="status" aria-live="polite"></p>
           </div>
         </form>
       </section>

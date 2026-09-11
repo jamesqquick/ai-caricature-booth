@@ -330,6 +330,8 @@ describe('admin event watermark', () => {
     expect(result.diagnostics).toEqual([]);
     expect(editor).toContain('/watermark');
     expect(editor).toContain('accept="image/png"');
+    expect(editor).toContain('class="grid items-start gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form"');
+    expect(editor).not.toContain('id="watermark-status"');
     expect(action).toContain('watermarkWidth');
     expect(worker).toContain('buildPostcard(this.env, caricature, watermarkKey, watermarkWidth)');
   });
