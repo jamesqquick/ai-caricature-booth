@@ -329,7 +329,10 @@ describe('admin event watermark', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(editor).toContain('/watermark');
+    expect(editor).toContain("import { Input } from '../../../components/ui/input'");
     expect(editor).toContain('accept="image/png"');
+    expect(editor).toContain('<Input className="bg-card px-3 text-sm" id="watermark-file"');
+    expect(editor).toContain('<Input className="bg-card" id="watermark-width"');
     expect(editor).toContain('class="grid items-start gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form"');
     expect(editor).not.toContain('id="watermark-status"');
     expect(action).toContain('watermarkWidth');

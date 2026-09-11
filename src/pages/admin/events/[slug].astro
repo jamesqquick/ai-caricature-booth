@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
 import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
 import PageHeader from '../../../components/admin/PageHeader.astro';
+import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
@@ -77,12 +78,12 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         <form class="grid items-start gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
-            <input class="min-h-12 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-primary-foreground" id="watermark-file" name="watermark" type="file" accept="image/png" required={!event.watermark_image_key} />
+            <Input className="bg-card px-3 text-sm" id="watermark-file" name="watermark" type="file" accept="image/png" required={!event.watermark_image_key} />
             <p class="m-0 text-xs text-muted-foreground">Maximum 2 MB and 4096 x 4096 pixels.</p>
           </div>
           <div class="grid gap-2">
             <label class="font-label text-sm font-bold" for="watermark-width">Width (px)</label>
-            <input class="min-h-12 rounded-xl border border-border bg-card px-4 text-foreground" id="watermark-width" name="width" type="number" min="120" max="900" step="1" value={event.watermark_w ?? 540} required />
+            <Input className="bg-card" id="watermark-width" name="width" type="number" min="120" max="900" step="1" defaultValue={event.watermark_w ?? 540} required />
           </div>
           <div class="flex flex-wrap items-center gap-3 sm:col-span-2">
             <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">{event.watermark_image_key ? 'Save watermark' : 'Upload watermark'}</button>

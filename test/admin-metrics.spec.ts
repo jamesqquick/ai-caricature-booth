@@ -73,6 +73,15 @@ describe('admin metrics', () => {
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
+  it('keeps dashboard date inputs on the compact shared size', async () => {
+    const files = ['src/components/admin/OperationsDashboard.tsx', 'src/components/admin/MetricsOverview.astro'];
+
+    for (const file of files) {
+      const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+      expect(source.match(/size="sm"/g)).toHaveLength(2);
+    }
+  });
+
   it('allows metric panels to size independently', async () => {
     const files = [
       'src/components/admin/OperationsDashboard.tsx',
