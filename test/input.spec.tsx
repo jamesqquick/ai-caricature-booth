@@ -27,5 +27,6 @@ describe('Input', () => {
     const input = screen.getByLabelText('PNG image');
     expect(input.classList.contains('h-12')).toBe(true);
     expect(input.classList.contains('file:h-10')).toBe(true);
+    expect(input.classList.contains('file:my-[3px]')).toBe(true);
   });
 });
