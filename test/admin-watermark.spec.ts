@@ -29,13 +29,12 @@ vi.mock('../src/db/events', () => ({
 import {
   DELETE,
   GET,
-  MAX_WATERMARK_BYTES,
-  MAX_WATERMARK_DIMENSION,
   PATCH,
   PUT,
 } from '../src/pages/api/admin/events/[slug]/watermark';
 import { buildPostcard } from '../src/lib/postcard';
 import { ADMIN_EMAIL_HEADER } from '../src/lib/admin-access';
+import { MAX_WATERMARK_BYTES, MAX_WATERMARK_DIMENSION } from '../src/lib/event-watermark';
 
 const event = {
   id: 7,

@@ -1,3 +1,5 @@
+import { assertPng, MAX_WATERMARK_BYTES, validateWatermarkWidth, WatermarkValidationError } from './event-watermark';
+
 export const EVENT_STATUSES = ['draft', 'active', 'archived'] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
@@ -30,6 +32,31 @@ export type SceneInput = {
 };
 
 export type SceneField = keyof SceneInput;
+
+export type CreateCompleteEventInput = {
+  name: string;
+  slug: string;
+  status: EventStatus;
+  accentColor: string;
+  tagline: string;
+  kioskIdleSubhead: string;
+  scenePickerHeading: string;
+  sceneStylePreamble: string | null;
+  sceneConstraints: string | null;
+  scenes: SceneInput[];
+  watermark?: {
+    bytes: Uint8Array;
+    width: number;
+  };
+};
+
+export class CompleteEventValidationError extends Error {
+  name = 'CompleteEventValidationError';
+
+  constructor(public readonly fields: Record<string, string>) {
+    super('Complete event configuration is invalid.');
+  }
+}
 
 export class EventValidationError extends Error {
   name = 'EventValidationError';
@@ -154,6 +181,151 @@ export function validateScene(input: Partial<Record<SceneField, unknown>>, requi
 
   if (Object.keys(fields).length > 0) throw new SceneValidationError(fields);
   return values;
+}
+
+export function validateCompleteEvent(input: unknown): CreateCompleteEventInput {
+  const value = isRecord(input) ? input : {};
+  const normalizedStatus = value.status === undefined
+    ? 'draft'
+    : typeof value.status === 'string' ? value.status.trim() : '';
+  const fields: Record<string, string> = {};
+  let core: CreateEventInput | undefined;
+  let details: EventUpdateInput | undefined;
+
+  try {
+    core = validateCreateEvent({ ...value, status: normalizedStatus });
+  } catch (error) {
+    if (!(error instanceof EventValidationError)) throw error;
+    for (const [field, message] of Object.entries(error.fields)) {
+      if (message) fields[field] = message;
+    }
+  }
+
+  const requiredBranding = {
+    tagline: value.tagline,
+    kiosk_idle_subhead: value.kioskIdleSubhead,
+    scene_picker_heading: value.scenePickerHeading,
+    accent_color: value.accentColor,
+  };
+  for (const [field, fieldValue] of Object.entries(requiredBranding)) {
+    if (fieldValue === undefined) fields[toCompleteField(field)] = 'This field is required.';
+  }
+  for (const field of ['sceneStylePreamble', 'sceneConstraints'] as const) {
+    const fieldValue = value[field];
+    if (fieldValue !== undefined && fieldValue !== null && typeof fieldValue !== 'string') {
+      fields[field] = 'Use text or null.';
+    }
+  }
+
+  try {
+    details = validateEventUpdate({
+      name: 'Event',
+      slug: 'event',
+      status: 'draft',
+      ...requiredBranding,
+      scene_style_preamble: value.sceneStylePreamble ?? '',
+      scene_constraints: value.sceneConstraints ?? '',
+    });
+  } catch (error) {
+    if (!(error instanceof EventValidationError)) throw error;
+    for (const [field, message] of Object.entries(error.fields)) {
+      if (message) fields[toCompleteField(field)] = message;
+    }
+  }
+
+  const scenes: SceneInput[] = [];
+  const seenSceneIds = new Set<string>();
+  if (!Array.isArray(value.scenes)) {
+    fields.scenes = 'Scenes must be an array.';
+  } else {
+    if (value.scenes.length > 50) fields.scenes = 'Use 50 scenes or fewer.';
+    if (normalizedStatus === 'active' && value.scenes.length === 0) {
+      fields.scenes = 'Active events require at least one scene.';
+    }
+
+    value.scenes.forEach((scene, index) => {
+      const sceneValue = isRecord(scene) ? scene : {};
+      const sceneId = typeof sceneValue.id === 'string' ? sceneValue.id.trim() : '';
+      if (sceneId && seenSceneIds.has(sceneId)) {
+        fields[`scenes[${index}].id`] = `Scene ID "${sceneId}" is duplicated.`;
+      } else if (sceneId) {
+        seenSceneIds.add(sceneId);
+      }
+
+      try {
+        scenes.push(validateScene(sceneValue));
+      } catch (error) {
+        if (!(error instanceof SceneValidationError)) throw error;
+        for (const [field, message] of Object.entries(error.fields)) {
+          if (message) fields[`scenes[${index}].${field}`] = message;
+        }
+      }
+    });
+  }
+
+  let watermark: CreateCompleteEventInput['watermark'];
+  if (value.watermark !== undefined) {
+    if (!isRecord(value.watermark)) {
+      fields.watermark = 'Watermark must include PNG bytes and a width.';
+    } else {
+      const bytes = value.watermark.bytes;
+      let width: number | undefined;
+      if (!(bytes instanceof Uint8Array)) {
+        fields['watermark.bytes'] = 'Watermark bytes must be a Uint8Array.';
+      } else if (bytes.byteLength > MAX_WATERMARK_BYTES) {
+        fields['watermark.bytes'] = 'Watermark must be 2 MB or smaller.';
+      } else {
+        try {
+          assertPng(bytes);
+        } catch (error) {
+          if (!(error instanceof WatermarkValidationError)) throw error;
+          fields['watermark.bytes'] = error.message;
+        }
+      }
+
+      try {
+        width = validateWatermarkWidth(value.watermark.width);
+      } catch (error) {
+        if (!(error instanceof WatermarkValidationError)) throw error;
+        fields['watermark.width'] = error.message;
+      }
+
+      if (bytes instanceof Uint8Array && width !== undefined && !fields['watermark.bytes']) {
+        watermark = { bytes, width };
+      }
+    }
+  }
+
+  if (Object.keys(fields).length > 0 || !core || !details) {
+    throw new CompleteEventValidationError(fields);
+  }
+
+  return {
+    ...core,
+    accentColor: details.accent_color!,
+    tagline: details.tagline!,
+    kioskIdleSubhead: details.kiosk_idle_subhead!,
+    scenePickerHeading: details.scene_picker_heading!,
+    sceneStylePreamble: details.scene_style_preamble ?? null,
+    sceneConstraints: details.scene_constraints ?? null,
+    scenes,
+    ...(watermark ? { watermark } : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toCompleteField(field: string) {
+  const fields: Record<string, string> = {
+    accent_color: 'accentColor',
+    kiosk_idle_subhead: 'kioskIdleSubhead',
+    scene_constraints: 'sceneConstraints',
+    scene_picker_heading: 'scenePickerHeading',
+    scene_style_preamble: 'sceneStylePreamble',
+  };
+  return fields[field] ?? field;
 }
 
 function validateRequiredLength(
