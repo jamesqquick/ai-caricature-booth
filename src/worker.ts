@@ -7,6 +7,8 @@ import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
 import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
+import { handleEventMcpRequest } from './lib/event-mcp';
+import { authenticateMcpRequest, isMcpPath } from './lib/mcp-auth';
 import { authenticatePrintAgent, isPrintAgentPath } from './lib/print-agent-auth';
 import { hasExactSessionAssetOwnership, readOwnedSelfieBytes, workflowSessionAssetKey } from './lib/selfie-ownership';
 
@@ -302,6 +304,10 @@ const astro = { fetch: handle } satisfies ExportedHandler<Env>;
 export default {
   async fetch(request: Request, env, context) {
     const pathname = new URL(request.url).pathname;
+    if (isMcpPath(pathname)) {
+      const authResponse = await authenticateMcpRequest(request, env.MCP_AUTH_TOKEN);
+      return authResponse ?? handleEventMcpRequest(request, env, context);
+    }
     if (isPrintAgentPath(pathname)) {
       const authResponse = await authenticatePrintAgent(request, env.PRINT_AGENT_TOKEN);
       return authResponse ?? astro.fetch(request, env, context);

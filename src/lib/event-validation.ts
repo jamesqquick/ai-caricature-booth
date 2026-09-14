@@ -1,5 +1,3 @@
-import { assertPng, MAX_WATERMARK_BYTES, validateWatermarkWidth, WatermarkValidationError } from './event-watermark';
-
 export const EVENT_STATUSES = ['draft', 'active', 'archived'] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
@@ -44,10 +42,6 @@ export type CreateCompleteEventInput = {
   sceneStylePreamble: string | null;
   sceneConstraints: string | null;
   scenes: SceneInput[];
-  watermark?: {
-    bytes: Uint8Array;
-    width: number;
-  };
 };
 
 export class CompleteEventValidationError extends Error {
@@ -263,39 +257,6 @@ export function validateCompleteEvent(input: unknown): CreateCompleteEventInput 
     });
   }
 
-  let watermark: CreateCompleteEventInput['watermark'];
-  if (value.watermark !== undefined) {
-    if (!isRecord(value.watermark)) {
-      fields.watermark = 'Watermark must include PNG bytes and a width.';
-    } else {
-      const bytes = value.watermark.bytes;
-      let width: number | undefined;
-      if (!(bytes instanceof Uint8Array)) {
-        fields['watermark.bytes'] = 'Watermark bytes must be a Uint8Array.';
-      } else if (bytes.byteLength > MAX_WATERMARK_BYTES) {
-        fields['watermark.bytes'] = 'Watermark must be 2 MB or smaller.';
-      } else {
-        try {
-          assertPng(bytes);
-        } catch (error) {
-          if (!(error instanceof WatermarkValidationError)) throw error;
-          fields['watermark.bytes'] = error.message;
-        }
-      }
-
-      try {
-        width = validateWatermarkWidth(value.watermark.width);
-      } catch (error) {
-        if (!(error instanceof WatermarkValidationError)) throw error;
-        fields['watermark.width'] = error.message;
-      }
-
-      if (bytes instanceof Uint8Array && width !== undefined && !fields['watermark.bytes']) {
-        watermark = { bytes, width };
-      }
-    }
-  }
-
   if (Object.keys(fields).length > 0 || !core || !details) {
     throw new CompleteEventValidationError(fields);
   }
@@ -309,7 +270,6 @@ export function validateCompleteEvent(input: unknown): CreateCompleteEventInput 
     sceneStylePreamble: details.scene_style_preamble ?? null,
     sceneConstraints: details.scene_constraints ?? null,
     scenes,
-    ...(watermark ? { watermark } : {}),
   };
 }
 

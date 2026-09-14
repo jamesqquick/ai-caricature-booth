@@ -47,11 +47,6 @@ const galleryScenes = scenes.slice(0, 4);
               href="#booths">Choose a booth <span aria-hidden="true">→</span></a
             >
           </div>
-          <p
-            class="mt-4 font-label text-[.65rem] uppercase tracking-[.08em] text-muted-foreground"
-          >
-            Generated live · Downloadable and shareable
-          </p>
         </div>
 
         <div
@@ -63,7 +58,7 @@ const galleryScenes = scenes.slice(0, 4);
               <article
                 class={`absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
               >
-                <div class="landing-postcard-image relative grid aspect-[4/5] place-items-center overflow-hidden bg-muted">
+                <div class="landing-postcard-image relative grid aspect-[3/2] place-items-center overflow-hidden bg-muted">
                   <span class="font-display text-[7rem] font-semibold text-primary/70" aria-hidden="true">
                     0{index + 1}
                   </span>
@@ -95,26 +90,22 @@ const galleryScenes = scenes.slice(0, 4);
             [
               [
                 "01 · CAPTURE",
-                "Step into frame",
                 "Take a photo directly in the browser. No app or account required.",
               ],
               [
                 "02 · GENERATE",
-                "Choose a scene",
                 "Select a scene and follow the transformation in real time.",
               ],
               [
                 "03 · DELIVER",
-                "Download or share it",
                 "Download the postcard or share its link.",
               ],
-            ].map(([label, title, copy]) => (
+            ].map(([label, copy]) => (
               <article class="min-h-52 bg-background p-6">
-                <span class="font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">
+                <h3 class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-primary">
                   {label}
-                </span>
-                <h3 class="mt-9 mb-3 font-display text-[1.45rem]">{title}</h3>
-                <p class="m-0 max-w-[28ch] leading-[1.55] text-muted-foreground">
+                </h3>
+                <p class="mt-9 mb-0 max-w-[28ch] leading-[1.55] text-muted-foreground">
                   {copy}
                 </p>
               </article>
@@ -134,7 +125,7 @@ const galleryScenes = scenes.slice(0, 4);
               <article
                 class="overflow-hidden rounded-2xl border border-border bg-card"
               >
-                <div class="landing-gallery-image relative grid aspect-[1/1.15] place-items-center overflow-hidden bg-muted">
+                <div class="landing-gallery-image relative grid aspect-[3/2] place-items-center overflow-hidden bg-muted">
                   <span class="font-display text-[5rem] font-semibold text-primary/70" aria-hidden="true">
                     0{index + 1}
                   </span>
@@ -290,7 +281,7 @@ const galleryScenes = scenes.slice(0, 4);
     <footer
       class="mx-auto flex w-[min(100%_-_3rem,74rem)] justify-between gap-4 border-t border-border py-5 text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[800px]:w-[min(100%_-_2rem,40rem)] max-[800px]:flex-col"
     >
-      <span>Build with Cloudflare</span>
+      <span>Built with Cloudflare</span>
     </footer>
   </div>
 </BoothLayout>
