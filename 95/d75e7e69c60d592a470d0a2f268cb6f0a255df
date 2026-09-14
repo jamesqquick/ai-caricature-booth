@@ -1,0 +1,19 @@
+src/components/steps/GeneratingStep.tsx
+  s_0f64af6745196c::t_915b212db52d11 324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95d75e7e69c60d592a470d0a2f268cb6f0a255df",
+  "prompts": {},
+  "sessions": {
+    "s_0f64af6745196c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5f2e0a06ffe6zY2ngKlfxfL1b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
