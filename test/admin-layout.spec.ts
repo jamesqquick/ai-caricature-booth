@@ -31,7 +31,7 @@ describe('admin layout', () => {
     expect(source).toContain("document.body.style.overflow = 'hidden'");
     expect(source).toContain("event.key === 'Tab' && open");
     expect(source).toContain("event.key === 'Escape' && open");
-    expect(source).toContain('inline-flex min-h-11 items-center font-display');
+    expect(source).toContain('inline-flex min-h-11 w-11 items-center justify-center');
   });
 
   it('pushes page header actions to the right from the root layout', async () => {
