@@ -119,7 +119,11 @@ function createDatabase() {
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       created_by TEXT,
       watermark_w INTEGER,
-      watermark_left_w INTEGER
+      watermark_x INTEGER NOT NULL DEFAULT 50,
+      watermark_y INTEGER NOT NULL DEFAULT 50,
+      watermark_left_w INTEGER,
+      watermark_left_x INTEGER NOT NULL DEFAULT 50,
+      watermark_left_y INTEGER NOT NULL DEFAULT 50
     );
     CREATE TABLE event_scenes (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,

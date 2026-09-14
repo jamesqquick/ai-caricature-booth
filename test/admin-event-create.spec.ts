@@ -63,5 +63,14 @@ describe('createEvent', () => {
       'admin@example.com',
     ]));
     expect(calls[0][0]).toContain('created_by');
+    expect(calls[0][0]).toContain('watermark_x, watermark_y, watermark_left_x, watermark_left_y');
+    expect(calls[0][0]).toContain('VALUES (?, ?, ?, ?, ?, 50, 50, 50, 50)');
+  });
+
+  it('explicitly initializes watermark offsets for both event insert paths', async () => {
+    const source = await readFile(new URL('../src/db/events.ts', import.meta.url), 'utf8');
+
+    expect(source.match(/watermark_x, watermark_y, watermark_left_x, watermark_left_y/g)).toHaveLength(2);
+    expect(source.match(/50, 50, 50, 50/g)).toHaveLength(2);
   });
 });

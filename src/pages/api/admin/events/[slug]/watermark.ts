@@ -6,6 +6,7 @@ import {
   restoreEventWatermark,
   updateEventWatermarkPlacement,
   type EventRecord,
+  type WatermarkSide,
 } from '../../../../../db/events';
 import { ADMIN_EMAIL_HEADER } from '../../../../../lib/admin-access';
 import {
@@ -59,6 +60,34 @@ function validateOffset(value: unknown, field: 'x' | 'y', max: number) {
 
 type WatermarkDimensions = { width: number; height: number };
 type WatermarkPlacement = { width: number; x: number; y: number };
+type WatermarkSnapshot = { key: string | null; width: number | null; x: number; y: number };
+
+function selectedSide(request: Request): WatermarkSide {
+  const side = new URL(request.url).searchParams.get('side');
+  if (side === null || side === 'right') return 'right';
+  if (side === 'left') return side;
+  throw new WatermarkValidationError('Watermark side must be left or right.', 400, 'side');
+}
+
+function watermarkSnapshot(event: EventRecord, side: WatermarkSide): WatermarkSnapshot {
+  return side === 'left'
+    ? {
+        key: event.watermark_image_key_left,
+        width: event.watermark_left_w,
+        x: event.watermark_left_x,
+        y: event.watermark_left_y,
+      }
+    : {
+        key: event.watermark_image_key,
+        width: event.watermark_w,
+        x: event.watermark_x,
+        y: event.watermark_y,
+      };
+}
+
+function sideArgument(side: WatermarkSide): [] | ['left'] {
+  return side === 'left' ? ['left'] : [];
+}
 
 function validatePlacementWidth(value: unknown) {
   try {
@@ -94,11 +123,11 @@ function parsePlacement(request: Request, dimensions: WatermarkDimensions) {
   return validatePlacement({ width: search.get('width'), x: search.get('x'), y: search.get('y') }, dimensions);
 }
 
-async function loadStoredDimensions(event: EventRecord) {
-  if (!event.watermark_image_key || !isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+async function loadStoredDimensions(event: EventRecord, snapshot: WatermarkSnapshot) {
+  if (!snapshot.key || !isEventOwnedWatermark(event.id, snapshot.key)) {
     throw new WatermarkValidationError('Upload a watermark before setting its placement.', 409);
   }
-  const watermark = await env.SELFIES.get(event.watermark_image_key);
+  const watermark = await env.SELFIES.get(snapshot.key);
   if (!watermark || watermark.httpMetadata?.contentType !== 'image/png') {
     throw new WatermarkValidationError('The stored watermark is unavailable. Upload it again.', 409);
   }
@@ -125,7 +154,9 @@ export async function PUT({ request, params }: RouteContext) {
   if (denied) return denied;
 
   try {
+    const side = selectedSide(request);
     const event = requireEvent(await loadEvent(params.slug ?? ''));
+    const current = watermarkSnapshot(event, side);
     const bytes = await readBoundedPng(request);
     const dimensions = assertPng(bytes);
     const placement = parsePlacement(request, dimensions);
@@ -134,14 +165,15 @@ export async function PUT({ request, params }: RouteContext) {
       const replaced = await replaceEventWatermark(
         env.DB,
         event.id,
-        event.watermark_image_key,
-        event.watermark_w,
-        event.watermark_x,
-        event.watermark_y,
+        current.key,
+        current.width,
+        current.x,
+        current.y,
         key,
         placement.width,
         placement.x,
         placement.y,
+        ...sideArgument(side),
       );
       if (!replaced) {
         await deleteEventWatermark(env.SELFIES, key);
@@ -152,9 +184,9 @@ export async function PUT({ request, params }: RouteContext) {
       throw error;
     }
 
-    if (event.watermark_image_key && isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+    if (current.key && isEventOwnedWatermark(event.id, current.key)) {
       try {
-        await deleteEventWatermark(env.SELFIES, event.watermark_image_key);
+        await deleteEventWatermark(env.SELFIES, current.key);
       } catch (error) {
         const restored = await restoreEventWatermark(
           env.DB,
@@ -163,10 +195,11 @@ export async function PUT({ request, params }: RouteContext) {
           placement.width,
           placement.x,
           placement.y,
-          event.watermark_image_key,
-          event.watermark_w,
-          event.watermark_x,
-          event.watermark_y,
+          current.key,
+          current.width,
+          current.x,
+          current.y,
+          ...sideArgument(side),
         );
         if (restored) {
           try {
@@ -188,12 +221,20 @@ export async function GET({ request, params }: RouteContext) {
   const denied = forbidden(request);
   if (denied) return denied;
 
+  let side: WatermarkSide;
+  try {
+    side = selectedSide(request);
+  } catch (error) {
+    return errorResponse(error);
+  }
+
   try {
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    if (!event.watermark_image_key || !isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+    const current = watermarkSnapshot(event, side);
+    if (!current.key || !isEventOwnedWatermark(event.id, current.key)) {
       return new Response('Not found', { status: 404 });
     }
-    const watermark = await env.SELFIES.get(event.watermark_image_key);
+    const watermark = await env.SELFIES.get(current.key);
     if (!watermark || watermark.httpMetadata?.contentType !== 'image/png') return new Response('Not found', { status: 404 });
     return new Response(watermark.body, {
       headers: {
@@ -212,8 +253,10 @@ export async function PATCH({ request, params }: RouteContext) {
   if (denied) return denied;
 
   try {
+    const side = selectedSide(request);
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    const dimensions = await loadStoredDimensions(event);
+    const current = watermarkSnapshot(event, side);
+    const dimensions = await loadStoredDimensions(event, current);
     const input = await request.json<{ width?: unknown; x?: unknown; y?: unknown }>().catch(() => {
       throw new WatermarkValidationError('JSON watermark placement is required.');
     });
@@ -221,13 +264,14 @@ export async function PATCH({ request, params }: RouteContext) {
     const updated = await updateEventWatermarkPlacement(
       env.DB,
       event.id,
-      event.watermark_image_key!,
-      event.watermark_w,
-      event.watermark_x,
-      event.watermark_y,
+      current.key!,
+      current.width,
+      current.x,
+      current.y,
       placement.width,
       placement.x,
       placement.y,
+      ...sideArgument(side),
     );
     if (!updated) throw new WatermarkConflictError();
     return Response.json(placement);
@@ -241,20 +285,23 @@ export async function DELETE({ request, params }: RouteContext) {
   if (denied) return denied;
 
   try {
+    const side = selectedSide(request);
     const event = requireEvent(await loadEvent(params.slug ?? ''));
-    if (!event.watermark_image_key) return Response.json({ removed: true });
+    const current = watermarkSnapshot(event, side);
+    if (!current.key) return Response.json({ removed: true });
     const cleared = await clearEventWatermark(
       env.DB,
       event.id,
-      event.watermark_image_key,
-      event.watermark_w,
-      event.watermark_x,
-      event.watermark_y,
+      current.key,
+      current.width,
+      current.x,
+      current.y,
+      ...sideArgument(side),
     );
     if (!cleared) throw new WatermarkConflictError();
-    if (event.watermark_image_key && isEventOwnedWatermark(event.id, event.watermark_image_key)) {
+    if (current.key && isEventOwnedWatermark(event.id, current.key)) {
       try {
-        await deleteEventWatermark(env.SELFIES, event.watermark_image_key);
+        await deleteEventWatermark(env.SELFIES, current.key);
       } catch (error) {
         await restoreEventWatermark(
           env.DB,
@@ -263,10 +310,11 @@ export async function DELETE({ request, params }: RouteContext) {
           null,
           DEFAULT_WATERMARK_X,
           DEFAULT_WATERMARK_Y,
-          event.watermark_image_key,
-          event.watermark_w,
-          event.watermark_x,
-          event.watermark_y,
+          current.key,
+          current.width,
+          current.x,
+          current.y,
+          ...sideArgument(side),
         );
         throw error;
       }

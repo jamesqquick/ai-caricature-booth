@@ -44,6 +44,12 @@ const payload = {
   selfieSha256,
   watermarkKey: 'events/1/watermarks/brand.png',
   watermarkWidth: 620,
+  watermarkX: 80,
+  watermarkY: 96,
+  watermarkLeftKey: 'events/1/watermarks/sponsor.png',
+  watermarkLeftWidth: 480,
+  watermarkLeftX: 72,
+  watermarkLeftY: 64,
 };
 const sessionRecord = {
   id: sessionId,
@@ -233,7 +239,18 @@ describe('CaricatureWorkflow moderation gate', () => {
       expect.any(Uint8Array),
       'Use a bold editorial ink style. Stored event scene prompt. Stone arches and Manhattan behind the guest. Use the event palette and avoid logos. Keep the person recognizable, expressive, and centered. No text.',
     );
-    expect(buildPostcard).toHaveBeenCalledWith(env, caricature, payload.watermarkKey, payload.watermarkWidth, null, null);
+    expect(buildPostcard).toHaveBeenCalledWith(
+      env,
+      caricature,
+      payload.watermarkKey,
+      payload.watermarkWidth,
+      payload.watermarkX,
+      payload.watermarkY,
+      payload.watermarkLeftKey,
+      payload.watermarkLeftWidth,
+      payload.watermarkLeftX,
+      payload.watermarkLeftY,
+    );
     expect(env.SELFIES.put).toHaveBeenNthCalledWith(
       1,
       caricatureKey,
