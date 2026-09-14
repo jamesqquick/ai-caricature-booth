@@ -26,18 +26,31 @@ Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not e
 
 ## Deployment
 
-Set the Worker secrets through Wrangler's secure prompt. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization and must be an independent random value, not a copy of `PRINT_AGENT_TOKEN`, `REPLICATE_API_TOKEN`, or any Access secret. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print either value.
+Set the Worker secrets through Wrangler's secure prompt. `MCP_AUTH_TOKEN`, `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` must be independent random values. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print any secret value.
 
 ```sh
 pnpm exec wrangler secret put PRINT_AGENT_TOKEN
 pnpm exec wrangler secret put PRINT_CAPABILITY_SECRET
 pnpm exec wrangler secret put REPLICATE_API_TOKEN
+pnpm exec wrangler secret put MCP_AUTH_TOKEN
 pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
 pnpm build
 pnpm exec wrangler deploy
 ```
 
 Run `pnpm exec wrangler whoami` first if Wrangler is not authenticated. Apply remote migrations before deploying code that depends on them. Do not run `drizzle/seed.local.sql` against the remote database.
+
+## Event MCP server
+
+The stateless MCP endpoint at `/mcp` exposes `list_events`, `get_event`, and `create_event`. Every request requires `Authorization: Bearer <MCP_AUTH_TOKEN>`. Event listing uses bounded cursor pagination. The create tool manages structured event configuration; add or change watermark images through the admin application.
+
+For local development, add an uncommitted `MCP_AUTH_TOKEN` value to `.env`, start `pnpm dev`, and configure an MCP client with the URL `http://localhost:4321/mcp` and that bearer token. You can verify that the HTTP boundary fails closed without displaying the token:
+
+```sh
+curl -i http://localhost:4321/mcp
+```
+
+The response must be `401 Unauthorized` with a `WWW-Authenticate: Bearer` header. Run `pnpm exec vitest run test/event-mcp.spec.ts test/mcp-auth.spec.ts` for protocol initialization, discovery, tool-call, validation, and authentication coverage.
 
 ## Print agent
 
