@@ -680,6 +680,15 @@ describe('admin event watermark', () => {
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-width"');
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-x"');
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-y"');
+    expect(editor).toContain('defaultValue={event.watermark_image_key_left ? event.watermark_left_w ?? 540 : 540} disabled={!event.watermark_image_key_left}');
+    expect(editor).toContain('defaultValue={event.watermark_image_key_left ? event.watermark_left_x : 50} disabled={!event.watermark_image_key_left}');
+    expect(editor).toContain('defaultValue={event.watermark_image_key_left ? event.watermark_left_y : 50} disabled={!event.watermark_image_key_left}');
+    expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_w ?? 540 : 540} disabled={!event.watermark_image_key}');
+    expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_x : 50} disabled={!event.watermark_image_key}');
+    expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_y : 50} disabled={!event.watermark_image_key}');
+    expect(editor.match(/name="watermark" type="file" accept="image\/png"/g)).toHaveLength(2);
+    expect(editor).toContain('input.disabled = !persistedPreviewSrc');
+    expect(editor).toContain('removeWatermark?.classList.remove(\'hidden\');\n        syncPlacementInputs()');
     expect(editor).toContain("watermarkFile.addEventListener('change'");
     expect(editor).toContain('const uploadOperations = createLatestOperationToken()');
     expect(editor).toContain('const detachedPreview = new Image()');
@@ -693,6 +702,7 @@ describe('admin event watermark', () => {
     );
     expect(watermarkRemove).toContain('uploadOperations.invalidate()');
     expect(watermarkRemove).toContain('activeUploadController?.abort()');
+    expect(watermarkRemove).toContain('syncPlacementInputs()');
     expect(watermarkRemove.indexOf('uploadOperations.invalidate()')).toBeLessThan(watermarkRemove.indexOf("method: 'DELETE'"));
     expect(watermarkRemove).toContain("watermarkFile.value = ''");
     expect(watermarkRemove).toContain('watermarkFile.disabled = false');
