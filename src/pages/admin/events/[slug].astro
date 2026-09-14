@@ -5,6 +5,7 @@ import { EventDeleteControl } from '../../../components/admin/EventDeleteControl
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
+import { TooltipHint } from '../../../components/ui/tooltip-hint';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
 import { loadAdminScenesByEvent } from '../../../db/scenes';
@@ -63,33 +64,92 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         ))}
       </nav>
 
-      <section class="mt-8 grid max-w-3xl gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading" data-tab-panel="watermark" hidden={activeTab !== 'watermark'}>
-        <div>
-          <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermark</h2>
-          <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload a PNG displayed in the bottom-right corner of generated postcards.</p>
+      <section class="mt-8 grid gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading" data-tab-panel="watermark" hidden={activeTab !== 'watermark'}>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermarks</h2>
+            <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload independent PNGs displayed in the bottom corners of generated postcards.</p>
+          </div>
+          <button class="min-h-11 shrink-0 rounded-full bg-primary px-5 font-extrabold text-primary-foreground enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50" id="save-watermarks" type="button" disabled>Save</button>
         </div>
-        <div class="grid gap-2">
-          <p class="m-0 font-label text-sm font-bold">Current watermark</p>
-          <div class="flex min-h-40 items-end justify-end rounded-2xl border border-border bg-muted/40 p-4">
-            <img class:list={['max-h-32 max-w-full object-contain', !event.watermark_image_key && 'hidden']} id="watermark-preview" src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} alt="Current postcard watermark" />
-            <p class:list={['m-auto text-sm text-muted-foreground', event.watermark_image_key && 'hidden']} id="watermark-empty">No watermark configured.</p>
+        <div class="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] xl:items-start">
+          <div class="grid gap-2">
+          <div class="flex items-center justify-between gap-3">
+            <p class="m-0 font-label text-sm font-bold">Postcard preview</p>
+          </div>
+          <div class="relative aspect-[3/2] w-full overflow-hidden rounded-2xl border border-border bg-muted" id="watermark-canvas">
+            <img
+              class:list={['absolute h-auto object-contain', !event.watermark_image_key && 'hidden']}
+              id="watermark-preview"
+              data-watermark-preview="right"
+              src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}
+              alt="Right watermark positioned on the postcard preview"
+              style={`width: ${((event.watermark_w ?? 540) / 1800) * 100}%; right: ${(event.watermark_x / 1800) * 100}%; bottom: ${(event.watermark_y / 1200) * 100}%`}
+            />
+            <img
+              class:list={['absolute h-auto object-contain', !event.watermark_image_key_left && 'hidden']}
+              id="watermark-preview-left"
+              data-watermark-preview="left"
+              src={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark?side=left`}
+              alt="Left watermark positioned on the postcard preview"
+              style={`width: ${((event.watermark_left_w ?? 540) / 1800) * 100}%; left: ${(event.watermark_left_x / 1800) * 100}%; bottom: ${(event.watermark_left_y / 1200) * 100}%`}
+            />
+            <p class:list={['absolute inset-0 grid place-items-center text-sm text-muted-foreground', (event.watermark_image_key || event.watermark_image_key_left) && 'hidden']} id="watermark-empty">Choose PNGs to preview and upload them.</p>
+          </div>
+          </div>
+          <div class="grid gap-5">
+          <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form-left" data-watermark-side="left" data-has-watermark={event.watermark_image_key_left ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark?side=left`} novalidate>
+            <div class="flex items-center justify-between gap-3" data-watermark-card-header>
+              <h3 class="m-0 font-display text-lg font-semibold">Left watermark</h3>
+              <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key_left && 'hidden']} data-remove-watermark type="button">Remove</button>
+            </div>
+            <div class="grid gap-2">
+              <label class="font-label text-sm font-bold" for="watermark-file-left">PNG image</label>
+              <Input className="bg-card px-3 text-sm" id="watermark-file-left" name="watermark" type="file" accept="image/png" />
+              <p class="m-0 text-xs text-muted-foreground">Max 2 MB and 4096 × 4096 px.</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width-left">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-width-left" name="width" type="number" min="120" max="900" step="1" defaultValue={event.watermark_image_key_left ? event.watermark_left_w ?? 540 : 540} disabled={!event.watermark_image_key_left} required />
+              </div>
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-x-left">X offset</label><TooltipHint client:load label="left X offset" text="Distance from the left edge in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-x-left" name="x" type="number" min="0" max={1800 - (event.watermark_left_w ?? 540)} step="1" defaultValue={event.watermark_image_key_left ? event.watermark_left_x : 50} disabled={!event.watermark_image_key_left} required />
+              </div>
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-y-left">Y offset</label><TooltipHint client:load label="left Y offset" text="Distance from the bottom edge in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-y-left" name="y" type="number" min="0" max="1200" step="1" defaultValue={event.watermark_image_key_left ? event.watermark_left_y : 50} disabled={!event.watermark_image_key_left} required />
+              </div>
+            </div>
+          </form>
+          <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form" data-watermark-side="right" data-has-watermark={event.watermark_image_key ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} novalidate>
+            <div class="flex items-center justify-between gap-3" data-watermark-card-header>
+              <h3 class="m-0 font-display text-lg font-semibold">Right watermark</h3>
+              <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" data-remove-watermark type="button">Remove</button>
+            </div>
+            <div class="grid gap-2">
+              <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
+              <Input className="bg-card px-3 text-sm" id="watermark-file" name="watermark" type="file" accept="image/png" />
+              <p class="m-0 text-xs text-muted-foreground">Max 2 MB and 4096 × 4096 px.</p>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-width" name="width" type="number" min="120" max="900" step="1" defaultValue={event.watermark_image_key ? event.watermark_w ?? 540 : 540} disabled={!event.watermark_image_key} required />
+              </div>
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-x">X offset</label><TooltipHint client:load label="right X offset" text="Distance from the right edge in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-x" name="x" type="number" min="0" max={1800 - (event.watermark_w ?? 540)} step="1" defaultValue={event.watermark_image_key ? event.watermark_x : 50} disabled={!event.watermark_image_key} required />
+              </div>
+              <div class="grid min-w-0 gap-2">
+                <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-y">Y offset</label><TooltipHint client:load label="right Y offset" text="Distance from the bottom edge in pixels." /></div>
+                <Input className="bg-card px-3" id="watermark-y" name="y" type="number" min="0" max="1200" step="1" defaultValue={event.watermark_image_key ? event.watermark_y : 50} disabled={!event.watermark_image_key} required />
+              </div>
+            </div>
+          </form>
           </div>
         </div>
-        <form class="grid items-start gap-4 sm:grid-cols-[1fr_10rem]" id="watermark-form" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`}>
-          <div class="grid gap-2">
-            <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
-            <Input className="bg-card px-3 text-sm" id="watermark-file" name="watermark" type="file" accept="image/png" required={!event.watermark_image_key} />
-            <p class="m-0 text-xs text-muted-foreground">Maximum 2 MB and 4096 x 4096 pixels.</p>
-          </div>
-          <div class="grid gap-2">
-            <label class="font-label text-sm font-bold" for="watermark-width">Width (px)</label>
-            <Input className="bg-card" id="watermark-width" name="width" type="number" min="120" max="900" step="1" defaultValue={event.watermark_w ?? 540} required />
-          </div>
-          <div class="flex flex-wrap items-center gap-3 sm:col-span-2">
-            <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">{event.watermark_image_key ? 'Save watermark' : 'Upload watermark'}</button>
-            <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" type="button">Remove watermark</button>
-          </div>
-        </form>
       </section>
 
       <form class="max-w-3xl" data-event-form="details" data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`} aria-label="Edit event details">
@@ -250,6 +310,16 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
 
 <script>
   import { toast } from 'sonner';
+  import {
+    createLatestOperationToken,
+    createWatermarkPlacementState,
+    createWatermarkSectionState,
+    DEFAULT_WATERMARK_PLACEMENT,
+    normalizeWatermarkPlacement,
+    previewableWatermarkPlacement,
+    watermarkUploadUrl,
+  } from '../../../lib/admin-watermark-placement';
+  import type { WatermarkSide } from '../../../lib/admin-watermark-placement';
 
   type ApiResult = {
     error?: string;
@@ -265,6 +335,9 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       scene_picker_heading: string;
     };
     scene?: { id: string; name: string; description: string; prompt: string };
+    width?: number;
+    x?: number;
+    y?: number;
   };
 
   class FormSubmissionError extends Error {
@@ -360,6 +433,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     pendingMessage: string,
     successMessage: string,
     request: () => Promise<Response>,
+    isCurrent: () => boolean = () => true,
   ) {
     if (form.dataset.pending === 'true') return null;
     form.dataset.pending = 'true';
@@ -371,12 +445,14 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     controls.forEach((control) => control.disabled = true);
     try {
       const result = await readResult(await request(), `${successMessage} failed.`);
+      if (!isCurrent()) return null;
       statuses.forEach((status) => status.textContent = 'Saved.');
       toast.success(successMessage);
       return result;
     } catch (error) {
+      if (!isCurrent()) return null;
       const message = error instanceof Error ? error.message : `${successMessage} failed. Check your connection and try again.`;
-      if (error instanceof FormSubmissionError) showFieldErrors(form, error.fields);
+      if (error instanceof FormSubmissionError && !form.dataset.watermarkSide) showFieldErrors(form, error.fields);
       statuses.forEach((status) => status.textContent = message);
       toast.error(message);
       return null;
@@ -385,6 +461,23 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       form.removeAttribute('aria-busy');
       controls.forEach((control) => control.disabled = false);
     }
+  }
+
+  const watermarkForms = Array.from(document.querySelectorAll<HTMLFormElement>('[data-watermark-side]'));
+  const watermarkSectionSave = document.querySelector<HTMLButtonElement>('#save-watermarks');
+  const watermarkSectionState = createWatermarkSectionState({
+    left: watermarkForms.find((form) => form.dataset.watermarkSide === 'left')?.dataset.hasWatermark === 'true',
+    right: watermarkForms.find((form) => form.dataset.watermarkSide === 'right')?.dataset.hasWatermark === 'true',
+  });
+  const watermarkControls: Array<{
+    side: WatermarkSide;
+    normalize: () => void;
+    savePlacement: () => Promise<void>;
+    updateEndpoint: (encodedSlug: string) => void;
+  }> = [];
+
+  function syncWatermarkSave() {
+    if (watermarkSectionSave) watermarkSectionSave.disabled = !watermarkSectionState.canSave;
   }
 
   document.querySelectorAll<HTMLFormElement>('[data-event-form]').forEach((eventForm) => {
@@ -418,62 +511,263 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       if (previewTagline) previewTagline.textContent = result.event.tagline;
       if (previewIdleSubhead) previewIdleSubhead.textContent = result.event.kiosk_idle_subhead;
       previewContainer?.style.setProperty('--preview-accent', result.event.accent_color);
-      const currentWatermark = document.querySelector<HTMLImageElement>('#watermark-preview');
-      if (currentWatermark) currentWatermark.src = `/api/admin/events/${encodedSlug}/watermark`;
+      watermarkControls.forEach((control) => control.updateEndpoint(encodedSlug));
       document.title = `${result.event.name} · Booth Admin`;
       const tab = new URL(window.location.href).searchParams.get('tab') ?? 'details';
       history.replaceState({}, '', `/admin/events/${encodedSlug}?tab=${encodeURIComponent(tab)}`);
     });
   });
 
-  const watermarkForm = document.querySelector<HTMLFormElement>('#watermark-form');
-  const watermarkFile = document.querySelector<HTMLInputElement>('#watermark-file');
-  const watermarkWidth = document.querySelector<HTMLInputElement>('#watermark-width');
-  const removeWatermark = document.querySelector<HTMLButtonElement>('#remove-watermark');
-  const saveWatermark = watermarkForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const watermarkPreview = document.querySelector<HTMLImageElement>('#watermark-preview');
   const watermarkEmpty = document.querySelector<HTMLElement>('#watermark-empty');
+  const POSTCARD_WIDTH = 1800;
+  const POSTCARD_HEIGHT = 1200;
 
-  watermarkForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const file = watermarkFile?.files?.[0];
-    if (!watermarkWidth) return;
-    const result = await submitMutation(watermarkForm, 'Saving...', 'Watermark saved.', () => file
-      ? fetch(`${watermarkForm.dataset.endpoint}?width=${encodeURIComponent(watermarkWidth.value)}`, {
+  function syncWatermarkEmptyState() {
+    const hasPreview = Array.from(document.querySelectorAll<HTMLImageElement>('[data-watermark-preview]'))
+      .some((preview) => !preview.classList.contains('hidden'));
+    watermarkEmpty?.classList.toggle('hidden', hasPreview);
+  }
+
+  function connectWatermarkForm(watermarkForm: HTMLFormElement) {
+    const side: WatermarkSide = watermarkForm.dataset.watermarkSide === 'left' ? 'left' : 'right';
+    const watermarkFile = watermarkForm.elements.namedItem('watermark');
+    const watermarkWidth = watermarkForm.elements.namedItem('width');
+    const watermarkX = watermarkForm.elements.namedItem('x');
+    const watermarkY = watermarkForm.elements.namedItem('y');
+    const removeWatermark = watermarkForm.querySelector<HTMLButtonElement>('[data-remove-watermark]');
+    const watermarkPreviewElement = document.querySelector<HTMLImageElement>(`[data-watermark-preview="${side}"]`);
+    if (!(watermarkFile instanceof HTMLInputElement)
+      || !(watermarkWidth instanceof HTMLInputElement)
+      || !(watermarkX instanceof HTMLInputElement)
+      || !(watermarkY instanceof HTMLInputElement)
+      || !watermarkPreviewElement) return;
+
+    const watermarkPreview = watermarkPreviewElement;
+    const widthInput = watermarkWidth;
+    const xInput = watermarkX;
+    const yInput = watermarkY;
+
+    let watermarkAspectRatio = 0;
+    const uploadOperations = createLatestOperationToken();
+    let activeUploadController: AbortController | null = null;
+    const placementState = createWatermarkPlacementState({
+      width: Number(widthInput.value || DEFAULT_WATERMARK_PLACEMENT.width),
+      x: Number(xInput.value || DEFAULT_WATERMARK_PLACEMENT.x),
+      y: Number(yInput.value || DEFAULT_WATERMARK_PLACEMENT.y),
+    });
+    let persistedPreviewSrc = watermarkPreview.classList.contains('hidden') ? null : watermarkPreview.getAttribute('src');
+
+    function placement() {
+      return { width: widthInput.valueAsNumber, x: xInput.valueAsNumber, y: yInput.valueAsNumber };
+    }
+
+    function setPlacement(next: { width: number; x: number; y: number }) {
+      widthInput.value = String(next.width);
+      xInput.value = String(next.x);
+      yInput.value = String(next.y);
+    }
+
+    function syncPlacementInputs() {
+      [widthInput, xInput, yInput].forEach((input) => input.disabled = !persistedPreviewSrc);
+    }
+
+    function updateWatermarkPreview(current = placement()) {
+      watermarkPreview.style.width = `${current.width / POSTCARD_WIDTH * 100}%`;
+      watermarkPreview.style.bottom = `${current.y / POSTCARD_HEIGHT * 100}%`;
+      if (side === 'left') watermarkPreview.style.left = `${current.x / POSTCARD_WIDTH * 100}%`;
+      else watermarkPreview.style.right = `${current.x / POSTCARD_WIDTH * 100}%`;
+    }
+
+    function previewWatermarkPlacement() {
+      if (![widthInput, xInput, yInput].every((input) => input.validity.valid)) return;
+      const current = previewableWatermarkPlacement(placement(), watermarkAspectRatio);
+      if (current) updateWatermarkPreview(current);
+    }
+
+    function constrainPlacement() {
+      const current = normalizeWatermarkPlacement(placement(), watermarkAspectRatio);
+      setPlacement(current);
+      xInput.max = String(POSTCARD_WIDTH - current.width);
+      yInput.max = String(POSTCARD_HEIGHT - (watermarkAspectRatio > 0 ? Math.ceil(current.width * watermarkAspectRatio) : 0));
+      updateWatermarkPreview(current);
+    }
+
+    function showPersistedWatermark() {
+      setPlacement(placementState.persisted);
+      if (persistedPreviewSrc) {
+        watermarkPreview.src = persistedPreviewSrc;
+        watermarkPreview.classList.remove('hidden');
+      } else {
+        watermarkPreview.classList.add('hidden');
+        watermarkAspectRatio = 0;
+      }
+      syncWatermarkEmptyState();
+      syncPlacementInputs();
+      constrainPlacement();
+    }
+
+    function syncWatermarkAspectRatio() {
+      if (watermarkPreview.naturalWidth > 0) {
+        watermarkAspectRatio = watermarkPreview.naturalHeight / watermarkPreview.naturalWidth;
+        constrainPlacement();
+      }
+    }
+
+    watermarkPreview.addEventListener('load', syncWatermarkAspectRatio);
+    if (watermarkPreview.complete) syncWatermarkAspectRatio();
+    [widthInput, xInput, yInput].forEach((input) => {
+      input.addEventListener('input', () => {
+        previewWatermarkPlacement();
+        watermarkSectionState.markChanged();
+        syncWatermarkSave();
+      });
+      input.addEventListener('blur', constrainPlacement);
+    });
+
+    watermarkForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      watermarkSectionSave?.click();
+    });
+
+    watermarkFile.addEventListener('change', async () => {
+      const file = watermarkFile.files?.[0];
+      if (!file) return;
+      const operation = uploadOperations.begin();
+      watermarkSectionState.beginOperation();
+      syncWatermarkSave();
+      watermarkFile.disabled = true;
+      const objectUrl = URL.createObjectURL(file);
+      const detachedPreview = new Image();
+      detachedPreview.src = objectUrl;
+      let operationController: AbortController | null = null;
+
+      try {
+        await detachedPreview.decode();
+        if (!uploadOperations.isCurrent(operation)) return;
+        watermarkAspectRatio = detachedPreview.naturalHeight / detachedPreview.naturalWidth;
+        watermarkPreview.src = objectUrl;
+        watermarkPreview.classList.remove('hidden');
+        syncWatermarkEmptyState();
+        constrainPlacement();
+        const uploadPlacement = placement();
+        const uploadUrl = watermarkUploadUrl(watermarkForm.dataset.endpoint ?? '', uploadPlacement, window.location.origin);
+        operationController = new AbortController();
+        activeUploadController = operationController;
+        const result = await submitMutation(watermarkForm, 'Uploading...', 'Watermark uploaded.', () => fetch(uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type, 'X-Watermark-Bytes': String(file.size) },
           body: file,
-        })
-      : fetch(watermarkForm.dataset.endpoint ?? '', {
+          signal: operationController?.signal,
+        }), () => uploadOperations.isCurrent(operation));
+        if (!uploadOperations.isCurrent(operation)) return;
+        if (result?.width === undefined || result.x === undefined || result.y === undefined) {
+          showPersistedWatermark();
+          return;
+        }
+        placementState.persist({ width: result.width, x: result.x, y: result.y });
+        watermarkSectionState.markChanged(side, true);
+        const previewUrl = new URL(watermarkForm.dataset.endpoint ?? '', window.location.origin);
+        previewUrl.searchParams.set('v', String(Date.now()));
+        persistedPreviewSrc = `${previewUrl.pathname}${previewUrl.search}`;
+        watermarkPreview.src = persistedPreviewSrc;
+        removeWatermark?.classList.remove('hidden');
+        syncPlacementInputs();
+      } catch {
+        if (!uploadOperations.isCurrent(operation)) return;
+        showPersistedWatermark();
+        toast.error('Choose a valid PNG image.');
+      } finally {
+        if (activeUploadController === operationController) activeUploadController = null;
+        URL.revokeObjectURL(objectUrl);
+        if (uploadOperations.isCurrent(operation)) {
+          watermarkFile.value = '';
+          watermarkFile.disabled = false;
+        }
+        watermarkSectionState.endOperation();
+        syncWatermarkSave();
+      }
+    });
+
+    removeWatermark?.addEventListener('click', async () => {
+      uploadOperations.invalidate();
+      activeUploadController?.abort();
+      activeUploadController = null;
+      watermarkFile.disabled = true;
+      watermarkSectionState.beginOperation();
+      syncWatermarkSave();
+      try {
+        const result = await submitMutation(watermarkForm, 'Removing...', 'Watermark removed.', () =>
+          fetch(watermarkForm.dataset.endpoint ?? '', { method: 'DELETE' }));
+        if (!result) return;
+        watermarkPreview.classList.add('hidden');
+        removeWatermark.classList.add('hidden');
+        persistedPreviewSrc = null;
+        watermarkAspectRatio = 0;
+        setPlacement(placementState.reset());
+        updateWatermarkPreview();
+        syncWatermarkEmptyState();
+        syncPlacementInputs();
+        watermarkSectionState.markChanged(side, false);
+      } finally {
+        watermarkFile.value = '';
+        watermarkFile.disabled = false;
+        watermarkSectionState.endOperation();
+        syncWatermarkSave();
+      }
+    });
+
+    watermarkControls.push({
+      side,
+      normalize: constrainPlacement,
+      async savePlacement() {
+        const result = await readResult(await fetch(watermarkForm.dataset.endpoint ?? '', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ width: Number(watermarkWidth.value) }),
-        }));
-    if (!result) return;
-    if (watermarkPreview) {
-      watermarkPreview.src = `${watermarkForm.dataset.endpoint}?v=${Date.now()}`;
-      watermarkPreview.classList.remove('hidden');
-    }
-    watermarkEmpty?.classList.add('hidden');
-    removeWatermark?.classList.remove('hidden');
-    if (saveWatermark) saveWatermark.textContent = 'Save watermark';
-    if (watermarkFile) {
-      watermarkFile.required = false;
-      watermarkFile.value = '';
-    }
-  });
+          body: JSON.stringify(placement()),
+        }), 'Watermark placement could not be saved.');
+        if (result.width === undefined || result.x === undefined || result.y === undefined) {
+          throw new FormSubmissionError('Watermark placement could not be saved.');
+        }
+        placementState.persist({ width: result.width, x: result.x, y: result.y });
+      },
+      updateEndpoint(encodedSlug) {
+        const endpoint = new URL(watermarkForm.dataset.endpoint ?? '', window.location.origin);
+        endpoint.pathname = endpoint.pathname.replace(/\/api\/admin\/events\/[^/]+/, `/api/admin/events/${encodedSlug}`);
+        watermarkForm.dataset.endpoint = `${endpoint.pathname}${endpoint.search}`;
+        if (!persistedPreviewSrc) return;
+        const previewUrl = new URL(watermarkForm.dataset.endpoint, window.location.origin);
+        persistedPreviewSrc = `${previewUrl.pathname}${previewUrl.search}`;
+        watermarkPreview.src = persistedPreviewSrc;
+      },
+    });
+    syncPlacementInputs();
+  }
 
-  removeWatermark?.addEventListener('click', async () => {
-    if (!watermarkForm) return;
-    const result = await submitMutation(watermarkForm, 'Removing...', 'Watermark removed.', () =>
-      fetch(watermarkForm.dataset.endpoint ?? '', { method: 'DELETE' }));
-    if (!result) return;
-    watermarkPreview?.classList.add('hidden');
-    watermarkEmpty?.classList.remove('hidden');
-    removeWatermark.classList.add('hidden');
-    if (saveWatermark) saveWatermark.textContent = 'Upload watermark';
-    if (watermarkFile) watermarkFile.required = true;
+  watermarkForms.forEach(connectWatermarkForm);
+  watermarkSectionSave?.addEventListener('click', async () => {
+    if (!watermarkSectionState.canSave) return;
+    watermarkControls.forEach((control) => control.normalize());
+    const controls = watermarkForms.flatMap(formControls).filter((control) => !control.disabled);
+    watermarkSectionState.beginOperation();
+    controls.forEach((control) => control.disabled = true);
+    syncWatermarkSave();
+    try {
+      const required = watermarkControls.filter((control) => watermarkSectionState.hasWatermark(control.side));
+      const results = await Promise.allSettled(required.map((control) => control.savePlacement()));
+      if (results.some((result) => result.status === 'rejected')) {
+        toast.error('Watermark settings could not be saved.');
+        return;
+      }
+      watermarkSectionState.saved();
+      toast.success('Watermark settings saved.');
+    } finally {
+      watermarkSectionState.endOperation();
+      controls.forEach((control) => control.disabled = false);
+      syncWatermarkSave();
+    }
   });
+  syncWatermarkEmptyState();
+  syncWatermarkSave();
 
   function scenePayload(form: HTMLFormElement) {
     const data = payload(form);

@@ -6,7 +6,7 @@ export const MAX_WATERMARK_WIDTH = 900;
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
 export class WatermarkValidationError extends Error {
-  constructor(message: string, readonly status = 400) {
+  constructor(message: string, readonly status = 400, readonly field?: string) {
     super(message);
     this.name = 'WatermarkValidationError';
   }
@@ -35,6 +35,7 @@ export function assertPng(bytes: Uint8Array) {
   if (width === 0 || height === 0 || width > MAX_WATERMARK_DIMENSION || height > MAX_WATERMARK_DIMENSION) {
     throw new WatermarkValidationError(`Watermark dimensions must be between 1 and ${MAX_WATERMARK_DIMENSION} pixels.`);
   }
+  return { width, height };
 }
 
 export async function readBoundedPng(request: Request) {
@@ -88,11 +89,22 @@ export function createEventWatermarkKey(eventId: number) {
   return `${ownedWatermarkPrefix(eventId)}${crypto.randomUUID()}.png`;
 }
 
-export async function putEventWatermark(bucket: R2Bucket, eventId: number, bytes: Uint8Array) {
+export async function putEventWatermark(
+  bucket: R2Bucket,
+  eventId: number,
+  bytes: Uint8Array,
+  dimensions?: { width: number; height: number },
+) {
   const key = createEventWatermarkKey(eventId);
   await bucket.put(key, bytes, {
     httpMetadata: { contentType: 'image/png' },
-    customMetadata: { eventId: String(eventId) },
+    customMetadata: {
+      eventId: String(eventId),
+      ...(dimensions ? {
+        imageWidth: String(dimensions.width),
+        imageHeight: String(dimensions.height),
+      } : {}),
+    },
   });
   return key;
 }

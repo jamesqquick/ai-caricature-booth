@@ -231,6 +231,12 @@ async function ensureWorkflow(
         selfieSha256: current.selfie_sha256,
         watermarkKey: event.watermark_image_key,
         watermarkWidth: event.watermark_w,
+        watermarkX: event.watermark_x,
+        watermarkY: event.watermark_y,
+        watermarkLeftKey: event.watermark_image_key_left,
+        watermarkLeftWidth: event.watermark_left_w,
+        watermarkLeftX: event.watermark_left_x,
+        watermarkLeftY: event.watermark_left_y,
       },
     });
     return loadClaimedSession(claim);
