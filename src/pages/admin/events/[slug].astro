@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
 import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
+import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
@@ -94,6 +95,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
               alt="Left watermark positioned on the postcard preview"
               style={`width: ${((event.watermark_left_w ?? 540) / 1800) * 100}%; left: ${(event.watermark_left_x / 1800) * 100}%; bottom: ${(event.watermark_left_y / 1200) * 100}%`}
             />
+            <WatermarkDropzones
+              client:load
+              leftHasWatermark={Boolean(event.watermark_image_key_left)}
+              rightHasWatermark={Boolean(event.watermark_image_key)}
+            />
             <p class:list={['absolute inset-0 grid place-items-center text-sm text-muted-foreground', (event.watermark_image_key || event.watermark_image_key_left) && 'hidden']} id="watermark-empty">Choose PNGs to preview and upload them.</p>
           </div>
           </div>
@@ -103,11 +109,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
               <h3 class="m-0 font-display text-lg font-semibold">Left watermark</h3>
               <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key_left && 'hidden']} data-remove-watermark type="button">Remove</button>
             </div>
-            <div class="grid gap-2">
-              <label class="font-label text-sm font-bold" for="watermark-file-left">PNG image</label>
-              <Input className="bg-card px-3 text-sm" id="watermark-file-left" name="watermark" type="file" accept="image/png" />
-              <p class="m-0 text-xs text-muted-foreground">Max 2 MB and 4096 × 4096 px.</p>
-            </div>
+            <p class="m-0 text-sm text-muted-foreground">Use the left dropzone in the preview to add or replace this PNG.</p>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
                 <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width-left">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
@@ -128,11 +130,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
               <h3 class="m-0 font-display text-lg font-semibold">Right watermark</h3>
               <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" data-remove-watermark type="button">Remove</button>
             </div>
-            <div class="grid gap-2">
-              <label class="font-label text-sm font-bold" for="watermark-file">PNG image</label>
-              <Input className="bg-card px-3 text-sm" id="watermark-file" name="watermark" type="file" accept="image/png" />
-              <p class="m-0 text-xs text-muted-foreground">Max 2 MB and 4096 × 4096 px.</p>
-            </div>
+            <p class="m-0 text-sm text-muted-foreground">Use the right dropzone in the preview to add or replace this PNG.</p>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
                 <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
@@ -319,6 +317,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     previewableWatermarkPlacement,
     watermarkUploadUrl,
   } from '../../../lib/admin-watermark-placement';
+  import {
+    WATERMARK_FILE_SELECTED_EVENT,
+    WATERMARK_UPLOAD_STATE_EVENT,
+    type WatermarkFileSelectedDetail,
+  } from '../../../lib/admin-watermark-dropzone';
   import type { WatermarkSide } from '../../../lib/admin-watermark-placement';
 
   type ApiResult = {
@@ -530,14 +533,12 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
 
   function connectWatermarkForm(watermarkForm: HTMLFormElement) {
     const side: WatermarkSide = watermarkForm.dataset.watermarkSide === 'left' ? 'left' : 'right';
-    const watermarkFile = watermarkForm.elements.namedItem('watermark');
     const watermarkWidth = watermarkForm.elements.namedItem('width');
     const watermarkX = watermarkForm.elements.namedItem('x');
     const watermarkY = watermarkForm.elements.namedItem('y');
     const removeWatermark = watermarkForm.querySelector<HTMLButtonElement>('[data-remove-watermark]');
     const watermarkPreviewElement = document.querySelector<HTMLImageElement>(`[data-watermark-preview="${side}"]`);
-    if (!(watermarkFile instanceof HTMLInputElement)
-      || !(watermarkWidth instanceof HTMLInputElement)
+    if (!(watermarkWidth instanceof HTMLInputElement)
       || !(watermarkX instanceof HTMLInputElement)
       || !(watermarkY instanceof HTMLInputElement)
       || !watermarkPreviewElement) return;
@@ -629,13 +630,13 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       watermarkSectionSave?.click();
     });
 
-    watermarkFile.addEventListener('change', async () => {
-      const file = watermarkFile.files?.[0];
-      if (!file) return;
+    async function uploadWatermark(file: File) {
       const operation = uploadOperations.begin();
       watermarkSectionState.beginOperation();
       syncWatermarkSave();
-      watermarkFile.disabled = true;
+      window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+        detail: { side, pending: true },
+      }));
       const objectUrl = URL.createObjectURL(file);
       const detachedPreview = new Image();
       detachedPreview.src = objectUrl;
@@ -672,6 +673,9 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         watermarkPreview.src = persistedPreviewSrc;
         removeWatermark?.classList.remove('hidden');
         syncPlacementInputs();
+        window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+          detail: { side, pending: false, hasWatermark: true },
+        }));
       } catch {
         if (!uploadOperations.isCurrent(operation)) return;
         showPersistedWatermark();
@@ -679,20 +683,27 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       } finally {
         if (activeUploadController === operationController) activeUploadController = null;
         URL.revokeObjectURL(objectUrl);
-        if (uploadOperations.isCurrent(operation)) {
-          watermarkFile.value = '';
-          watermarkFile.disabled = false;
-        }
+        window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+          detail: { side, pending: false },
+        }));
         watermarkSectionState.endOperation();
         syncWatermarkSave();
       }
-    });
+    }
+
+    const handleWatermarkFileSelected = (event: Event) => {
+      const detail = (event as CustomEvent<WatermarkFileSelectedDetail>).detail;
+      if (detail?.side === side) void uploadWatermark(detail.file);
+    };
+    window.addEventListener(WATERMARK_FILE_SELECTED_EVENT, handleWatermarkFileSelected);
 
     removeWatermark?.addEventListener('click', async () => {
       uploadOperations.invalidate();
       activeUploadController?.abort();
       activeUploadController = null;
-      watermarkFile.disabled = true;
+      window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+        detail: { side, pending: true },
+      }));
       watermarkSectionState.beginOperation();
       syncWatermarkSave();
       try {
@@ -708,9 +719,13 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         syncWatermarkEmptyState();
         syncPlacementInputs();
         watermarkSectionState.markChanged(side, false);
+        window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+          detail: { side, pending: false, hasWatermark: false },
+        }));
       } finally {
-        watermarkFile.value = '';
-        watermarkFile.disabled = false;
+        window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
+          detail: { side, pending: false },
+        }));
         watermarkSectionState.endOperation();
         syncWatermarkSave();
       }
