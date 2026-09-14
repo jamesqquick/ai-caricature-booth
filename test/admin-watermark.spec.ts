@@ -640,18 +640,24 @@ describe('admin event watermark', () => {
 
   it('compiles the editor and propagates the selected configuration to the workflow', async () => {
     const editor = await readFile(new URL('../src/pages/admin/events/[slug].astro', import.meta.url), 'utf8');
+    const dropzones = await readFile(new URL('../src/components/admin/WatermarkDropzones.tsx', import.meta.url), 'utf8');
     const action = await readFile(new URL('../src/actions/index.ts', import.meta.url), 'utf8');
     const worker = await readFile(new URL('../src/worker.ts', import.meta.url), 'utf8');
     const result = await transform(editor, { filename: 'src/pages/admin/events/[slug].astro' });
 
     expect(result.diagnostics).toEqual([]);
     expect(editor).toContain('/watermark');
-    expect(editor).toContain("import { Input } from '../../../components/ui/input'");
-    expect(editor).toContain('accept="image/png"');
+    expect(editor).toContain("import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones'");
+    expect(editor).toContain('<WatermarkDropzones');
+    expect(editor).toContain('leftHasWatermark={Boolean(event.watermark_image_key_left)}');
+    expect(editor).toContain('rightHasWatermark={Boolean(event.watermark_image_key)}');
+    expect(editor).not.toContain('name="watermark" type="file"');
+    expect(dropzones).toContain("accept: { 'image/png': ['.png'] }");
+    expect(dropzones).toContain('maxSize: 2 * 1024 * 1024');
     expect(editor).toContain('aspect-[3/2]');
     expect(editor).not.toContain('>3:2 aspect ratio</p>');
     expect(editor).not.toContain('>1800 × 1200 px</p>');
-    expect(editor.match(/>Max 2 MB and 4096 × 4096 px\.<\/p>/g)).toHaveLength(2);
+    expect(dropzones).toContain('Max 2 MB.');
     expect(editor).not.toContain('Uploads automatically.');
     expect(editor).toContain('data-tab-panel="watermark"');
     expect(editor).not.toContain('grid max-w-3xl gap-5 rounded-[var(--radius-surface)] border border-border bg-card/40 p-5" aria-labelledby="watermark-heading" data-tab-panel="watermark"');
@@ -676,7 +682,6 @@ describe('admin event watermark', () => {
     expect(editor).toContain('side=left');
     expect(editor).toContain('style.left');
     expect(editor).toContain('style.right');
-    expect(editor).toContain('<Input className="bg-card px-3 text-sm" id="watermark-file"');
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-width"');
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-x"');
     expect(editor).toContain('<Input className="bg-card px-3" id="watermark-y"');
@@ -686,13 +691,12 @@ describe('admin event watermark', () => {
     expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_w ?? 540 : 540} disabled={!event.watermark_image_key}');
     expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_x : 50} disabled={!event.watermark_image_key}');
     expect(editor).toContain('defaultValue={event.watermark_image_key ? event.watermark_y : 50} disabled={!event.watermark_image_key}');
-    expect(editor.match(/name="watermark" type="file" accept="image\/png"/g)).toHaveLength(2);
     expect(editor).toContain('input.disabled = !persistedPreviewSrc');
     expect(editor).toContain('removeWatermark?.classList.remove(\'hidden\');\n        syncPlacementInputs()');
-    expect(editor).toContain("watermarkFile.addEventListener('change'");
+    expect(editor).toContain('async function uploadWatermark(file: File)');
+    expect(editor).toContain('WATERMARK_FILE_SELECTED_EVENT');
     expect(editor).toContain('const uploadOperations = createLatestOperationToken()');
     expect(editor).toContain('const detachedPreview = new Image()');
-    expect(editor).toContain('watermarkFile.disabled = true');
     expect(editor).toContain('if (!uploadOperations.isCurrent(operation)) return');
     expect(editor).toContain('() => uploadOperations.isCurrent(operation)');
     expect(editor).toContain('if (!isCurrent()) return null');
@@ -704,8 +708,6 @@ describe('admin event watermark', () => {
     expect(watermarkRemove).toContain('activeUploadController?.abort()');
     expect(watermarkRemove).toContain('syncPlacementInputs()');
     expect(watermarkRemove.indexOf('uploadOperations.invalidate()')).toBeLessThan(watermarkRemove.indexOf("method: 'DELETE'"));
-    expect(watermarkRemove).toContain("watermarkFile.value = ''");
-    expect(watermarkRemove).toContain('watermarkFile.disabled = false');
     expect(editor).toContain("input.addEventListener('input', () => {");
     expect(editor).toContain('watermarkSectionState.markChanged()');
     expect(editor).toContain("input.addEventListener('blur', constrainPlacement)");

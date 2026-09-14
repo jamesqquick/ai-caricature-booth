@@ -8,6 +8,7 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - agents@0.23.0
+  - react-dropzone@20.1.2
 
 overrides:
   fast-uri: 3.1.6
