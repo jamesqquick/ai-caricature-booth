@@ -4,6 +4,7 @@ import {
   insertCompleteEvent,
   loadEventBySlug,
   loadEvents,
+  type EventListOptions,
   type EventRecord,
 } from '../db/events';
 import { loadAdminScenesByEvent } from '../db/scenes';
@@ -14,13 +15,7 @@ import {
   type EventStatus,
   validateCompleteEvent,
 } from './event-validation';
-import {
-  assertPng,
-  deleteEventWatermark,
-  isEventOwnedWatermark,
-  MAX_WATERMARK_BYTES,
-  putEventWatermark,
-} from './event-watermark';
+import { isEventOwnedWatermark } from './event-watermark';
 
 const MAX_EVENT_ID_ATTEMPTS = 3;
 const PNG_CONTENT_TYPE = 'image/png';
@@ -49,58 +44,45 @@ export type CompleteEventDto = EventSummary & {
   watermark: {
     contentType: typeof PNG_CONTENT_TYPE;
     width: number | null;
-    bytes?: Uint8Array;
   } | null;
 };
 
 export type EventServiceContext = {
   database: D1Database;
-  bucket: R2Bucket;
   createdBy: string;
 };
 
-export class CompleteEventReadError extends Error {
-  name = 'CompleteEventReadError';
-
-  constructor(
-    public readonly slug: string,
-    public readonly reason: 'unsafe-watermark' | 'missing-watermark' | 'invalid-watermark' | 'oversized-watermark',
-  ) {
-    super(`The watermark for event "${slug}" could not be read safely.`);
-  }
-}
-
-export class CompleteEventCompensationError extends Error {
-  name = 'CompleteEventCompensationError';
-
-  constructor(
-    public readonly eventId: number,
-    public readonly watermarkKey: string,
-    public readonly operationError: unknown,
-    public readonly cleanupError: unknown,
-  ) {
-    super(`Event ${eventId} failed and its staged watermark could not be cleaned up.`);
-  }
-}
-
-export async function listEvents(database: D1Database, status?: EventStatus): Promise<EventSummary[]> {
+export async function listEvents(
+  database: D1Database,
+  status?: EventStatus,
+  options: EventListOptions = {},
+): Promise<EventSummary[]> {
   if (status !== undefined && !EVENT_STATUSES.includes(status)) {
     throw new CompleteEventValidationError({ status: 'Choose draft, active, or archived.' });
   }
-  return (await loadEvents(database, status)).map(toEventSummary);
+  if (options.limit !== undefined && (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 101)) {
+    throw new CompleteEventValidationError({ limit: 'Choose a limit from 1 to 101.' });
+  }
+  if (options.cursor && (
+    !Number.isInteger(options.cursor.createdAt)
+    || options.cursor.createdAt < 0
+    || !Number.isInteger(options.cursor.id)
+    || options.cursor.id < 1
+  )) {
+    throw new CompleteEventValidationError({ cursor: 'Use a valid event cursor.' });
+  }
+  return (await loadEvents(database, status, options)).map(toEventSummary);
 }
 
 export async function getCompleteEvent(
   database: D1Database,
-  bucket: R2Bucket,
   slug: string,
-  options: { includeWatermarkData?: boolean } = {},
 ): Promise<CompleteEventDto | null> {
   const event = await loadEventBySlug(database, slug);
   if (!event) return null;
 
   const scenes = await loadAdminScenesByEvent(database, event.id);
-  const watermark = await loadWatermark(event, bucket, options.includeWatermarkData === true);
+  const watermark = loadWatermarkMetadata(event);
   return {
     ...toEventSummary(event),
     accentColor: event.accent_color,
@@ -127,16 +109,10 @@ export async function createCompleteEvent(
   let attempt = 1;
   while (true) {
     const eventId = await allocateEventId(service.database);
-    let watermarkKey: string | null = null;
-
-    if (validated.watermark) {
-      watermarkKey = await putEventWatermark(service.bucket, eventId, validated.watermark.bytes);
-    }
 
     try {
-      await insertCompleteEvent(service.database, eventId, validated, service.createdBy, createdAt, watermarkKey);
+      await insertCompleteEvent(service.database, eventId, validated, service.createdBy, createdAt);
     } catch (error) {
-      if (watermarkKey) await compensateWatermark(service.bucket, eventId, watermarkKey, error);
       if (error instanceof EventIdConflictError && attempt < MAX_EVENT_ID_ATTEMPTS) {
         attempt += 1;
         continue;
@@ -158,48 +134,14 @@ function toEventSummary(event: EventRecord): EventSummary {
   };
 }
 
-async function loadWatermark(
-  event: EventRecord,
-  bucket: R2Bucket,
-  includeData: boolean,
-): Promise<CompleteEventDto['watermark']> {
+function loadWatermarkMetadata(event: EventRecord): CompleteEventDto['watermark'] {
   const key = event.watermark_image_key;
   if (!key) return null;
-  if (!isEventOwnedWatermark(event.id, key)) {
-    if (includeData) throw new CompleteEventReadError(event.slug, 'unsafe-watermark');
-    return null;
-  }
-
-  const metadata: NonNullable<CompleteEventDto['watermark']> = {
+  if (!isEventOwnedWatermark(event.id, key)) return null;
+  return {
     contentType: PNG_CONTENT_TYPE,
     width: event.watermark_w === null ? null : Number(event.watermark_w),
   };
-  if (!includeData) return metadata;
-
-  const object = await bucket.get(key);
-  if (!object) throw new CompleteEventReadError(event.slug, 'missing-watermark');
-  if (object.httpMetadata?.contentType !== PNG_CONTENT_TYPE) {
-    throw new CompleteEventReadError(event.slug, 'unsafe-watermark');
-  }
-  if (object.size > MAX_WATERMARK_BYTES) {
-    throw new CompleteEventReadError(event.slug, 'oversized-watermark');
-  }
-
-  const bytes = new Uint8Array(await object.arrayBuffer());
-  try {
-    assertPng(bytes);
-  } catch {
-    throw new CompleteEventReadError(event.slug, 'invalid-watermark');
-  }
-  return { ...metadata, bytes };
-}
-
-async function compensateWatermark(bucket: R2Bucket, eventId: number, key: string, operationError: unknown) {
-  try {
-    await deleteEventWatermark(bucket, key);
-  } catch (cleanupError) {
-    throw new CompleteEventCompensationError(eventId, key, operationError, cleanupError);
-  }
 }
 
 function toCompleteEventDto(
@@ -220,8 +162,6 @@ function toCompleteEventDto(
     sceneStylePreamble: event.sceneStylePreamble,
     sceneConstraints: event.sceneConstraints,
     scenes: event.scenes.map(({ id, name, description, prompt }) => ({ id, name, description, prompt })),
-    watermark: event.watermark
-      ? { contentType: PNG_CONTENT_TYPE, width: event.watermark.width }
-      : null,
+    watermark: null,
   };
 }

@@ -37,6 +37,11 @@ export type AdminEventSummary = {
   lastActivity: number | null;
 };
 
+export type EventListOptions = {
+  limit?: number;
+  cursor?: { createdAt: number; id: number };
+};
+
 type AdminEventSummaryRow = {
   id: number;
   slug: string;
@@ -97,22 +102,20 @@ export async function insertCompleteEvent(
   input: CreateCompleteEventInput,
   createdBy: string,
   createdAt: number,
-  watermarkKey: string | null,
 ): Promise<void> {
   const statements = [
     database.prepare(`
       INSERT INTO events (
-        id, slug, name, status, accent_color, watermark_image_key, tagline,
+        id, slug, name, status, accent_color, tagline,
         kiosk_idle_subhead, scene_picker_heading, scene_style_preamble,
-        scene_constraints, created_at, created_by, watermark_w
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        scene_constraints, created_at, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       input.slug,
       input.name,
       input.status,
       input.accentColor,
-      watermarkKey,
       input.tagline,
       input.kioskIdleSubhead,
       input.scenePickerHeading,
@@ -120,7 +123,6 @@ export async function insertCompleteEvent(
       input.sceneConstraints,
       createdAt,
       createdBy,
-      input.watermark?.width ?? null,
     ),
     ...input.scenes.map((scene, sortOrder) => database.prepare(`
       INSERT INTO event_scenes (
@@ -150,15 +152,32 @@ export async function insertCompleteEvent(
   }
 }
 
-export async function loadEvents(database: D1Database, status?: EventStatus): Promise<EventRecord[]> {
+export async function loadEvents(
+  database: D1Database,
+  status?: EventStatus,
+  options: EventListOptions = {},
+): Promise<EventRecord[]> {
+  const filters: string[] = [];
+  const bindings: Array<string | number> = [];
+  if (status) {
+    filters.push('status = ?');
+    bindings.push(status);
+  }
+  if (options.cursor) {
+    filters.push('(created_at < ? OR (created_at = ? AND id < ?))');
+    bindings.push(options.cursor.createdAt, options.cursor.createdAt, options.cursor.id);
+  }
+  if (options.limit !== undefined) bindings.push(options.limit);
+
   const statement = database.prepare(`
     SELECT *
     FROM events
-    ${status ? 'WHERE status = ?' : ''}
+    ${filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : ''}
     ORDER BY created_at DESC, id DESC
+    ${options.limit === undefined ? '' : 'LIMIT ?'}
   `);
-  const result = status
-    ? await statement.bind(status).all<EventRecord>()
+  const result = bindings.length > 0
+    ? await statement.bind(...bindings).all<EventRecord>()
     : await statement.all<EventRecord>();
   return result.results;
 }
