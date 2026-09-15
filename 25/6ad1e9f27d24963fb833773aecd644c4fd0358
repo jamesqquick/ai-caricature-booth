@@ -1,0 +1,33 @@
+src/components/admin/EventTable.astro
+  s_dca4f9be3e6d36::t_46d4f5f41a2938 2,4,64-66
+src/lib/admin-watermark-placement.ts
+  s_dca4f9be3e6d36::t_2efd234b520e02 85-87
+src/pages/admin/events/index.astro
+  s_dca4f9be3e6d36::t_4190de37317874 3,6,28-29,37-40
+src/pages/admin/events/new.astro
+  s_dca4f9be3e6d36::t_bd1b01e716a786 2,11-13,37
+test/admin-event-create.spec.ts
+  s_dca4f9be3e6d36::t_9e33eab08abb56 10
+test/admin-event-edit.spec.ts
+  s_dca4f9be3e6d36::t_36b4d57c67729d 163,174-178
+test/admin-events-list.spec.ts
+  s_dca4f9be3e6d36::t_990c4370cc4176 83-85,97,100-101
+test/admin-watermark-placement.spec.ts
+  s_dca4f9be3e6d36::t_e86d810ff0c178 28,30,33-39,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "256ad1e9f27d24963fb833773aecd644c4fd0358",
+  "prompts": {},
+  "sessions": {
+    "s_dca4f9be3e6d36": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5fe1f924ffeX9IRKdlpF7OP9d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
