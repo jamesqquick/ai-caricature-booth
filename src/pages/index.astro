@@ -61,7 +61,7 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
           {
             featuredScenes.map((scene, index) => (
               <article
-                class={`absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
+                class={`landing-postcard absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] transition-[transform,box-shadow] duration-300 hover:-translate-y-2 hover:scale-[1.03] hover:shadow-[0_2.75rem_5.5rem_oklch(5%_.01_55_/.62)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
               >
                 <div class="landing-postcard-image relative overflow-hidden bg-muted">
                   <Image
@@ -74,14 +74,11 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
                     loading={index === 0 ? "eager" : "lazy"}
                     class="block aspect-[3/2] size-full object-cover"
                   />
-                  <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
-                    AI CARICATURE
-                  </small>
                 </div>
                 <div class="flex min-h-[3.8rem] items-center justify-between font-display text-base">
                   <span>{scene.name}</span>
                   <b class="text-[.7rem] tracking-[.12em] text-primary">
-                    NYC
+                    SF
                   </b>
                 </div>
               </article>

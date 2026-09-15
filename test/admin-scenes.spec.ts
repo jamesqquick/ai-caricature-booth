@@ -363,6 +363,9 @@ describe('event scene runtime wiring', () => {
     expect(route).toContain('sfPostcard2');
     expect(route).toContain('sfPostcard3');
     expect(route).toContain('sizes="(min-width: 801px) 18rem, 70vw"');
+    expect(route).toContain('landing-postcard');
+    expect(route).toContain('SF');
+    expect(route).not.toContain('AI CARICATURE');
     expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
     expect(route).toContain('scenes.slice(0, 3)');
