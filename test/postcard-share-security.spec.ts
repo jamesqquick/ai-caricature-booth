@@ -11,4 +11,14 @@ describe('postcard sharing security', () => {
     expect(source).toContain('navigator.clipboard.writeText(canonicalUrl)');
     expect(source).not.toMatch(/printToken|print-capability/);
   });
+
+  it('reports share outcomes with toasts instead of persistent inline status', async () => {
+    const source = await readFile(new URL('../src/pages/p/[sessionId].astro', import.meta.url), 'utf8');
+
+    expect(source).toContain("import { toast } from 'sonner'");
+    expect(source).toContain('toast.success("Postcard shared.")');
+    expect(source).toContain('toast.success("Postcard link copied.")');
+    expect(source).toContain('toast.error("We couldn\'t share automatically. Copy the URL from your browser.")');
+    expect(source).not.toContain('data-share-status');
+  });
 });
