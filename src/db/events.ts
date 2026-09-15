@@ -281,7 +281,14 @@ export async function duplicateEventConfiguration(
 }
 
 type DuplicatedEventWatermarks = Pick<EventRecord,
-  'watermark_image_key' | 'watermark_image_key_left' | 'watermark_w' | 'watermark_left_w'>;
+  | 'watermark_image_key'
+  | 'watermark_image_key_left'
+  | 'watermark_w'
+  | 'watermark_x'
+  | 'watermark_y'
+  | 'watermark_left_w'
+  | 'watermark_left_x'
+  | 'watermark_left_y'>;
 
 export async function updateDuplicatedEventWatermarks(
   database: D1Database,
@@ -290,13 +297,19 @@ export async function updateDuplicatedEventWatermarks(
 ) {
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = ?, watermark_image_key_left = ?, watermark_w = ?, watermark_left_w = ?
+    SET watermark_image_key = ?, watermark_image_key_left = ?,
+      watermark_w = ?, watermark_x = ?, watermark_y = ?,
+      watermark_left_w = ?, watermark_left_x = ?, watermark_left_y = ?
     WHERE id = ?
   `).bind(
     watermarks.watermark_image_key,
     watermarks.watermark_image_key_left,
     watermarks.watermark_w,
+    watermarks.watermark_x,
+    watermarks.watermark_y,
     watermarks.watermark_left_w,
+    watermarks.watermark_left_x,
+    watermarks.watermark_left_y,
     id,
   ).run();
   if (result.meta.changes !== 1) throw new EventDuplicationStateError('Duplicated event no longer exists.');

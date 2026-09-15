@@ -76,14 +76,20 @@ describe('admin events list', () => {
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
-  it('exposes attendee links from event names and admin details links from actions', async () => {
+  it('exposes attendee links and responsive edit, duplicate, and delete actions', async () => {
     const source = await readFile(new URL('../src/components/admin/EventTable.astro', import.meta.url), 'utf8');
 
     expect(source).toContain('/e/${encodeURIComponent(event.slug)}');
     expect(source).toContain("buttonVariants({ variant: 'outline', size: 'sm' })");
     expect(source).toContain('<Pencil aria-hidden="true" />');
-    expect(source).toContain('Edit');
+    expect(source).toContain('<span class="sr-only sm:not-sr-only">Edit</span>');
+    expect(source).toContain('aria-label={`Edit ${event.name}`}');
     expect(source).toContain('/admin/events/${encodeURIComponent(event.slug)}');
+    expect(source).toContain("import { EventDuplicateControl } from './EventDuplicateControl'");
+    expect(source).toContain("import { EventDeleteControl } from './EventDeleteControl'");
+    expect(source).toContain('endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/duplicate`}');
+    expect(source).toContain('endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}');
+    expect(source).toContain("'size-11 p-0 sm:h-auto sm:w-auto sm:px-4'");
     expect(source).not.toContain('Attendee link');
     expect(source).toContain('draft');
     expect(source).toContain('archived');

@@ -53,6 +53,7 @@ export function EventDeleteControl({ eventName, endpoint }: EventDeleteControlPr
         variant="destructiveOutline"
         size="sm"
         className="size-11 p-0 sm:h-auto sm:w-auto sm:px-4"
+        aria-label={`Delete ${eventName}`}
         onClick={showDialog}
       >
         <Trash2 aria-hidden="true" />

@@ -3,7 +3,6 @@ import {
   deleteDuplicatedEvent,
   duplicateEventConfiguration,
   EventDuplicationConflictError,
-  EventDuplicationStateError,
   loadEventBySlug,
   updateDuplicatedEventWatermarks,
   type EventRecord,
@@ -66,7 +65,11 @@ async function duplicateWatermarks(source: EventRecord, duplicateId: number, cop
     watermark_image_key: right,
     watermark_image_key_left: left,
     watermark_w: right ? source.watermark_w : null,
+    watermark_x: source.watermark_x,
+    watermark_y: source.watermark_y,
     watermark_left_w: left ? source.watermark_left_w : null,
+    watermark_left_x: source.watermark_left_x,
+    watermark_left_y: source.watermark_left_y,
   });
 }
 
@@ -90,9 +93,7 @@ export async function POST({ request, params }: RouteContext) {
     }
     const { name } = validateDuplicateEvent(input as Record<string, unknown>);
     duplicate = await duplicateEventConfiguration(env.DB, source, name, createdBy);
-    const watermarkSource = await loadEventBySlug(env.DB, params.slug ?? '');
-    if (!watermarkSource) throw new EventDuplicationStateError('Source event no longer exists.');
-    await duplicateWatermarks(watermarkSource, duplicate.id, copiedKeys);
+    await duplicateWatermarks(source, duplicate.id, copiedKeys);
     return Response.json({
       event: duplicate,
       redirectTo: `/admin/events/${encodeURIComponent(duplicate.slug)}`,

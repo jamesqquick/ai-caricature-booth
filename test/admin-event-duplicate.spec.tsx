@@ -13,9 +13,12 @@ afterEach(() => {
 
 describe('event duplication control', () => {
   it('opens a full-viewport dialog with an editable copy name and restores focus', () => {
-    render(<EventDuplicateControl eventName="Demo Event" endpoint="/api/admin/events/demo-event/duplicate" />);
+    const { container } = render(<EventDuplicateControl eventName="Demo Event" endpoint="/api/admin/events/demo-event/duplicate" />);
 
-    const trigger = screen.getByRole('button', { name: 'Duplicate event' });
+    const trigger = screen.getByRole('button', { name: 'Duplicate Demo Event' });
+    expect(trigger.className).toContain('size-11');
+    expect(trigger.className).toContain('sm:w-auto');
+    expect(container.querySelector('svg.lucide-copy')).toBeTruthy();
     fireEvent.click(trigger);
 
     const dialog = screen.getByRole('dialog', { name: 'Duplicate Demo Event' });
@@ -39,7 +42,7 @@ describe('event duplication control', () => {
     vi.stubGlobal('location', { assign });
     render(<EventDuplicateControl eventName="Demo Event" endpoint="/api/admin/events/demo-event/duplicate" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Duplicate event' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Demo Event' }));
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Event name' }), {
       target: { value: 'Regional Demo' },
@@ -68,7 +71,7 @@ describe('event duplication control', () => {
         detail: { name: 'Updated Event', slug: 'updated-event' },
       }));
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Duplicate event' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Updated Event' }));
     const dialog = screen.getByRole('dialog', { name: 'Duplicate Updated Event' });
     expect(within(dialog).getByRole<HTMLInputElement>('textbox', { name: 'Event name' }).value).toBe('Updated Event (Copy)');
     await act(async () => {
@@ -80,7 +83,7 @@ describe('event duplication control', () => {
 
   it('caps the suggested duplicate name at the event name limit', () => {
     render(<EventDuplicateControl eventName={'A'.repeat(120)} endpoint="/api/admin/events/long/duplicate" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Duplicate event' }));
+    fireEvent.click(screen.getByRole('button', { name: `Duplicate ${'A'.repeat(120)}` }));
 
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Event name' }).value).toHaveLength(120);
   });
@@ -92,7 +95,7 @@ describe('event duplication control', () => {
     }), { status: 400, headers: { 'content-type': 'application/json' } })));
     render(<EventDuplicateControl eventName="Demo Event" endpoint="/api/admin/events/demo-event/duplicate" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Duplicate event' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Demo Event' }));
     const dialog = screen.getByRole('dialog');
     const name = within(dialog).getByRole('textbox', { name: 'Event name' });
     fireEvent.change(name, { target: { value: '' } });

@@ -1,3 +1,4 @@
+import { Copy } from 'lucide-react';
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '../ui/button';
 import { PopupOverlay } from '../ui/popup-overlay';
@@ -89,8 +90,17 @@ export function EventDuplicateControl({ eventName, endpoint }: EventDuplicateCon
 
   return (
     <>
-      <Button ref={triggerRef} type="button" variant="secondary" onClick={showDialog}>
-        Duplicate event
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="size-11 p-0 sm:h-auto sm:w-auto sm:px-4"
+        aria-label={`Duplicate ${source.name}`}
+        onClick={showDialog}
+      >
+        <Copy aria-hidden="true" />
+        <span className="sr-only sm:not-sr-only">Duplicate event</span>
       </Button>
       <PopupOverlay
         open={open}

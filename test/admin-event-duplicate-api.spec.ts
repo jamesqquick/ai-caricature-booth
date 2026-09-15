@@ -34,7 +34,11 @@ const sourceEvent = {
   watermark_image_key: 'events/7/watermarks/right.png',
   watermark_image_key_left: 'events/7/watermarks/left.png',
   watermark_w: 540,
+  watermark_x: 56,
+  watermark_y: 64,
   watermark_left_w: 300,
+  watermark_left_x: 72,
+  watermark_left_y: 80,
 };
 
 function request(name = 'Demo Event (Copy)', authenticated = true) {
@@ -74,9 +78,7 @@ describe('event duplication API', () => {
   });
 
   it('copies both watermark objects and returns the draft event destination', async () => {
-    loadEventBySlug
-      .mockResolvedValueOnce(sourceEvent)
-      .mockResolvedValueOnce({ ...sourceEvent, watermark_w: 640 });
+    loadEventBySlug.mockResolvedValue(sourceEvent);
     duplicateEventConfiguration.mockResolvedValue({ id: 12, name: 'Demo Event (Copy)', slug: 'demo-event-copy', status: 'draft' });
     fakeEnv.SELFIES.get
       .mockResolvedValueOnce({ body: 'right-body', httpMetadata: { contentType: 'image/png' }, customMetadata: { side: 'right' } })
@@ -99,9 +101,14 @@ describe('event duplication API', () => {
     expect(updateDuplicatedEventWatermarks).toHaveBeenCalledWith(fakeEnv.DB, 12, {
       watermark_image_key: 'events/12/watermarks/right.png',
       watermark_image_key_left: 'events/12/watermarks/left.png',
-      watermark_w: 640,
+      watermark_w: 540,
+      watermark_x: 56,
+      watermark_y: 64,
       watermark_left_w: 300,
+      watermark_left_x: 72,
+      watermark_left_y: 80,
     });
+    expect(loadEventBySlug).toHaveBeenCalledTimes(1);
   });
 
   it('removes partial R2 and D1 copies when watermark duplication fails', async () => {

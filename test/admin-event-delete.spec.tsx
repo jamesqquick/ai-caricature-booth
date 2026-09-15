@@ -17,7 +17,7 @@ describe('event deletion', () => {
       <EventDeleteControl eventName="Demo Event" endpoint="/api/admin/events/demo-event" />,
     );
 
-    const trigger = screen.getByRole('button', { name: 'Delete event' });
+    const trigger = screen.getByRole('button', { name: 'Delete Demo Event' });
     expect(trigger.className).toContain('border-destructive/50');
     expect(trigger.className).toContain('size-11');
     expect(trigger.className).toContain('sm:w-auto');
@@ -38,7 +38,7 @@ describe('event deletion', () => {
     )));
     render(<EventDeleteControl eventName="Demo Event" endpoint="/api/admin/events/demo-event" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete event' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Demo Event' }));
     const dialog = screen.getByRole('dialog');
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Permanently delete event' }));

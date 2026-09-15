@@ -1,7 +1,10 @@
 ---
 import { Pencil } from 'lucide-react';
 import type { AdminEventSummary } from '../../db/events';
+import { cn } from '../../lib/utils';
 import { buttonVariants } from '../ui/button';
+import { EventDeleteControl } from './EventDeleteControl';
+import { EventDuplicateControl } from './EventDuplicateControl';
 
 type Props = {
   events: AdminEventSummary[];
@@ -61,10 +64,26 @@ function getStatusTone(status: string) {
               <td class="px-5 py-4 font-semibold">{event.sessionCount}</td>
               <td class="px-5 py-4 text-muted-foreground">{formatDate(event.lastActivity)}</td>
               <td class="px-5 py-4 text-right">
-                <a class={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/admin/events/${encodeURIComponent(event.slug)}`}>
-                  <Pencil aria-hidden="true" />
-                  Edit
-                </a>
+                <div class="flex justify-end gap-2">
+                  <a
+                    class={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'size-11 p-0 sm:h-auto sm:w-auto sm:px-4')}
+                    href={`/admin/events/${encodeURIComponent(event.slug)}`}
+                    aria-label={`Edit ${event.name}`}
+                  >
+                    <Pencil aria-hidden="true" />
+                    <span class="sr-only sm:not-sr-only">Edit</span>
+                  </a>
+                  <EventDuplicateControl
+                    client:load
+                    eventName={event.name}
+                    endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/duplicate`}
+                  />
+                  <EventDeleteControl
+                    client:load
+                    eventName={event.name}
+                    endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}
+                  />
+                </div>
               </td>
             </tr>
           ))}

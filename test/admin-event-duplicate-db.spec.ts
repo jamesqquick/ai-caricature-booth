@@ -1,7 +1,7 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
-import { duplicateEventConfiguration } from '../src/db/events';
+import { duplicateEventConfiguration, updateDuplicatedEventWatermarks } from '../src/db/events';
 import { EventValidationError, eventSlugFromName, validateDuplicateEvent } from '../src/lib/event-validation';
 
 const sourceEvent = {
@@ -20,7 +20,11 @@ const sourceEvent = {
   created_at: 1,
   created_by: 'source@example.com',
   watermark_w: null,
+  watermark_x: 56,
+  watermark_y: 64,
   watermark_left_w: null,
+  watermark_left_x: 72,
+  watermark_left_y: 80,
 };
 
 function asD1(sqlite: DatabaseSync) {
@@ -103,6 +107,47 @@ describe('duplicateEventConfiguration', () => {
     expect(sceneCopy?.values).toEqual(['demo-event-copy-2', 7]);
   });
 
+  it('stores copied watermark keys, widths, and placements', async () => {
+    const calls: { query: string; values: unknown[] }[] = [];
+    const database = {
+      prepare(query: string) {
+        return {
+          bind(...values: unknown[]) {
+            calls.push({ query, values });
+            return { async run() { return { meta: { changes: 1 } }; } };
+          },
+        };
+      },
+    } as unknown as D1Database;
+
+    await updateDuplicatedEventWatermarks(database, 12, {
+      watermark_image_key: 'events/12/watermarks/right.png',
+      watermark_image_key_left: 'events/12/watermarks/left.png',
+      watermark_w: 540,
+      watermark_x: 56,
+      watermark_y: 64,
+      watermark_left_w: 300,
+      watermark_left_x: 72,
+      watermark_left_y: 80,
+    });
+
+    expect(calls[0].query).toContain('watermark_x = ?');
+    expect(calls[0].query).toContain('watermark_y = ?');
+    expect(calls[0].query).toContain('watermark_left_x = ?');
+    expect(calls[0].query).toContain('watermark_left_y = ?');
+    expect(calls[0].values).toEqual([
+      'events/12/watermarks/right.png',
+      'events/12/watermarks/left.png',
+      540,
+      56,
+      64,
+      300,
+      72,
+      80,
+      12,
+    ]);
+  });
+
   it('executes against SQLite and excludes source sessions and watermark references', async () => {
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec(`
@@ -123,7 +168,11 @@ describe('duplicateEventConfiguration', () => {
         created_at INTEGER NOT NULL DEFAULT (unixepoch()),
         created_by TEXT,
         watermark_w INTEGER,
-        watermark_left_w INTEGER
+        watermark_x INTEGER NOT NULL DEFAULT 50,
+        watermark_y INTEGER NOT NULL DEFAULT 50,
+        watermark_left_w INTEGER,
+        watermark_left_x INTEGER NOT NULL DEFAULT 50,
+        watermark_left_y INTEGER NOT NULL DEFAULT 50
       );
       CREATE TABLE event_scenes (
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -138,7 +187,7 @@ describe('duplicateEventConfiguration', () => {
       INSERT INTO events VALUES (
         7, 'demo-event', 'Demo Event', 'active', '#ff0000',
         'events/7/watermarks/right.png', NULL, 'Tagline', 'Subhead', 'Pick a scene',
-        'Style', 'Constraints', 1, 'source@example.com', 540, NULL
+        'Style', 'Constraints', 1, 'source@example.com', 540, 56, 64, NULL, 72, 80
       );
       INSERT INTO event_scenes VALUES (7, 'scene-1', 'Scene', 'Description', 'Prompt', 1);
       INSERT INTO sessions VALUES ('session-1', 7);
