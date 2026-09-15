@@ -1,0 +1,151 @@
+README.md
+  s_2ff9d7bc8fba39::t_1753456a53478b 29,35,43-54
+docs/design/button-system.md
+  s_2ff9d7bc8fba39::t_d382da4ba9550a 1-90
+docs/superpowers/plans/2026-09-14-button-icon-system.md
+  s_2ff9d7bc8fba39::t_88b7002f603e36 1-788
+drizzle/migrations/0016_watermark_position.sql
+  s_2ff9d7bc8fba39::t_7703d185f95494 1-2
+drizzle/migrations/0017_left_watermark_position.sql
+  s_2ff9d7bc8fba39::t_0488d30a78782e 1-2
+drizzle/migrations/0018_empty_watermark_position_defaults.sql
+  s_2ff9d7bc8fba39::t_e70772a8aa89fc 1-5
+drizzle/migrations/0019_empty_left_watermark_position_defaults.sql
+  s_2ff9d7bc8fba39::t_17f3cf5f7a8267 1-5
+package.json
+  s_2ff9d7bc8fba39::t_684931054c083a 29,33,35,45,50-51,55-56,64
+pnpm-lock.yaml
+  s_2ff9d7bc8fba39::t_78c4ddda343e5b 7-9,29-31,41-43,47-49,77-79,95-97,102-107,129-131,296-299,304-307,312-315,320-327,332-341,346-353,364-367,372-387,392-395,400-403,408-411,416-419,425-441,454-457,466-469,474-477,482-485,543-545,998-1012,1022-1027,1367-1388,1433-1445,1521-1533,1595-1607,1644-1677,1768-1784,1975-1977,1981-1983,2071-2113,2122-2129,2194-2197,2216-2219,2228-2239,2247-2249,2307-2318,2325-2332,2341-2355,2404-2407,2551-2557,2570-2577,2597-2604,2608-2611,2626-2628,2632-2638,2642-2649,2654-2663,2676-2677,2691-2698,2714-2721,2727-2729,2742-2745,2750-2753,2761-2764,2771-2778,2797-2800,2814-2835,2855-2860,2868-2873,2898-2900,3093-3096,3106-3113,3129-3147,3167-3175,3200-3207,3218-3224,3267-3278,3286-3289,3293-3295,3316-3323,3328-3330,3355-3358,3368-3371,3375-3382,3388-3399,3484-3490,3514-3521,3525-3527,3541-3548,3553-3568,3599-3602,3680-3683,3712-3715,3771-3774,3863-3866,4096-4100,4129-4131,4204-4208,4212-4214,4420-4424,4427-4428,4449-4467,4476-4488,4497-4515,4518-4524,4541-4544,4547-4562,4565-4566,4569-4570,4573-4574,4580-4584,4589-4604,4615-4618,4627-4632,4645-4654,4660-4664,4704-4705,4984-5000,5007-5010,5245-5287,5341-5349,5422-5439,5485-5505,5534-5558,5601-5609,5790-5791,5796-5797,5929-5959,5964-5967,5975,6067,6104-6105,6118-6131,6142-6153,6158-6159,6208-6213,6218-6221,6226-6240,6288-6289,6334-6341,6353-6356,6370-6373,6376-6379,6440-6441,6446-6449,6452-6457,6460-6500,6511,6521-6533,6549-6552,6556-6557,6564-6576,6579-6583,6590-6591,6606-6611,6662-6663,6676-6695,6706-6709,6714-6717,6754-6755,6892-6893,6910-6913,6931-6949,6970-6975,6994-6997,7008-7015,7057-7064,7069-7070,7073-7074,7092-7095,7098-7099,7120-7124,7133-7137,7140-7148,7154-7161,7247-7258,7288-7312,7315-7316,7383-7388,7400-7427,7447-7448,7522-7523,7548-7553,7617-7618,7651-7652,7671,7849-7852,7894-7895,7974-7977,7980-7981
+pnpm-workspace.yaml
+  s_2ff9d7bc8fba39::t_84fda085a93269 5,8-14
+public/favicon.svg
+  s_2ff9d7bc8fba39::t_714b7556e52cac 2-8
+src/actions/index.ts
+  s_2ff9d7bc8fba39::t_914d5457aac57f 234-239
+src/components/Navbar.astro
+  s_2ff9d7bc8fba39::t_74524ac6ab8b25 1-10,16,20,26-30,37-38,42-46,53-54
+src/components/admin/AdminNavbar.astro
+  s_2ff9d7bc8fba39::t_bc943d663f0c58 2-3,5-9,25,29,33-37,44,50-54,60,97-101,108-109
+src/components/admin/EventDeleteControl.tsx
+  s_2ff9d7bc8fba39::t_d27d45ab1ef1c4 1,53-55,58-59
+src/components/admin/EventTable.astro
+  s_2ff9d7bc8fba39::t_62c0a9f2ef963f 2,4,64-66
+src/components/admin/MetricsOverview.astro
+  s_2ff9d7bc8fba39::t_6ec2a75d4bfa19 31,34
+src/components/admin/OperationsDashboard.tsx
+  s_2ff9d7bc8fba39::t_fb21f10717168f 244,246,256,258
+src/components/admin/WatermarkDropzones.tsx
+  s_2ff9d7bc8fba39::t_10a3fb69bc16a1 1-96
+src/components/steps/GeneratingStep.tsx
+  s_2ff9d7bc8fba39::t_bbcff45f015195 324
+src/components/ui/button.tsx
+  s_2ff9d7bc8fba39::t_beb5815c4c89bc 7,11,13-15,17,20,22-23,27
+src/components/ui/input.tsx
+  s_2ff9d7bc8fba39::t_48b8e87f3fa648 1-2,5-24
+src/components/ui/tooltip-hint.tsx
+  s_2ff9d7bc8fba39::t_5605004487f21d 1-28
+src/components/ui/tooltip.tsx
+  s_2ff9d7bc8fba39::t_0ccb31cd1bd6c9 1-30
+src/db/events.ts
+  s_dca4f9be3e6d36::t_d6f6eb6c2ecbb3 3-11,29-30,32-33,45-49,88-190,195-198,397-404,410-411,414-416,418,421-427,431,435-437,439-441,443,446-452,461-463,465,468-474,483-484,487-489,491,494-500
+src/env.d.ts
+  s_2ff9d7bc8fba39::t_65124c62cbd474 3
+src/lib/admin-watermark-dropzone.ts
+  s_2ff9d7bc8fba39::t_7c044df04b9533 1-17
+src/lib/admin-watermark-placement.ts
+  s_2ff9d7bc8fba39::t_51c8ddd42bfab7 1-105
+src/lib/event-mcp.ts
+  s_2ff9d7bc8fba39::t_7495eff486c350 1-164
+src/lib/event-service.ts
+  s_2ff9d7bc8fba39::t_3cc5c4fe4c730a 1-167
+src/lib/event-validation.ts
+  s_2ff9d7bc8fba39::t_7d4ff9060a05f6 38-58,204-314
+src/lib/event-watermark.ts
+  s_2ff9d7bc8fba39::t_8a841a1a14be75 1-123
+src/lib/mcp-auth.ts
+  s_2ff9d7bc8fba39::t_1c9b78efec9f58 1-31
+src/lib/postcard.ts
+  s_2ff9d7bc8fba39::t_17724052a6da15 4-5,12-17,20-36
+src/pages/admin/events/[slug].astro
+  s_2ff9d7bc8fba39::t_5f25f511006a43 3,7,9-10,12,17,78-82,84-88,90,92-93,95-117,120-168,220-227,247-250,272-275,298-301,325-328,340-343,350-364,380-382,478,490,495,497,508-531,566,573-574,577-705,709-726,728-740,743-832,834
+src/pages/admin/events/index.astro
+  s_2ff9d7bc8fba39::t_cb1a6ce77dbb85 3,6,28-29,37-40
+src/pages/admin/events/new.astro
+  s_2ff9d7bc8fba39::t_381363e78c77e8 2,11-13,37
+src/pages/api/admin/events/[slug]/watermark.ts
+  s_2ff9d7bc8fba39::t_80bd274ab94782 7,9,12-26,53-56,58,61-69,72-86,88-90,92-97,99,103-110,112-113,115-116,118,121-137,146,157,159,161-163,168-171,173-176,179,183,187,189,195-202,206,214,224-230,233-234,237,256,258-261,263-275,277,288,290-300,302,304,311-317
+src/pages/index.astro
+  s_2ff9d7bc8fba39::t_18ad1ebba9ab4e 61,103,105,107-108,128,284
+src/worker.ts
+  s_2ff9d7bc8fba39::t_d99498087ebeb7 10-11,29-34,54-59,204-216,307-310
+test/admin-event-branding.spec.ts
+  s_2ff9d7bc8fba39::t_f3bbd30b416196 134
+test/admin-event-create.spec.ts
+  s_2ff9d7bc8fba39::t_b8c4130af578ff 10,67-75
+test/admin-event-delete.spec.tsx
+  s_2ff9d7bc8fba39::t_6807821ada9fbc 16-18,21-24
+test/admin-event-edit.spec.ts
+  s_2ff9d7bc8fba39::t_19cdff044b325c 163,174-178
+test/admin-events-list.spec.ts
+  s_2ff9d7bc8fba39::t_7811e81a9e2064 83-85,97,100-101
+test/admin-layout.spec.ts
+  s_2ff9d7bc8fba39::t_d5b1b8aa7a4e5b 34
+test/admin-metrics.spec.ts
+  s_2ff9d7bc8fba39::t_8a1a5ee44a6e5f 76-84
+test/admin-navbar.spec.ts
+  s_2ff9d7bc8fba39::t_606b7fbe63c55c 50-67
+test/admin-watermark-placement.spec.ts
+  s_2ff9d7bc8fba39::t_7ac71f77642b8f 1-116
+test/admin-watermark.spec.ts
+  s_2ff9d7bc8fba39::t_e299b7d2795bbe 3,17,27,38,44,46-50,62,73-85,94,104,122,126,130,132-143,148-170,228-260,275-276,280,286-296,301-325,327-328,332-348,362-369,378-394,405-438,451-490,501-535,553-558,562-564,569-574,590,600-601,605-638,643,650-750,752-814
+test/button.spec.tsx
+  s_2ff9d7bc8fba39::t_abdc94e712d3d6 1-52
+test/event-mcp.spec.ts
+  s_2ff9d7bc8fba39::t_d3f11ada82bf27 1-280
+test/event-service.spec.ts
+  s_2ff9d7bc8fba39::t_918aa26a11b0dd 1-507
+test/event-watermark.spec.ts
+  s_2ff9d7bc8fba39::t_7131a710e8b6f5 1-140
+test/input.spec.tsx
+  s_2ff9d7bc8fba39::t_999a17190682c3 1-32
+test/mcp-auth.spec.ts
+  s_2ff9d7bc8fba39::t_54b5e185cf31a9 1-93
+test/mcp-worker-integration.spec.ts
+  s_2ff9d7bc8fba39::t_902e925b973c08 1-65
+test/public-500.spec.ts
+  s_2ff9d7bc8fba39::t_416a30b9fc209a 2,13-17,27-30,32-33
+test/public-actions-errors.spec.ts
+  s_2ff9d7bc8fba39::t_72a5bc025c7422 54-59,214-221
+test/sound.spec.ts
+  s_2ff9d7bc8fba39::t_35e265b6233cfc 1-2,18-34
+test/watermark-dropzones.spec.tsx
+  s_2ff9d7bc8fba39::t_3ac6af7369451f 1-111
+test/worker-moderation.spec.ts
+  s_2ff9d7bc8fba39::t_cd21e9477e7ec3 47-52,242-253
+wrangler.jsonc
+  s_2ff9d7bc8fba39::t_0591650aa66585 12,17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "05b316d9b9ae1dc68e0a5763bb3c16e668067f07",
+  "prompts": {},
+  "sessions": {
+    "s_2ff9d7bc8fba39": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5a93be65ffew8Em7J66xIR9TJ",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_dca4f9be3e6d36": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5fe1f924ffeX9IRKdlpF7OP9d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
