@@ -51,12 +51,11 @@ export function EventDeleteControl({ eventName, endpoint }: EventDeleteControlPr
         ref={triggerRef}
         type="button"
         variant="destructiveOutline"
-        size="sm"
-        className="size-11 p-0 sm:h-auto sm:w-auto sm:px-4"
+        size="icon"
+        aria-label={`Delete ${eventName}`}
         onClick={showDialog}
       >
         <Trash2 aria-hidden="true" />
-        <span className="sr-only sm:not-sr-only">Delete event</span>
       </Button>
       <ConfirmationDialog
         open={open}

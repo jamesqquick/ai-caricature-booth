@@ -2,6 +2,8 @@
 import { Pencil } from 'lucide-react';
 import type { AdminEventSummary } from '../../db/events';
 import { buttonVariants } from '../ui/button';
+import { EventDeleteControl } from './EventDeleteControl';
+import { EventDuplicateControl } from './EventDuplicateControl';
 
 type Props = {
   events: AdminEventSummary[];
@@ -34,14 +36,14 @@ function getStatusTone(status: string) {
 
   {events.length > 0 ? (
     <div class="overflow-x-auto rounded-[var(--radius-surface)] border border-border bg-card">
-      <table class="w-full min-w-[46rem] border-collapse text-left text-sm">
+      <table class="w-full border-collapse text-left text-sm md:min-w-[46rem]">
         <caption class="sr-only">All booth events and their generation activity</caption>
         <thead class="border-b border-border bg-muted/60 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
           <tr>
             <th class="px-5 py-4" scope="col">Event</th>
-            <th class="px-5 py-4" scope="col">Status</th>
-            <th class="px-5 py-4" scope="col">Sessions</th>
-            <th class="px-5 py-4" scope="col">Last activity</th>
+            <th class="hidden px-5 py-4 sm:table-cell" scope="col">Status</th>
+            <th class="hidden px-5 py-4 md:table-cell" scope="col">Sessions</th>
+            <th class="hidden px-5 py-4 md:table-cell" scope="col">Last activity</th>
             <th class="px-5 py-4" scope="col"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -53,18 +55,33 @@ function getStatusTone(status: string) {
                   {event.name}
                 </a>
               </th>
-              <td class="px-5 py-4">
+              <td class="hidden px-5 py-4 sm:table-cell">
                 <span class:list={['inline-flex min-h-7 items-center rounded-full border px-2.5 font-label text-[.62rem] font-extrabold uppercase tracking-[.08em]', getStatusTone(event.status)]}>
                   {event.status}
                 </span>
               </td>
-              <td class="px-5 py-4 font-semibold">{event.sessionCount}</td>
-              <td class="px-5 py-4 text-muted-foreground">{formatDate(event.lastActivity)}</td>
+              <td class="hidden px-5 py-4 font-semibold md:table-cell">{event.sessionCount}</td>
+              <td class="hidden px-5 py-4 text-muted-foreground md:table-cell">{formatDate(event.lastActivity)}</td>
               <td class="px-5 py-4 text-right">
-                <a class={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/admin/events/${encodeURIComponent(event.slug)}`}>
-                  <Pencil aria-hidden="true" />
-                  Edit
-                </a>
+                <div class="flex justify-end gap-2">
+                  <a
+                    class={buttonVariants({ variant: 'outline', size: 'icon' })}
+                    href={`/admin/events/${encodeURIComponent(event.slug)}`}
+                    aria-label={`Edit ${event.name}`}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </a>
+                  <EventDuplicateControl
+                    client:load
+                    eventName={event.name}
+                    endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/duplicate`}
+                  />
+                  <EventDeleteControl
+                    client:load
+                    eventName={event.name}
+                    endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}
+                  />
+                </div>
               </td>
             </tr>
           ))}

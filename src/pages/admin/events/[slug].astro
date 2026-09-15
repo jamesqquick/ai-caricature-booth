@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { ExternalLink, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
+import { EventDuplicateControl } from '../../../components/admin/EventDuplicateControl';
 import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
 import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones';
 import PageHeader from '../../../components/admin/PageHeader.astro';
@@ -47,12 +48,18 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     <>
       <div data-event-page-header>
         <PageHeader title={event.name}>
-          <EventDeleteControl
-            slot="actions"
-            client:load
-            eventName={event.name}
-            endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}
-          />
+          <div class="flex flex-wrap justify-end gap-3" slot="actions">
+            <EventDuplicateControl
+              client:load
+              eventName={event.name}
+              endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/duplicate`}
+            />
+            <EventDeleteControl
+              client:load
+              eventName={event.name}
+              endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}
+            />
+          </div>
         </PageHeader>
       </div>
       <EventFeedback client:load saved={saved} feedbackCode={feedbackCode} />
@@ -549,6 +556,9 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       const previewIdleSubhead = document.querySelector<HTMLElement>('[data-preview-idle-subhead]');
       const previewContainer = document.querySelector<HTMLElement>('[data-preview-container]');
       if (pageHeading) pageHeading.textContent = result.event.name;
+      window.dispatchEvent(new CustomEvent('event-details-updated', {
+        detail: { name: result.event.name, slug: result.event.slug },
+      }));
       if (previewHeading) previewHeading.textContent = result.event.scene_picker_heading;
       if (previewTagline) previewTagline.textContent = result.event.tagline;
       if (previewIdleSubhead) previewIdleSubhead.textContent = result.event.kiosk_idle_subhead;

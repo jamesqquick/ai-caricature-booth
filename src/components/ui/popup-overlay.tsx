@@ -7,11 +7,12 @@ type PopupOverlayProps = {
   closeLabel?: string;
   size?: 'compact' | 'wide';
   onClose: () => void;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
 };
 
-export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 'wide', onClose, returnFocusRef, children }: PopupOverlayProps) {
+export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 'wide', onClose, initialFocusRef, returnFocusRef, children }: PopupOverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const wasOpenRef = useRef(false);
 
@@ -25,7 +26,7 @@ export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 
   useEffect(() => {
     if (!open) return;
 
-    dialogRef.current?.focus();
+    (initialFocusRef?.current ?? dialogRef.current)?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKeyDown = (event: KeyboardEvent) => {
@@ -57,7 +58,7 @@ export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose, open, returnFocusRef]);
+  }, [initialFocusRef, onClose, open]);
 
   if (!open) return null;
 
