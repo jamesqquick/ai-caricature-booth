@@ -31,7 +31,6 @@ const watermarkOutputSchema = z.object({
   width: z.number().int().nullable(),
 });
 const completeEventSchema = eventSummarySchema.extend({
-  accentColor: z.string(),
   tagline: z.string(),
   kioskIdleSubhead: z.string(),
   scenePickerHeading: z.string(),
@@ -102,7 +101,6 @@ export function createEventMcpServer(env: EventMcpEnv) {
         name: z.string(),
         slug: z.string(),
         status: eventStatusSchema.optional().default('draft'),
-        accentColor: z.string(),
         tagline: z.string(),
         kioskIdleSubhead: z.string(),
         scenePickerHeading: z.string(),

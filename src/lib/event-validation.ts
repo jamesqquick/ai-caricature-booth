@@ -15,7 +15,6 @@ export type EventBrandingInput = {
   tagline: string;
   kiosk_idle_subhead: string;
   scene_picker_heading: string;
-  accent_color: string;
 };
 
 export type EventPromptInput = {
@@ -39,7 +38,6 @@ export type CreateCompleteEventInput = {
   name: string;
   slug: string;
   status: EventStatus;
-  accentColor: string;
   tagline: string;
   kioskIdleSubhead: string;
   scenePickerHeading: string;
@@ -147,12 +145,6 @@ export function validateEventUpdate(input: Partial<Record<EventField, unknown>>)
     else branding[field] = value;
   }
 
-  if (input.accent_color !== undefined) {
-    const accentColor = typeof input.accent_color === 'string' ? input.accent_color.trim().toLowerCase() : '';
-    if (!/^#[0-9a-f]{6}$/.test(accentColor)) fields.accent_color = 'Use a six-digit hexadecimal color.';
-    else branding.accent_color = accentColor;
-  }
-
   const prompts: Partial<EventPromptInput> = {};
   for (const field of ['scene_style_preamble', 'scene_constraints'] as const) {
     if (input[field] === undefined) continue;
@@ -223,7 +215,6 @@ export function validateCompleteEvent(input: unknown): CreateCompleteEventInput 
     tagline: value.tagline,
     kiosk_idle_subhead: value.kioskIdleSubhead,
     scene_picker_heading: value.scenePickerHeading,
-    accent_color: value.accentColor,
   };
   for (const [field, fieldValue] of Object.entries(requiredBranding)) {
     if (fieldValue === undefined) fields[toCompleteField(field)] = 'This field is required.';
@@ -287,7 +278,6 @@ export function validateCompleteEvent(input: unknown): CreateCompleteEventInput 
 
   return {
     ...core,
-    accentColor: details.accent_color!,
     tagline: details.tagline!,
     kioskIdleSubhead: details.kiosk_idle_subhead!,
     scenePickerHeading: details.scene_picker_heading!,
@@ -303,7 +293,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toCompleteField(field: string) {
   const fields: Record<string, string> = {
-    accent_color: 'accentColor',
     kiosk_idle_subhead: 'kioskIdleSubhead',
     scene_constraints: 'sceneConstraints',
     scene_picker_heading: 'scenePickerHeading',

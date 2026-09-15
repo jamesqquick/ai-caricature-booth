@@ -38,7 +38,6 @@ function renderPhotobooth() {
       tagline="Pick a scene"
       kioskIdleSubhead="Ready when you are"
       scenePickerHeading="Choose your scene."
-      accentColor="#ff5c35"
       scenes={scenes}
     />,
   );

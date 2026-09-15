@@ -62,7 +62,6 @@ function createDatabase() {
       slug TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       status TEXT NOT NULL,
-      accent_color TEXT NOT NULL DEFAULT '#ff0000',
       watermark_image_key TEXT,
       watermark_image_key_left TEXT,
       tagline TEXT NOT NULL DEFAULT 'Tagline',
@@ -369,7 +368,7 @@ describe('event activation and editor wiring', () => {
     expect(source).toContain('tabPanels.forEach((panel) => panel.hidden = panel.dataset.tabPanel !== tabId)');
     expect(source).toContain('updateHistory && currentTab !== tabId');
     expect(source).toContain("document.querySelector<HTMLElement>('[data-event-page-header] h1')");
-    expect(source).toContain("previewContainer?.style.setProperty('--preview-accent', result.event.accent_color)");
+    expect(source).not.toContain('--preview-accent');
   });
 
   it('renders add scene before a vertical single-open scene accordion list', async () => {

@@ -9,7 +9,6 @@ const sourceEvent = {
   slug: 'demo-event',
   name: 'Demo Event',
   status: 'active',
-  accent_color: '#ff0000',
   watermark_image_key: null,
   watermark_image_key_left: null,
   tagline: 'Tagline',
@@ -98,7 +97,7 @@ describe('duplicateEventConfiguration', () => {
     const inserts = calls.filter(({ query }) => query.includes('INSERT INTO events'));
     expect(inserts.map(({ values }) => values[0])).toEqual(['demo-event-copy', 'demo-event-copy-2']);
     expect(inserts[1].query).toContain("'draft'");
-    expect(inserts[1].query).toContain('accent_color');
+    expect(inserts[1].query).not.toContain('accent_color');
     expect(inserts[1].query).toContain('scene_style_preamble');
     expect(inserts[1].values).toEqual(expect.arrayContaining(['Demo Event (Copy)', 'admin@example.com', 7]));
 
@@ -157,7 +156,6 @@ describe('duplicateEventConfiguration', () => {
         slug TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'draft',
-        accent_color TEXT NOT NULL,
         watermark_image_key TEXT,
         watermark_image_key_left TEXT,
         tagline TEXT NOT NULL,
@@ -185,7 +183,7 @@ describe('duplicateEventConfiguration', () => {
       );
       CREATE TABLE sessions (id TEXT PRIMARY KEY, event_id INTEGER NOT NULL);
       INSERT INTO events VALUES (
-        7, 'demo-event', 'Demo Event', 'active', '#ff0000',
+        7, 'demo-event', 'Demo Event', 'active',
         'events/7/watermarks/right.png', NULL, 'Tagline', 'Subhead', 'Pick a scene',
         'Style', 'Constraints', 1, 'source@example.com', 540, 56, 64, NULL, 72, 80
       );
@@ -208,7 +206,6 @@ describe('duplicateEventConfiguration', () => {
         slug: 'demo-event-copy',
         name: 'Demo Event (Copy)',
         status: 'draft',
-        accent_color: '#ff0000',
         scene_style_preamble: 'Style',
         scene_constraints: 'Constraints',
         created_by: 'admin@example.com',

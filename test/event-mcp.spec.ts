@@ -21,7 +21,6 @@ const eventSummary = {
 
 const completeEvent = {
   ...eventSummary,
-  accentColor: '#ff5500',
   tagline: 'Drawn live.',
   kioskIdleSubhead: 'Tap to begin.',
   scenePickerHeading: 'Choose a scene',
@@ -133,7 +132,6 @@ describe('event MCP server', () => {
       name: 'Launch Party',
       slug: 'launch-party',
       status: 'active',
-      accentColor: '#ff5500',
       tagline: 'Drawn live.',
       kioskIdleSubhead: 'Tap to begin.',
       scenePickerHeading: 'Choose a scene',
@@ -172,12 +170,29 @@ describe('event MCP server', () => {
     const result = await client.callTool('create_event', {
       name: 'Launch Party',
       slug: 'launch-party',
-      accentColor: '#ff5500',
       tagline: 'Drawn live.',
       kioskIdleSubhead: 'Tap to begin.',
       scenePickerHeading: 'Choose a scene',
       scenes: [],
       watermark: { dataBase64: 'iVBORw==', width: 620 },
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(createCompleteEvent).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it('rejects the removed accent color input', async () => {
+    const client = await initializedClient();
+
+    const result = await client.callTool('create_event', {
+      name: 'Launch Party',
+      slug: 'launch-party',
+      accentColor: '#ff5500',
+      tagline: 'Drawn live.',
+      kioskIdleSubhead: 'Tap to begin.',
+      scenePickerHeading: 'Choose a scene',
+      scenes: [],
     });
 
     expect(result).toMatchObject({ isError: true });

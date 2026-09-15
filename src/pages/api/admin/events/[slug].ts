@@ -32,7 +32,6 @@ function eventDetailsDto(event: Record<string, unknown>) {
     name: event.name,
     slug: event.slug,
     status: event.status,
-    accent_color: event.accent_color,
     tagline: event.tagline,
     kiosk_idle_subhead: event.kiosk_idle_subhead,
     scene_picker_heading: event.scene_picker_heading,

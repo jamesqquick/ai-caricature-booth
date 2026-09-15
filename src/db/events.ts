@@ -15,7 +15,6 @@ export type EventRecord = {
   slug: string;
   name: string;
   status: string;
-  accent_color: string;
   watermark_image_key: string | null;
   watermark_image_key_left: string | null;
   tagline: string;
@@ -111,17 +110,16 @@ export async function insertCompleteEvent(
   const statements = [
     database.prepare(`
       INSERT INTO events (
-        id, slug, name, status, accent_color, tagline,
+        id, slug, name, status, tagline,
         kiosk_idle_subhead, scene_picker_heading, scene_style_preamble,
         scene_constraints, created_at, created_by, watermark_w,
         watermark_x, watermark_y, watermark_left_x, watermark_left_y
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 50, 50, 50, 50)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 50, 50, 50, 50)
     `).bind(
       id,
       input.slug,
       input.name,
       input.status,
-      input.accentColor,
       input.tagline,
       input.kioskIdleSubhead,
       input.scenePickerHeading,
@@ -247,10 +245,10 @@ export async function duplicateEventConfiguration(
         const [result] = await database.batch([
           database.prepare(`
             INSERT INTO events (
-              slug, name, status, accent_color, tagline, kiosk_idle_subhead,
+              slug, name, status, tagline, kiosk_idle_subhead,
               scene_picker_heading, scene_style_preamble, scene_constraints, created_by
             )
-            SELECT ?, ?, 'draft', accent_color, tagline, kiosk_idle_subhead,
+            SELECT ?, ?, 'draft', tagline, kiosk_idle_subhead,
               scene_picker_heading, scene_style_preamble, scene_constraints, ?
             FROM events
             WHERE id = ?
@@ -324,7 +322,7 @@ export async function deleteDuplicatedEvent(database: D1Database, id: number) {
 
 export async function updateEvent(database: D1Database, id: number, input: EventUpdateInput) {
   try {
-    const brandingFields = ['tagline', 'kiosk_idle_subhead', 'scene_picker_heading', 'accent_color', 'scene_style_preamble', 'scene_constraints']
+    const brandingFields = ['tagline', 'kiosk_idle_subhead', 'scene_picker_heading', 'scene_style_preamble', 'scene_constraints']
       .filter((field) => input[field as keyof EventUpdateInput] !== undefined);
     const fields = ['slug', 'name', 'status', ...brandingFields];
     const values = fields.map((field) => input[field as keyof EventUpdateInput]);
