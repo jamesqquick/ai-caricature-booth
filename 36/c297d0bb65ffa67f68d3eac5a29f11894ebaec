@@ -1,0 +1,41 @@
+README.md
+  s_b323e16b7659dc::t_9b25f6ddbbcd03 40,43
+drizzle/migrations/0020_remove_event_accent_color.sql
+  s_b323e16b7659dc::t_a3d3586b4059c3 1
+src/components/Photobooth.tsx
+  s_b323e16b7659dc::t_a3ce9762ca4695 1,26,42
+src/db/events.ts
+  s_b323e16b7659dc::t_6c39fd6797c78f 113,117,248,251,325
+src/pages/admin/events/[slug].astro
+  s_b323e16b7659dc::t_dd1585d3a5b0f1 175,193,207-208
+src/pages/e/[slug].astro
+  s_b323e16b7659dc::t_f7934908a456d0 20
+test/admin-event-branding.spec.ts
+  s_b323e16b7659dc::t_e71beb662cf4a8 9,27,74-76,94,97,105-107,113-114
+test/admin-event-duplicate-db.spec.ts
+  s_b323e16b7659dc::t_fc3ec1bdf31bab 100,186
+test/admin-event-edit.spec.ts
+  s_b323e16b7659dc::t_6e9e4a81f88911 64
+test/admin-scene-editor.spec.ts
+  s_b323e16b7659dc::t_c90e2da8d72949 371
+test/event-color-migration.spec.ts
+  s_b323e16b7659dc::t_37a7e28cebd011 1-38
+test/event-mcp.spec.ts
+  s_b323e16b7659dc::t_42c07c1510aa42 185-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "36c297d0bb65ffa67f68d3eac5a29f11894ebaec",
+  "prompts": {},
+  "sessions": {
+    "s_b323e16b7659dc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f599bae58ffe5m7YXxOyZU0Ild",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
