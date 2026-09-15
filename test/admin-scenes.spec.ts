@@ -358,6 +358,11 @@ describe('event scene runtime wiring', () => {
     const route = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/index.astro' })).resolves.toBeTruthy();
+    expect(route).toContain('import { Image } from "astro:assets"');
+    expect(route).toContain('sfPostcard1');
+    expect(route).toContain('sfPostcard2');
+    expect(route).toContain('sfPostcard3');
+    expect(route).toContain('sizes="(min-width: 801px) 18rem, 70vw"');
     expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
     expect(route).toContain('scenes.slice(0, 3)');

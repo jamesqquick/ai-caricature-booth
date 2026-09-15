@@ -1,10 +1,14 @@
 ---
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
+import { Image } from "astro:assets";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
 import { loadScenesByEvent } from "../db/scenes";
 import { toPublicScene } from "../data/scenes";
+import sfPostcard1 from "../assets/sf-postcard-1.jpg";
+import sfPostcard2 from "../assets/sf-postcard-2.jpg";
+import sfPostcard3 from "../assets/sf-postcard-3.jpg";
 
 export const prerender = false;
 
@@ -13,6 +17,7 @@ const sceneSets = await Promise.all(events.map(async (event) => (await loadScene
 const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
 const featuredScenes = scenes.slice(0, 3);
 const galleryScenes = scenes.slice(0, 4);
+const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
 ---
 
 <BoothLayout
@@ -58,10 +63,17 @@ const galleryScenes = scenes.slice(0, 4);
               <article
                 class={`absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
               >
-                <div class="landing-postcard-image relative grid aspect-[3/2] place-items-center overflow-hidden bg-muted">
-                  <span class="font-display text-[7rem] font-semibold text-primary/70" aria-hidden="true">
-                    0{index + 1}
-                  </span>
+                <div class="landing-postcard-image relative overflow-hidden bg-muted">
+                  <Image
+                    src={featuredPostcards[index]}
+                    alt={`Example ${scene.name} caricature postcard`}
+                    width={1800}
+                    height={1200}
+                    layout="constrained"
+                    sizes="(min-width: 801px) 18rem, 70vw"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    class="block aspect-[3/2] size-full object-cover"
+                  />
                   <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
                     AI CARICATURE
                   </small>
