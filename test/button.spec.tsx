@@ -12,7 +12,10 @@ describe('Button', () => {
     render(<Button>Save</Button>);
 
     expect(screen.getByRole('button', { name: 'Save' }).className).toContain('bg-primary');
-    expect(buttonVariants({ variant: 'primary' })).toContain('bg-primary');
+    expect(buttonVariants({ variant: 'primary' })).toContain('border-primary');
+    expect(buttonVariants({ variant: 'primary' })).not.toContain('border-transparent');
+    expect(buttonVariants({ variant: 'primary' })).toContain('whitespace-nowrap');
+    expect(buttonVariants({ variant: 'primary' })).not.toContain('border-current');
   });
 
   it.each([
@@ -44,5 +47,6 @@ describe('Button', () => {
     const link = screen.getByRole('link', { name: 'Events' });
     expect(link.getAttribute('href')).toBe('/admin/events');
     expect(link.className).toContain('border-border');
+    expect(link.className).toContain('no-underline');
   });
 });

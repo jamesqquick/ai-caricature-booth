@@ -131,7 +131,7 @@ describe('admin event branding', () => {
     expect(styles).toContain("button:focus-visible, a:focus-visible { outline: 3px solid var(--ring)");
     expect(styles).toContain(".scene-card-visual[data-selected='true']");
     expect(styles).toContain('outline: 2px solid var(--foreground)');
-    expect(button).toContain('border border-current bg-primary text-primary-foreground');
+    expect(button).toContain('border border-primary bg-primary text-primary-foreground');
     expect(sceneStep).toContain('bg-primary text-[.7rem] font-black text-primary-foreground');
     expect(editor).not.toContain('style="color: var(--preview-accent)"');
   });

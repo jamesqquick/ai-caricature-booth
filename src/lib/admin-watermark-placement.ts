@@ -82,6 +82,9 @@ export function createWatermarkSectionState(initial: Record<WatermarkSide, boole
     get canSave() {
       return dirty && pending === 0;
     },
+    get hasAnyWatermark() {
+      return hasWatermark.left || hasWatermark.right;
+    },
     hasWatermark(side: WatermarkSide) {
       return hasWatermark[side];
     },
