@@ -125,6 +125,13 @@ describe('admin session detail', () => {
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
+  it('mounts the shared delete control in the PageHeader actions slot', async () => {
+    const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
+
+    expect(source).toContain("import { SessionDeleteControl } from '../../../components/admin/SessionDeleteControl';");
+    expect(source).toMatch(/<PageHeader\s+title="Session details"\s*>[\s\S]*slot="actions"[\s\S]*<SessionDeleteControl[\s\S]*client:load[\s\S]*sessionId=\{session\.id\}[\s\S]*endpoint=\{`\/api\/admin\/sessions\/\$\{encodeURIComponent\(session\.id\)\}`\}[\s\S]*<\/PageHeader>/);
+  });
+
   it('loads print history with the session in parallel and places it before the timeline', async () => {
     const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
 
