@@ -482,17 +482,16 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     try {
       const result = await readResult(await request(), `${successMessage} failed.`);
       if (!isCurrent()) return null;
-      statuses.forEach((status) => status.textContent = 'Saved.');
       toast.success(successMessage);
       return result;
     } catch (error) {
       if (!isCurrent()) return null;
       const message = error instanceof Error ? error.message : `${successMessage} failed. Check your connection and try again.`;
       if (error instanceof FormSubmissionError && !form.dataset.watermarkSide) showFieldErrors(form, error.fields);
-      statuses.forEach((status) => status.textContent = message);
       toast.error(message);
       return null;
     } finally {
+      statuses.forEach((status) => status.textContent = '');
       form.dataset.pending = 'false';
       form.removeAttribute('aria-busy');
       controls.forEach((control) => control.disabled = false);
@@ -862,7 +861,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
   addSceneForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const sceneData = scenePayload(addSceneForm);
-    const result = await submitMutation(addSceneForm, 'Adding...', 'Scene added.', () => fetch(addSceneForm.dataset.endpoint ?? '', {
+    const result = await submitMutation(addSceneForm, 'Adding...', `Scene added: ${sceneData.name}.`, () => fetch(addSceneForm.dataset.endpoint ?? '', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(sceneData),
@@ -893,8 +892,6 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     document.querySelector<HTMLElement>('#scene-empty')?.remove();
     addSceneForm.reset();
     const summary = sceneAccordion.querySelector<HTMLElement>('summary');
-    const addStatus = addSceneForm.querySelector<HTMLElement>('[data-scene-status]');
-    if (addStatus) addStatus.textContent = `Scene added: ${result.scene.name}.`;
     summary?.focus();
   });
 </script>

@@ -356,6 +356,10 @@ describe('event activation and editor wiring', () => {
     expect(source).toContain("querySelectorAll<Element>('input, button, textarea, select')");
     expect(source).toContain("field.setAttribute('aria-errormessage', output.id)");
     expect(source).toContain("querySelector<HTMLElement>('[aria-invalid=\"true\"]')?.focus()");
+    expect(source).toContain('statuses.forEach((status) => status.textContent = pendingMessage)');
+    expect(source).toContain("statuses.forEach((status) => status.textContent = '')");
+    expect(source).not.toContain("statuses.forEach((status) => status.textContent = 'Saved.')");
+    expect(source).not.toContain('statuses.forEach((status) => status.textContent = message)');
   });
 
   it('switches tabs without navigation and keeps browser history in sync', async () => {
@@ -386,7 +390,8 @@ describe('event activation and editor wiring', () => {
     expect(source).toContain('id="scene-empty"');
     expect(source).toContain("document.querySelector<HTMLElement>('#scene-empty')?.remove()");
     expect(source).toContain('summary?.focus()');
-    expect(source).toContain('Scene added: ${result.scene.name}.');
+    expect(source).toContain('`Scene added: ${sceneData.name}.`');
+    expect(source).not.toContain("const addStatus = addSceneForm.querySelector<HTMLElement>('[data-scene-status]')");
   });
 
   it('captures add and edit payloads before mutateScene disables form controls', async () => {
