@@ -25,13 +25,20 @@ describe('admin watermark placement interactions', () => {
   });
 
   it('tracks successful upload and removal state independently by side', () => {
-    const section = createWatermarkSectionState({ left: false, right: true });
+    const section = createWatermarkSectionState({ left: false, right: false });
 
+    expect(section.hasAnyWatermark).toBe(false);
     section.markChanged('left', true);
-    section.markChanged('right', false);
-
     expect(section.hasWatermark('left')).toBe(true);
+    expect(section.hasAnyWatermark).toBe(true);
+    section.markChanged('right', true);
+    section.markChanged('left', false);
+    expect(section.hasWatermark('left')).toBe(false);
+    expect(section.hasWatermark('right')).toBe(true);
+    expect(section.hasAnyWatermark).toBe(true);
+    section.markChanged('right', false);
     expect(section.hasWatermark('right')).toBe(false);
+    expect(section.hasAnyWatermark).toBe(false);
     expect(section.canSave).toBe(true);
   });
 

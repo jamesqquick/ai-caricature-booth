@@ -1,5 +1,7 @@
 ---
+import { Pencil } from 'lucide-react';
 import type { AdminEventSummary } from '../../db/events';
+import { buttonVariants } from '../ui/button';
 
 type Props = {
   events: AdminEventSummary[];
@@ -59,8 +61,9 @@ function getStatusTone(status: string) {
               <td class="px-5 py-4 font-semibold">{event.sessionCount}</td>
               <td class="px-5 py-4 text-muted-foreground">{formatDate(event.lastActivity)}</td>
               <td class="px-5 py-4 text-right">
-                <a class="inline-flex min-h-11 items-center rounded-full border border-border px-3 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={`/admin/events/${encodeURIComponent(event.slug)}`}>
-                  Details <span class="ml-1" aria-hidden="true">&rarr;</span>
+                <a class={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/admin/events/${encodeURIComponent(event.slug)}`}>
+                  <Pencil aria-hidden="true" />
+                  Edit
                 </a>
               </td>
             </tr>

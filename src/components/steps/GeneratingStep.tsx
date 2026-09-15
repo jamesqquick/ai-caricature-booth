@@ -321,7 +321,7 @@ export function GeneratingStep({ scene, photoDataUrl, eventSlug, onComplete, onC
                 {issue.kind !== 'connection_lost' && issue.kind !== 'request_permanent' && !(issue.kind === 'terminal' && issue.code === 'photo_rejected') && (
                   <Button className="max-[480px]:w-full" type="button" onClick={retryGeneration}>{issueActionLabels.retry}</Button>
                 )}
-                <Button className="max-[480px]:w-full" variant={issue.kind === 'terminal' && issue.code === 'photo_rejected' ? 'default' : 'secondary'} type="button" onClick={onChooseAnotherPhoto}>{issueActionLabels.anotherPhoto}</Button>
+                <Button className="max-[480px]:w-full" variant={issue.kind === 'terminal' && issue.code === 'photo_rejected' ? 'primary' : 'secondary'} type="button" onClick={onChooseAnotherPhoto}>{issueActionLabels.anotherPhoto}</Button>
               </div>
             </div>
           </Alert>

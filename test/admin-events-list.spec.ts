@@ -80,7 +80,9 @@ describe('admin events list', () => {
     const source = await readFile(new URL('../src/components/admin/EventTable.astro', import.meta.url), 'utf8');
 
     expect(source).toContain('/e/${encodeURIComponent(event.slug)}');
-    expect(source).toContain('Details <span');
+    expect(source).toContain("buttonVariants({ variant: 'outline', size: 'sm' })");
+    expect(source).toContain('<Pencil aria-hidden="true" />');
+    expect(source).toContain('Edit');
     expect(source).toContain('/admin/events/${encodeURIComponent(event.slug)}');
     expect(source).not.toContain('Attendee link');
     expect(source).toContain('draft');
@@ -92,9 +94,11 @@ describe('admin events list', () => {
 
   it('renders an actionable safe state when the event query fails', async () => {
     const source = await readFile(new URL('../src/pages/admin/events/index.astro', import.meta.url), 'utf8');
+    expect(source).toContain("import { Plus, RefreshCw } from 'lucide-react'");
     expect(source).toContain("console.error('Admin events list load failed'");
     expect(source).toContain('Unable to load events');
-    expect(source).toContain('href="/admin/events">Retry</a>');
+    expect(source).toContain('href="/admin/events"');
+    expect(source).toContain('<RefreshCw aria-hidden="true" />\n        Retry');
   });
 
   it('links to event creation from the page header', async () => {
