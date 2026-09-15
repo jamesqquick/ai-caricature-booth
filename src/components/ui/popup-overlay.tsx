@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 
 type PopupOverlayProps = {
   open: boolean;
@@ -62,7 +63,7 @@ export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
       role="presentation"
@@ -88,6 +89,7 @@ export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

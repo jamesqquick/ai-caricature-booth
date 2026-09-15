@@ -64,6 +64,25 @@ function renderDashboard() {
   );
 }
 
+function renderFilteredDashboard() {
+  return render(
+    <OperationsDashboard
+      events={[{ id: 7, name: 'Demo Event', slug: 'demo-event', status: 'active' }]}
+      statuses={['pending', 'completed']}
+      initialFilters={{
+        eventId: 7,
+        status: 'completed',
+        from: 86_400,
+        to: 172_799,
+        page: 4,
+        pageSize: 30,
+      }}
+      initialSessionResult={{ ...initialSessionResult, page: 4, totalPages: 4 }}
+      initialStats={initialStats}
+    />,
+  );
+}
+
 function successfulFetch(url: string | URL | Request) {
   const href = String(url);
   if (href.startsWith('/api/admin/sessions')) {
@@ -110,6 +129,42 @@ describe('OperationsDashboard polling', () => {
     const row = screen.getByRole('row', { name: /session-1/ });
     expect(within(row).getByRole('img', { name: 'No postcard preview for session session-1' }).querySelector('svg')).toBeTruthy();
     expect(within(row).queryByText('Not available')).toBeNull();
+  });
+
+  it('exposes View and Delete actions for live session rows', () => {
+    renderDashboard();
+
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+    const row = screen.getByRole('row', { name: /session-1/ });
+    expect(within(row).getByRole('link', { name: 'View session session-1' }).getAttribute('href')).toBe('/admin/sessions/session-1');
+    expect(within(row).getByRole('button', { name: 'Delete session session-1' })).toBeTruthy();
+  });
+
+  it('uses a page-1 delete redirect that preserves nonempty filters', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { assign });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ deleted: true, redirectTo: '/admin' }),
+      { headers: { 'content-type': 'application/json' } },
+    )));
+    renderFilteredDashboard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete session session-1' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    });
+
+    const redirect = new URL(assign.mock.calls[0]?.[0], 'https://booth.test');
+    expect(redirect.pathname).toBe('/admin');
+    expect(Object.fromEntries(redirect.searchParams)).toEqual({
+      eventId: '7',
+      status: 'completed',
+      from: '1970-01-02T00:00:00.000Z',
+      to: '1970-01-02T23:59:59.000Z',
+    });
+    expect(redirect.searchParams.has('page')).toBe(false);
   });
 
   it('renders a postcard thumbnail and opens the full postcard preview', () => {
