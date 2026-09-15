@@ -20,7 +20,7 @@ describe('event deletion', () => {
     const trigger = screen.getByRole('button', { name: 'Delete Demo Event' });
     expect(trigger.className).toContain('border-destructive/50');
     expect(trigger.className).toContain('size-11');
-    expect(trigger.className).toContain('sm:w-auto');
+    expect(trigger.textContent).toBe('');
     expect(container.querySelector('svg.lucide-trash-2')).toBeTruthy();
     fireEvent.click(trigger);
     const dialog = screen.getByRole('dialog', { name: 'Delete Demo Event' });

@@ -93,14 +93,12 @@ export function EventDuplicateControl({ eventName, endpoint }: EventDuplicateCon
       <Button
         ref={triggerRef}
         type="button"
-        variant="secondary"
-        size="sm"
-        className="size-11 p-0 sm:h-auto sm:w-auto sm:px-4"
+        variant="outline"
+        size="icon"
         aria-label={`Duplicate ${source.name}`}
         onClick={showDialog}
       >
         <Copy aria-hidden="true" />
-        <span className="sr-only sm:not-sr-only">Duplicate event</span>
       </Button>
       <PopupOverlay
         open={open}

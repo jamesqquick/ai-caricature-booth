@@ -76,20 +76,26 @@ describe('admin events list', () => {
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
   });
 
-  it('exposes attendee links and responsive edit, duplicate, and delete actions', async () => {
+  it('exposes attendee links and icon-only edit, duplicate, and delete actions', async () => {
     const source = await readFile(new URL('../src/components/admin/EventTable.astro', import.meta.url), 'utf8');
 
     expect(source).toContain('/e/${encodeURIComponent(event.slug)}');
-    expect(source).toContain("buttonVariants({ variant: 'outline', size: 'sm' })");
+    expect(source).toContain("buttonVariants({ variant: 'outline', size: 'icon' })");
     expect(source).toContain('<Pencil aria-hidden="true" />');
-    expect(source).toContain('<span class="sr-only sm:not-sr-only">Edit</span>');
+    expect(source).not.toContain('sm:not-sr-only');
     expect(source).toContain('aria-label={`Edit ${event.name}`}');
     expect(source).toContain('/admin/events/${encodeURIComponent(event.slug)}');
     expect(source).toContain("import { EventDuplicateControl } from './EventDuplicateControl'");
     expect(source).toContain("import { EventDeleteControl } from './EventDeleteControl'");
     expect(source).toContain('endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/duplicate`}');
     expect(source).toContain('endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}`}');
-    expect(source).toContain("'size-11 p-0 sm:h-auto sm:w-auto sm:px-4'");
+    expect(source).toContain('<table class="w-full border-collapse text-left text-sm md:min-w-[46rem]">');
+    expect(source).toContain('<th class="hidden px-5 py-4 sm:table-cell" scope="col">Status</th>');
+    expect(source).toContain('<td class="hidden px-5 py-4 sm:table-cell">');
+    expect(source).toContain('<th class="hidden px-5 py-4 md:table-cell" scope="col">Sessions</th>');
+    expect(source).toContain('<th class="hidden px-5 py-4 md:table-cell" scope="col">Last activity</th>');
+    expect(source).toContain('<td class="hidden px-5 py-4 font-semibold md:table-cell">{event.sessionCount}</td>');
+    expect(source).toContain('<td class="hidden px-5 py-4 text-muted-foreground md:table-cell">{formatDate(event.lastActivity)}</td>');
     expect(source).not.toContain('Attendee link');
     expect(source).toContain('draft');
     expect(source).toContain('archived');

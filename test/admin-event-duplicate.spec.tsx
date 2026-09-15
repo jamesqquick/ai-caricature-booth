@@ -17,7 +17,8 @@ describe('event duplication control', () => {
 
     const trigger = screen.getByRole('button', { name: 'Duplicate Demo Event' });
     expect(trigger.className).toContain('size-11');
-    expect(trigger.className).toContain('sm:w-auto');
+    expect(trigger.className).toContain('bg-transparent');
+    expect(trigger.textContent).toBe('');
     expect(container.querySelector('svg.lucide-copy')).toBeTruthy();
     fireEvent.click(trigger);
 
