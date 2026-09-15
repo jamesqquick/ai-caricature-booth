@@ -176,6 +176,7 @@ describe('admin event editing', () => {
     expect(source).toContain("buttonVariants({ variant: 'outline'");
     expect(source).toContain('{loadFailed && <RefreshCw aria-hidden="true" />}');
     expect(source).toContain("{loadFailed ? 'Retry' : 'Back to events'}");
+    expect(source).not.toContain('Save prompts');
   });
 
   it('does not serialize arbitrary error query values into admin HTML', async () => {

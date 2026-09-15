@@ -682,11 +682,11 @@ describe('admin event watermark', () => {
     expect(editor).toContain("class={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'shrink-0')} id=\"save-watermarks\" type=\"button\" disabled");
     expect(editor).toContain("<Save className={event.watermark_image_key || event.watermark_image_key_left ? undefined : 'hidden'} aria-hidden=\"true\" data-watermark-save-icon />");
     expect(editor).toContain("<Upload className={event.watermark_image_key || event.watermark_image_key_left ? 'hidden' : undefined} aria-hidden=\"true\" data-watermark-upload-icon />");
-    expect(editor).toContain("<span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload watermark'}</span>");
+    expect(editor).toContain("<span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload'}</span>");
     expect(editor).toContain('const hasAnyWatermark = watermarkSectionState.hasAnyWatermark');
     expect(editor).toContain("watermarkSaveIcon?.classList.toggle('hidden', !hasAnyWatermark)");
     expect(editor).toContain("watermarkUploadIcon?.classList.toggle('hidden', hasAnyWatermark)");
-    expect(editor).toContain("watermarkSaveLabel.textContent = hasAnyWatermark ? 'Save' : 'Upload watermark'");
+    expect(editor).toContain("watermarkSaveLabel.textContent = hasAnyWatermark ? 'Save' : 'Upload'");
     expect(editor).not.toContain('Use the left dropzone in the preview to add or replace this PNG.');
     expect(editor).not.toContain('Use the right dropzone in the preview to add or replace this PNG.');
     expect(editor).not.toContain('Save placement');

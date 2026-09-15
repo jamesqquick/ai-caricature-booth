@@ -84,7 +84,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <button class={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'shrink-0')} id="save-watermarks" type="button" disabled>
             <Save className={event.watermark_image_key || event.watermark_image_key_left ? undefined : 'hidden'} aria-hidden="true" data-watermark-save-icon />
             <Upload className={event.watermark_image_key || event.watermark_image_key_left ? 'hidden' : undefined} aria-hidden="true" data-watermark-upload-icon />
-            <span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload watermark'}</span>
+            <span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload'}</span>
           </button>
         </div>
         <div class="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
@@ -246,7 +246,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <div class="flex flex-wrap items-center gap-3">
             <button class={buttonVariants({ variant: 'primary' })} type="submit">
               <Save aria-hidden="true" />
-              Save prompts
+              Save
             </button>
             <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
           </div>
@@ -526,7 +526,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     if (watermarkSectionSave) watermarkSectionSave.disabled = !watermarkSectionState.canSave;
     watermarkSaveIcon?.classList.toggle('hidden', !hasAnyWatermark);
     watermarkUploadIcon?.classList.toggle('hidden', hasAnyWatermark);
-    if (watermarkSaveLabel) watermarkSaveLabel.textContent = hasAnyWatermark ? 'Save' : 'Upload watermark';
+    if (watermarkSaveLabel) watermarkSaveLabel.textContent = hasAnyWatermark ? 'Save' : 'Upload';
   }
 
   document.querySelectorAll<HTMLFormElement>('[data-event-form]').forEach((eventForm) => {
