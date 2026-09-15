@@ -29,7 +29,6 @@ function createSceneDatabase() {
        slug TEXT NOT NULL UNIQUE,
        name TEXT NOT NULL DEFAULT '',
        status TEXT NOT NULL DEFAULT 'active',
-       accent_color TEXT NOT NULL DEFAULT '#000000',
        watermark_image_key TEXT,
        watermark_image_key_left TEXT,
        tagline TEXT NOT NULL DEFAULT '',

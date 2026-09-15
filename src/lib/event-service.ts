@@ -29,7 +29,6 @@ export type EventSummary = {
 };
 
 export type CompleteEventDto = EventSummary & {
-  accentColor: string;
   tagline: string;
   kioskIdleSubhead: string;
   scenePickerHeading: string;
@@ -85,7 +84,6 @@ export async function getCompleteEvent(
   const watermark = loadWatermarkMetadata(event);
   return {
     ...toEventSummary(event),
-    accentColor: event.accent_color,
     tagline: event.tagline,
     kioskIdleSubhead: event.kiosk_idle_subhead,
     scenePickerHeading: event.scene_picker_heading,
@@ -155,7 +153,6 @@ function toCompleteEventDto(
     name: event.name,
     status: event.status,
     createdAt,
-    accentColor: event.accentColor,
     tagline: event.tagline,
     kioskIdleSubhead: event.kioskIdleSubhead,
     scenePickerHeading: event.scenePickerHeading,

@@ -35,12 +35,12 @@ pnpm exec wrangler secret put PRINT_AGENT_TOKEN
 pnpm exec wrangler secret put PRINT_CAPABILITY_SECRET
 pnpm exec wrangler secret put REPLICATE_API_TOKEN
 pnpm exec wrangler secret put MCP_AUTH_TOKEN
-pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
 pnpm build
 pnpm exec wrangler deploy
+pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
 ```
 
-Run `pnpm exec wrangler whoami` first if Wrangler is not authenticated. Apply remote migrations before deploying code that depends on them. Do not run `drizzle/seed.local.sql` against the remote database.
+Run `pnpm exec wrangler whoami` first if Wrangler is not authenticated. Deploy code that works with both schemas before applying destructive migrations such as `0020_remove_event_accent_color.sql`; apply additive migrations before deploying code that depends on them. Do not run `drizzle/seed.local.sql` against the remote database.
 
 ## Event MCP server
 
