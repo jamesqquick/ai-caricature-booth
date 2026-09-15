@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import { ImagePreview } from '../../../components/admin/ImagePreview';
 import { PrintHistory } from '../../../components/admin/PrintHistory';
+import { SessionDeleteControl } from '../../../components/admin/SessionDeleteControl';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import SessionImages from '../../../components/admin/SessionImages.astro';
 import SessionTimeline from '../../../components/admin/SessionTimeline.astro';
@@ -46,9 +47,15 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 >
   {session ? (
     <>
-      <PageHeader
-        title="Session details"
-      />
+      <PageHeader title="Session details">
+        <div slot="actions">
+          <SessionDeleteControl
+            client:load
+            sessionId={session.id}
+            endpoint={`/api/admin/sessions/${encodeURIComponent(session.id)}`}
+          />
+        </div>
+      </PageHeader>
 
       <section class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]" aria-labelledby="session-summary-heading">
         <div class="rounded-[var(--radius-surface)] border border-border bg-card p-6">

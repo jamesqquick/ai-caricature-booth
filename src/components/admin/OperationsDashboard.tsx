@@ -1,7 +1,11 @@
+import { Eye } from 'lucide-react';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { buttonVariants } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select } from '../ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { ImagePlaceholder, ImagePreview } from './ImagePreview';
+import { SessionDeleteControl } from './SessionDeleteControl';
 import type { AdminEventOption, AdminStatistics } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
 import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
@@ -363,7 +367,7 @@ export function OperationsDashboard({
                  <caption className="sr-only">Filtered booth sessions</caption>
                 <thead className="border-b border-border bg-muted">
                   <tr>
-                    {['Postcard', 'Session', 'Event', 'Scene', 'Status', 'Updated', 'Details'].map((heading) => (
+                    {['Postcard', 'Session', 'Event', 'Scene', 'Status', 'Updated', 'Actions'].map((heading) => (
                       <th className="px-4 py-3 font-label text-[.62rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground" key={heading} scope="col">{heading}</th>
                     ))}
                   </tr>
@@ -408,9 +412,27 @@ export function OperationsDashboard({
                           <time dateTime={updatedAt.toISOString()}>{dateFormatter.format(updatedAt)} UTC</time>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-right">
-                          <a className="inline-flex min-h-11 items-center gap-1 rounded-sm px-2 text-sm font-bold text-primary no-underline hover:underline hover:underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href={`/admin/sessions/${encodeURIComponent(session.id)}`} aria-label={`View details for session ${session.id}`}>
-                            View <span aria-hidden="true">&rarr;</span>
-                          </a>
+                          <div className="flex justify-end gap-2">
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <a
+                                    className={buttonVariants({ variant: 'outline', size: 'icon' })}
+                                    href={`/admin/sessions/${encodeURIComponent(session.id)}`}
+                                    aria-label={`View session ${session.id}`}
+                                  >
+                                    <Eye aria-hidden="true" />
+                                  </a>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">View session</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <SessionDeleteControl
+                              sessionId={session.id}
+                              endpoint={`/api/admin/sessions/${encodeURIComponent(session.id)}`}
+                              redirectTo={pageHref(1)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

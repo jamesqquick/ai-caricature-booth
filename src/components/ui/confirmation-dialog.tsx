@@ -5,7 +5,7 @@ import { PopupOverlay } from './popup-overlay';
 type ConfirmationDialogProps = {
   open: boolean;
   title: string;
-  confirmLabel: string;
+  confirmLabel: ReactNode;
   pendingLabel: string;
   pending: boolean;
   error: string;
@@ -42,7 +42,7 @@ export function ConfirmationDialog({
     >
       <div className="pr-12">
         <p className="m-0 font-label text-xs font-extrabold uppercase tracking-[.14em] text-destructive">Permanent action</p>
-        <h2 className="mb-0 mt-3 font-display text-3xl font-semibold tracking-[-.04em]">{title}</h2>
+        <h2 className="mb-0 mt-3 break-words font-display text-3xl font-semibold tracking-[-.04em]">{title}</h2>
       </div>
       <div className="mt-5 text-sm leading-[1.65] text-muted-foreground">{children}</div>
       {error && <p className="mb-0 mt-5 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{error}</p>}
