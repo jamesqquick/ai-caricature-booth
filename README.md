@@ -26,6 +26,8 @@ Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not e
 
 ## Deployment
 
+Automatic Cloudflare Workers builds deploy changes merged to the production branch.
+
 Set the Worker secrets through Wrangler's secure prompt. `MCP_AUTH_TOKEN`, `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` must be independent random values. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print any secret value.
 
 ```sh
