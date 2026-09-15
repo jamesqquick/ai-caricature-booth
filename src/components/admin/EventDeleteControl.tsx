@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '../ui/button';
 import { ConfirmationDialog } from '../ui/confirmation-dialog';
@@ -49,11 +50,13 @@ export function EventDeleteControl({ eventName, endpoint }: EventDeleteControlPr
       <Button
         ref={triggerRef}
         type="button"
-        variant="secondary"
-        className="border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+        variant="destructiveOutline"
+        size="sm"
+        className="size-11 p-0 sm:h-auto sm:w-auto sm:px-4"
         onClick={showDialog}
       >
-        Delete event
+        <Trash2 aria-hidden="true" />
+        <span className="sr-only sm:not-sr-only">Delete event</span>
       </Button>
       <ConfirmationDialog
         open={open}

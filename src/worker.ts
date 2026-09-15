@@ -7,6 +7,8 @@ import { generateCaricature } from './lib/replicate';
 import { adminForbiddenResponse, isAdminApiPath, isAdminPath, isAllowedAdminMutation, withVerifiedAdminIdentity } from './lib/admin-access';
 import type { GenerationFailureCode } from './lib/generation-errors';
 import { composeGenerationPrompt } from './lib/generation-prompt';
+import { handleEventMcpRequest } from './lib/event-mcp';
+import { authenticateMcpRequest, isMcpPath } from './lib/mcp-auth';
 import { authenticatePrintAgent, isPrintAgentPath } from './lib/print-agent-auth';
 import { hasExactSessionAssetOwnership, readOwnedSelfieBytes, workflowSessionAssetKey } from './lib/selfie-ownership';
 
@@ -24,6 +26,12 @@ export type CaricaturePayload = {
   selfieSha256?: string;
   watermarkKey: string | null;
   watermarkWidth: number | null;
+  watermarkX?: number | null;
+  watermarkY?: number | null;
+  watermarkLeftKey?: string | null;
+  watermarkLeftWidth?: number | null;
+  watermarkLeftX?: number | null;
+  watermarkLeftY?: number | null;
 };
 
 export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayload> {
@@ -43,6 +51,12 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
       selfieSha256,
       watermarkKey,
       watermarkWidth,
+      watermarkX,
+      watermarkY,
+      watermarkLeftKey,
+      watermarkLeftWidth,
+      watermarkLeftX,
+      watermarkLeftY,
     } = event.payload;
     const stopped = { sessionId, postcardKey: null };
     const ownsSession = () => ownsActiveWorkflowSession(this.env.DB, sessionId, event.instanceId);
@@ -187,8 +201,19 @@ export class CaricatureWorkflow extends WorkflowEntrypoint<Env, CaricaturePayloa
             await markErrored('unknown_failure');
             return null;
           }
-          console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey) }));
-          const postcard = await buildPostcard(this.env, caricature, watermarkKey, watermarkWidth);
+          console.info(JSON.stringify({ message: 'postcard composition started', sessionId, attempt: ctx.attempt, caricatureBytes: caricature.size, hasWatermark: Boolean(watermarkKey || watermarkLeftKey) }));
+          const postcard = await buildPostcard(
+            this.env,
+            caricature,
+            watermarkKey,
+            watermarkWidth,
+            watermarkX ?? null,
+            watermarkY ?? null,
+            watermarkLeftKey ?? null,
+            watermarkLeftWidth ?? null,
+            watermarkLeftX ?? null,
+            watermarkLeftY ?? null,
+          );
           if (!postcard.ok || !postcard.body) throw new Error(`Postcard composition failed: HTTP ${postcard.status}`);
           if (!(await ownsSession())) return null;
           console.info(JSON.stringify({ message: 'postcard composition completed', sessionId, attempt: ctx.attempt, status: postcard.status, elapsedMs: Date.now() - startedAt }));
@@ -279,6 +304,10 @@ const astro = { fetch: handle } satisfies ExportedHandler<Env>;
 export default {
   async fetch(request: Request, env, context) {
     const pathname = new URL(request.url).pathname;
+    if (isMcpPath(pathname)) {
+      const authResponse = await authenticateMcpRequest(request, env.MCP_AUTH_TOKEN);
+      return authResponse ?? handleEventMcpRequest(request, env, context);
+    }
     if (isPrintAgentPath(pathname)) {
       const authResponse = await authenticatePrintAgent(request, env.PRINT_AGENT_TOKEN);
       return authResponse ?? astro.fetch(request, env, context);

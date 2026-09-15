@@ -28,10 +28,10 @@ function dateValue(timestamp: number | undefined) {
       </Select>
     </label>
     <label class="grid gap-2 text-sm font-semibold" for="metrics-from">From
-      <Input className="min-h-11 rounded-xl border border-border bg-card px-3 text-foreground" id="metrics-from" name="from" type="date" value={dateValue(filters.from)} />
+      <Input className="bg-card px-3" id="metrics-from" name="from" type="date" value={dateValue(filters.from)} size="sm" />
     </label>
     <label class="grid gap-2 text-sm font-semibold" for="metrics-to">To
-      <Input className="min-h-11 rounded-xl border border-border bg-card px-3 text-foreground" id="metrics-to" name="to" type="date" value={dateValue(filters.to)} />
+      <Input className="bg-card px-3" id="metrics-to" name="to" type="date" value={dateValue(filters.to)} size="sm" />
     </label>
   </form>
 </section>

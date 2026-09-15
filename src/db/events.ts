@@ -1,6 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from './index';
-import { eventSlugFromName, EventSlugConflictError, type CreateEventInput, type EventPromptInput, type EventUpdateInput } from '../lib/event-validation';
+import {
+  eventSlugFromName,
+  EventSlugConflictError,
+  type CreateCompleteEventInput,
+  type CreateEventInput,
+  type EventPromptInput,
+  type EventStatus,
+  type EventUpdateInput,
+} from '../lib/event-validation';
 
 export type EventRecord = {
   id: number;
@@ -18,7 +26,11 @@ export type EventRecord = {
   created_at: number;
   created_by: string | null;
   watermark_w: number | null;
+  watermark_x: number;
+  watermark_y: number;
   watermark_left_w: number | null;
+  watermark_left_x: number;
+  watermark_left_y: number;
 };
 
 export type AdminEventSummary = {
@@ -28,6 +40,11 @@ export type AdminEventSummary = {
   status: string;
   sessionCount: number;
   lastActivity: number | null;
+};
+
+export type EventListOptions = {
+  limit?: number;
+  cursor?: { createdAt: number; id: number };
 };
 
 type AdminEventSummaryRow = {
@@ -68,12 +85,117 @@ export async function loadEventById(database: D1Database, id: number): Promise<E
   return db.get<EventRecord>(sql`SELECT * FROM events WHERE id = ${id} LIMIT 1`);
 }
 
+export class EventIdConflictError extends Error {
+  name = 'EventIdConflictError';
+
+  constructor(public readonly eventId: number) {
+    super(`Event ID ${eventId} was allocated concurrently.`);
+  }
+}
+
+export async function allocateEventId(database: D1Database): Promise<number> {
+  const row = await database.prepare(`
+    SELECT COALESCE(MAX(id), 0) + 1 AS id
+    FROM events
+  `).first<{ id: number }>();
+  return Number(row?.id ?? 1);
+}
+
+export async function insertCompleteEvent(
+  database: D1Database,
+  id: number,
+  input: CreateCompleteEventInput,
+  createdBy: string,
+  createdAt: number,
+): Promise<void> {
+  const statements = [
+    database.prepare(`
+      INSERT INTO events (
+        id, slug, name, status, accent_color, tagline,
+        kiosk_idle_subhead, scene_picker_heading, scene_style_preamble,
+        scene_constraints, created_at, created_by, watermark_w,
+        watermark_x, watermark_y, watermark_left_x, watermark_left_y
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 50, 50, 50, 50)
+    `).bind(
+      id,
+      input.slug,
+      input.name,
+      input.status,
+      input.accentColor,
+      input.tagline,
+      input.kioskIdleSubhead,
+      input.scenePickerHeading,
+      input.sceneStylePreamble,
+      input.sceneConstraints,
+      createdAt,
+      createdBy,
+    ),
+    ...input.scenes.map((scene, sortOrder) => database.prepare(`
+      INSERT INTO event_scenes (
+        event_id, id, name, description, prompt, sort_order
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      scene.id,
+      scene.name,
+      scene.description,
+      scene.prompt,
+      sortOrder,
+    )),
+  ];
+
+  try {
+    await database.batch(statements);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/unique constraint failed:\s*events\.id\b|primary key constraint failed:\s*events\.id\b/i.test(message)) {
+      throw new EventIdConflictError(id);
+    }
+    if (/unique constraint failed:\s*events\.slug\b/i.test(message)) {
+      throw new EventSlugConflictError(input.slug);
+    }
+    throw error;
+  }
+}
+
+export async function loadEvents(
+  database: D1Database,
+  status?: EventStatus,
+  options: EventListOptions = {},
+): Promise<EventRecord[]> {
+  const filters: string[] = [];
+  const bindings: Array<string | number> = [];
+  if (status) {
+    filters.push('status = ?');
+    bindings.push(status);
+  }
+  if (options.cursor) {
+    filters.push('(created_at < ? OR (created_at = ? AND id < ?))');
+    bindings.push(options.cursor.createdAt, options.cursor.createdAt, options.cursor.id);
+  }
+  if (options.limit !== undefined) bindings.push(options.limit);
+
+  const statement = database.prepare(`
+    SELECT *
+    FROM events
+    ${filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : ''}
+    ORDER BY created_at DESC, id DESC
+    ${options.limit === undefined ? '' : 'LIMIT ?'}
+  `);
+  const result = bindings.length > 0
+    ? await statement.bind(...bindings).all<EventRecord>()
+    : await statement.all<EventRecord>();
+  return result.results;
+}
+
 export async function createEvent(database: D1Database, input: CreateEventInput, createdBy: string) {
   if (input.status === 'active') throw new EventActivationError();
   try {
     const result = await database.prepare(`
-      INSERT INTO events (slug, name, status, tagline, created_by)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO events (
+        slug, name, status, tagline, created_by,
+        watermark_x, watermark_y, watermark_left_x, watermark_left_y
+      ) VALUES (?, ?, ?, ?, ?, 50, 50, 50, 50)
     `).bind(
       input.slug,
       input.name,
@@ -272,33 +394,62 @@ export class EventActivationError extends Error {
   }
 }
 
+export type WatermarkSide = 'left' | 'right';
+
+function watermarkColumns(side: WatermarkSide) {
+  return side === 'left'
+    ? { key: 'watermark_image_key_left', width: 'watermark_left_w', x: 'watermark_left_x', y: 'watermark_left_y' }
+    : { key: 'watermark_image_key', width: 'watermark_w', x: 'watermark_x', y: 'watermark_y' };
+}
+
 export async function replaceEventWatermark(
   database: D1Database,
   id: number,
   expectedKey: string | null,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   key: string,
   width: number,
+  x: number,
+  y: number,
+  side: WatermarkSide = 'right',
 ) {
+  const columns = watermarkColumns(side);
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = ?, watermark_w = ?
-    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
-  `).bind(key, width, id, expectedKey, expectedWidth).run();
+    SET ${columns.key} = ?, ${columns.width} = ?, ${columns.x} = ?, ${columns.y} = ?
+    WHERE id = ?
+      AND ${columns.key} IS ?
+      AND ${columns.width} IS ?
+      AND ${columns.x} = ?
+      AND ${columns.y} = ?
+  `).bind(key, width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
-export async function updateEventWatermarkWidth(
+export async function updateEventWatermarkPlacement(
   database: D1Database,
   id: number,
   expectedKey: string,
+  expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   width: number,
+  x: number,
+  y: number,
+  side: WatermarkSide = 'right',
 ) {
+  const columns = watermarkColumns(side);
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_w = ?
-    WHERE id = ? AND watermark_image_key = ?
-  `).bind(width, id, expectedKey).run();
+    SET ${columns.width} = ?, ${columns.x} = ?, ${columns.y} = ?
+    WHERE id = ?
+      AND ${columns.key} = ?
+      AND ${columns.width} IS ?
+      AND ${columns.x} = ?
+      AND ${columns.y} = ?
+  `).bind(width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
@@ -307,12 +458,20 @@ export async function clearEventWatermark(
   id: number,
   expectedKey: string,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
+  side: WatermarkSide = 'right',
 ) {
+  const columns = watermarkColumns(side);
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = NULL, watermark_w = NULL
-    WHERE id = ? AND watermark_image_key = ? AND watermark_w IS ?
-  `).bind(id, expectedKey, expectedWidth).run();
+    SET ${columns.key} = NULL, ${columns.width} = NULL, ${columns.x} = 50, ${columns.y} = 50
+    WHERE id = ?
+      AND ${columns.key} = ?
+      AND ${columns.width} IS ?
+      AND ${columns.x} = ?
+      AND ${columns.y} = ?
+  `).bind(id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 
@@ -321,14 +480,24 @@ export async function restoreEventWatermark(
   id: number,
   expectedKey: string | null,
   expectedWidth: number | null,
+  expectedX: number,
+  expectedY: number,
   key: string,
   width: number | null,
+  x: number,
+  y: number,
+  side: WatermarkSide = 'right',
 ) {
+  const columns = watermarkColumns(side);
   const result = await database.prepare(`
     UPDATE events
-    SET watermark_image_key = ?, watermark_w = ?
-    WHERE id = ? AND watermark_image_key IS ? AND watermark_w IS ?
-  `).bind(key, width, id, expectedKey, expectedWidth).run();
+    SET ${columns.key} = ?, ${columns.width} = ?, ${columns.x} = ?, ${columns.y} = ?
+    WHERE id = ?
+      AND ${columns.key} IS ?
+      AND ${columns.width} IS ?
+      AND ${columns.x} = ?
+      AND ${columns.y} = ?
+  `).bind(key, width, x, y, id, expectedKey, expectedWidth, expectedX, expectedY).run();
   return result.meta.changes === 1;
 }
 

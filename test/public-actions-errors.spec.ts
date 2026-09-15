@@ -51,6 +51,12 @@ const event = {
   scene_constraints: null,
   watermark_image_key: null,
   watermark_w: null,
+  watermark_x: 56,
+  watermark_y: 56,
+  watermark_image_key_left: 'events/7/watermarks/sponsor.png',
+  watermark_left_w: 480,
+  watermark_left_x: 72,
+  watermark_left_y: 64,
 };
 const scene = {
   id: 'brooklyn-bridge',
@@ -205,7 +211,14 @@ describe('public action error boundaries', () => {
     expect(claimWorkflowInstanceId).toHaveBeenCalledWith(fakeEnv.DB, sessionId, sessionId);
     expect(fakeEnv.CARICATURE_WORKFLOW.create).toHaveBeenCalledWith(expect.objectContaining({
       id: sessionId,
-      params: expect.objectContaining({ workflowInstanceId: sessionId, selfieSha256 }),
+      params: expect.objectContaining({
+        workflowInstanceId: sessionId,
+        selfieSha256,
+        watermarkLeftKey: event.watermark_image_key_left,
+        watermarkLeftWidth: event.watermark_left_w,
+        watermarkLeftX: event.watermark_left_x,
+        watermarkLeftY: event.watermark_left_y,
+      }),
     }));
     expect(fakeEnv.SELFIES.get).not.toHaveBeenCalled();
   });

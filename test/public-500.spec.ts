@@ -1,4 +1,5 @@
 import { transform } from '@astrojs/compiler';
+import react from '@astrojs/react';
 import { getViteConfig } from 'astro/config';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { readFile } from 'node:fs/promises';
@@ -9,7 +10,11 @@ import { describe, expect, it } from 'vitest';
 async function render500Page(error: Error) {
   const createViteConfig = getViteConfig(
     { logLevel: 'silent' },
-    { configFile: false, root: fileURLToPath(new URL('../', import.meta.url)) },
+    {
+      configFile: false,
+      root: fileURLToPath(new URL('../', import.meta.url)),
+      integrations: [react()],
+    },
   );
   const viteConfig = await createViteConfig({ command: 'serve', mode: 'test' });
   const server = await createServer({
@@ -19,8 +24,13 @@ async function render500Page(error: Error) {
   } as InlineConfig);
 
   try {
-    const page = await server.ssrLoadModule('/src/pages/500.astro');
+    const [page, { default: reactRenderer }] = await Promise.all([
+      server.ssrLoadModule('/src/pages/500.astro'),
+      server.ssrLoadModule('@astrojs/react/server.js'),
+    ]);
     const container = await AstroContainer.create();
+    container.addServerRenderer({ renderer: reactRenderer });
+    container.addClientRenderer({ name: '@astrojs/react', entrypoint: '@astrojs/react/client.js' });
     return await container.renderToString(page.default, {
       props: { error },
       request: new Request('https://booth.test/500'),
