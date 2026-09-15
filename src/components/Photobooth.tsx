@@ -1,8 +1,7 @@
-import { useEffect, useReducer, useRef, type CSSProperties } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { actions } from 'astro:actions';
 import type { PublicScene } from '../data/scenes';
 import { boothReducer, createInitialBoothState, type BoothStep } from '../lib/booth-machine';
-import { eventAccentForeground } from '../lib/event-accent';
 import { completeGenerationNavigation } from '../lib/print-capability-storage';
 import { Stepper } from './Stepper';
 import { CameraStep } from './steps/CameraStep';
@@ -21,17 +20,15 @@ type Props = {
   tagline: string;
   kioskIdleSubhead: string;
   scenePickerHeading: string;
-  accentColor: string;
   scenes: PublicScene[];
 };
 
-export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, accentColor, scenes }: Props) {
+export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, scenes }: Props) {
   const [state, dispatch] = useReducer(boothReducer, scenes[0]?.id ?? null, createInitialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
   const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
-  const accentForeground = eventAccentForeground(accentColor);
   const finishGeneration = (sessionId: string, printToken: string) => completeGenerationNavigation(sessionId, printToken);
   const chooseAnotherPhoto = () => dispatch({ type: 'retake-photo' });
 
@@ -42,7 +39,7 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   }, [state.step]);
 
   return (
-    <main className="booth-event relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--event-accent)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)]" style={{ '--event-accent': accentColor, '--event-accent-foreground': accentForeground } as CSSProperties}>
+    <main className="relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--primary)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)]">
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-10 opacity-[0.16]" aria-hidden="true" />
       <Stepper
         steps={stepLabels}

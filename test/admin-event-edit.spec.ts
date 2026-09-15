@@ -40,7 +40,6 @@ async function renderEventEditor(error: string) {
       slug TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       status TEXT NOT NULL,
-      accent_color TEXT NOT NULL,
       watermark_image_key TEXT,
       watermark_image_key_left TEXT,
       tagline TEXT NOT NULL,
@@ -62,7 +61,7 @@ async function renderEventEditor(error: string) {
       sort_order INTEGER NOT NULL
     );
     INSERT INTO events VALUES (
-      1, 'demo-event', 'Demo Event', 'draft', '#ff0000', NULL, NULL,
+      1, 'demo-event', 'Demo Event', 'draft', NULL, NULL,
       'Tagline', 'Subhead', 'Pick a scene', NULL, NULL, 1, 'admin@example.com', NULL, NULL
     );
   `);
