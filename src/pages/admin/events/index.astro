@@ -1,7 +1,9 @@
 ---
 import { env } from 'cloudflare:workers';
+import { Plus, RefreshCw } from 'lucide-react';
 import EventTable from '../../../components/admin/EventTable.astro';
 import PageHeader from '../../../components/admin/PageHeader.astro';
+import { buttonVariants } from '../../../components/ui/button';
 import { loadAdminEvents } from '../../../db/events';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 
@@ -23,7 +25,8 @@ try {
   description="Create events and edit their attendee copy, scenes, prompts, and watermark."
 >
   <PageHeader title="Events">
-    <a slot="actions" class="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-extrabold text-primary-foreground no-underline hover:bg-primary-hover" href="/admin/events/new">
+    <a slot="actions" class={buttonVariants({ variant: 'primary', size: 'sm' })} href="/admin/events/new">
+      <Plus aria-hidden="true" />
       New event
     </a>
   </PageHeader>
@@ -31,7 +34,10 @@ try {
     <section class="mt-8 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-6" role="alert">
       <h2 class="m-0 font-display text-xl">Unable to load events</h2>
       <p class="mb-0 mt-2 text-sm text-muted-foreground">Couldn't load events. Try again.</p>
-      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin/events">Retry</a>
+      <a class={buttonVariants({ variant: 'outline', className: 'mt-5' })} href="/admin/events">
+        <RefreshCw aria-hidden="true" />
+        Retry
+      </a>
     </section>
   ) : <EventTable events={events} />}
 </AdminLayout>

@@ -30,8 +30,8 @@ describe('WatermarkDropzones', () => {
 
     expect(screen.getByRole('button', { name: /left watermark/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /right watermark/i })).toBeTruthy();
-    expect(screen.getAllByText('Drop or click to choose').every((text) => text.parentElement?.classList.contains('top-6'))).toBe(true);
-    expect(screen.getAllByText('Drop or click to choose')).toHaveLength(2);
+    expect(screen.getAllByText('Drop or click to choose a png to upload').every((text) => text.parentElement?.classList.contains('top-6'))).toBe(true);
+    expect(screen.getAllByText('Drop or click to choose a png to upload')).toHaveLength(2);
   });
 
   it('emits the selected PNG with its watermark side', async () => {
@@ -69,8 +69,11 @@ describe('WatermarkDropzones', () => {
   it('disables only the side whose upload is pending', async () => {
     render(<WatermarkDropzones leftHasWatermark={true} rightHasWatermark={false} />);
     const left = screen.getByRole('button', { name: /left watermark/i });
-    expect(within(left).queryByText('Drop or click to choose')).toBeNull();
-    expect(within(left).getByText('Replace watermark').classList.contains('top-6')).toBe(true);
+    expect(within(left).getByText('Left watermark')).toBeTruthy();
+    const prompt = within(left).getByText('Drop or click to choose a png to upload');
+    expect(prompt).toBeTruthy();
+    expect(prompt.parentElement?.className).not.toContain('opacity-0');
+    expect(within(left).queryByText('Replace watermark')).toBeNull();
     const right = screen.getByRole('button', { name: /right watermark/i });
 
     await act(async () => {
@@ -81,10 +84,10 @@ describe('WatermarkDropzones', () => {
 
     await waitFor(() => expect(left.getAttribute('aria-disabled')).toBe('true'));
     expect(right.getAttribute('aria-disabled')).not.toBe('true');
-    expect(screen.getByText('Uploading left...').classList.contains('top-6')).toBe(true);
+    expect(within(left).getByText('Left watermark')).toBeTruthy();
   });
 
-  it('updates the visible prompt when a watermark is uploaded or removed', async () => {
+  it('keeps the visible prompt constant when a watermark is uploaded or removed', async () => {
     render(<WatermarkDropzones leftHasWatermark={false} rightHasWatermark={false} />);
     const left = screen.getByRole('button', { name: /left watermark/i });
 
@@ -93,15 +96,16 @@ describe('WatermarkDropzones', () => {
         detail: { side: 'left', pending: false, hasWatermark: true },
       }));
     });
-    expect(within(left).queryByText('Drop or click to choose')).toBeNull();
-    expect(within(left).getByText('Replace watermark')).toBeTruthy();
+    expect(within(left).getByText('Left watermark')).toBeTruthy();
+    expect(within(left).getByText('Drop or click to choose a png to upload')).toBeTruthy();
+    expect(within(left).queryByText('Replace watermark')).toBeNull();
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
         detail: { side: 'left', pending: false, hasWatermark: false },
       }));
     });
-    expect(within(left).getByText('Drop or click to choose')).toBeTruthy();
+    expect(within(left).getByText('Drop or click to choose a png to upload')).toBeTruthy();
     expect(left.getAttribute('aria-disabled')).toBeNull();
   });
 });

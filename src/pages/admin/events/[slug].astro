@@ -1,9 +1,11 @@
 ---
 import { env } from 'cloudflare:workers';
+import { ExternalLink, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
 import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
 import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones';
 import PageHeader from '../../../components/admin/PageHeader.astro';
+import { buttonVariants } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
 import { TooltipHint } from '../../../components/ui/tooltip-hint';
@@ -11,6 +13,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { loadEventBySlug } from '../../../db/events';
 import { loadAdminScenesByEvent } from '../../../db/scenes';
 import { parseEventFeedbackCode } from '../../../lib/admin-event-feedback';
+import { cn } from '../../../lib/utils';
 
 export const prerender = false;
 
@@ -71,9 +74,13 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermarks</h2>
             <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload independent PNGs displayed in the bottom corners of generated postcards.</p>
           </div>
-          <button class="min-h-11 shrink-0 rounded-full bg-primary px-5 font-extrabold text-primary-foreground enabled:hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50" id="save-watermarks" type="button" disabled>Save</button>
+          <button class={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'shrink-0')} id="save-watermarks" type="button" disabled>
+            <Save className={event.watermark_image_key || event.watermark_image_key_left ? undefined : 'hidden'} aria-hidden="true" data-watermark-save-icon />
+            <Upload className={event.watermark_image_key || event.watermark_image_key_left ? 'hidden' : undefined} aria-hidden="true" data-watermark-upload-icon />
+            <span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload watermark'}</span>
+          </button>
         </div>
-        <div class="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] xl:items-start">
+        <div class="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
           <div class="grid gap-2">
           <div class="flex items-center justify-between gap-3">
             <p class="m-0 font-label text-sm font-bold">Postcard preview</p>
@@ -103,13 +110,15 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <p class:list={['absolute inset-0 grid place-items-center text-sm text-muted-foreground', (event.watermark_image_key || event.watermark_image_key_left) && 'hidden']} id="watermark-empty">Choose PNGs to preview and upload them.</p>
           </div>
           </div>
-          <div class="grid gap-5">
+          <div class="grid gap-5 lg:pt-8">
           <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form-left" data-watermark-side="left" data-has-watermark={event.watermark_image_key_left ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark?side=left`} novalidate>
             <div class="flex items-center justify-between gap-3" data-watermark-card-header>
               <h3 class="m-0 font-display text-lg font-semibold">Left watermark</h3>
-              <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key_left && 'hidden']} data-remove-watermark type="button">Remove</button>
+              <button class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key_left && 'hidden')} data-remove-watermark type="button">
+                <X aria-hidden="true" />
+                Remove
+              </button>
             </div>
-            <p class="m-0 text-sm text-muted-foreground">Use the left dropzone in the preview to add or replace this PNG.</p>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
                 <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width-left">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
@@ -128,9 +137,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form" data-watermark-side="right" data-has-watermark={event.watermark_image_key ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} novalidate>
             <div class="flex items-center justify-between gap-3" data-watermark-card-header>
               <h3 class="m-0 font-display text-lg font-semibold">Right watermark</h3>
-              <button class:list={['min-h-11 rounded-full border border-border px-5 font-bold text-foreground hover:border-destructive hover:text-destructive', !event.watermark_image_key && 'hidden']} id="remove-watermark" data-remove-watermark type="button">Remove</button>
+              <button class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key && 'hidden')} id="remove-watermark" data-remove-watermark type="button">
+                <X aria-hidden="true" />
+                Remove
+              </button>
             </div>
-            <p class="m-0 text-sm text-muted-foreground">Use the right dropzone in the preview to add or replace this PNG.</p>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
                 <div class="flex items-center gap-1"><label class="font-label text-xs font-bold" for="watermark-width">Width</label><TooltipHint client:load label="width" text="Rendered watermark width in pixels." /></div>
@@ -199,8 +210,14 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           </div>
         </div>
           <div class="flex flex-wrap items-center gap-3">
-            <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save event</button>
-            <a class:list={['inline-flex min-h-12 items-center rounded-full border border-border px-5 font-bold text-foreground no-underline hover:border-primary hover:text-primary', event.status !== 'active' && 'hidden']} id="attendee-page-link" href={`/e/${encodeURIComponent(event.slug)}`}>View attendee page</a>
+            <button class={buttonVariants({ variant: 'primary' })} type="submit">
+              <Save aria-hidden="true" />
+              Save
+            </button>
+            <a class={cn(buttonVariants({ variant: 'outline' }), event.status !== 'active' && 'hidden')} id="attendee-page-link" href={`/e/${encodeURIComponent(event.slug)}`}>
+              <ExternalLink aria-hidden="true" />
+              View attendee page
+            </a>
             <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
           </div>
         </section>
@@ -220,7 +237,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <textarea class="min-h-32 rounded-xl border border-border bg-card px-4 py-3 text-foreground" id="scene_constraints" name="scene_constraints" maxlength="2000">{event.scene_constraints ?? ''}</textarea>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            <button class="min-h-12 w-fit rounded-full bg-primary px-6 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Save prompts</button>
+            <button class={buttonVariants({ variant: 'primary' })} type="submit">
+              <Save aria-hidden="true" />
+              Save prompts
+            </button>
             <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
           </div>
         </section>
@@ -242,7 +262,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <label class="grid gap-2 font-label text-sm font-bold">Description<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="description" required maxlength="300" /></label>
           <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
           <div class="flex flex-wrap items-center gap-3">
-            <button class="min-h-11 rounded-full bg-primary px-5 font-extrabold text-primary-foreground hover:bg-primary-hover" type="submit">Add scene</button>
+            <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+              <Plus aria-hidden="true" />
+              Add
+            </button>
             <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
           </div>
         </form>
@@ -265,7 +288,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
                 <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300">{scene.description}</textarea></label>
                 <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000">{scene.prompt}</textarea></label>
                 <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                  <button class="min-h-11 rounded-full bg-primary px-5 font-bold text-primary-foreground hover:bg-primary-hover" type="submit">Save scene</button>
+                  <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+                    <Save aria-hidden="true" />
+                    Save
+                  </button>
                 </div>
                 <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
               </form>
@@ -289,7 +315,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
               <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300"></textarea></label>
               <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
               <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                <button class="min-h-11 rounded-full bg-primary px-5 font-bold text-primary-foreground hover:bg-primary-hover" type="submit">Save scene</button>
+                <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+                  <Save aria-hidden="true" />
+                  Save
+                </button>
               </div>
               <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
             </form>
@@ -301,7 +330,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     <section class:list={['rounded-[var(--radius-surface)] border p-8 text-center', loadFailed ? 'border-destructive/40 bg-destructive/10' : 'border-dashed border-border bg-muted/30']} role={loadFailed ? 'alert' : undefined}>
       <h1 class="m-0 font-display text-3xl">{loadFailed ? 'Unable to load event' : 'Event not found'}</h1>
       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? "Couldn't load the event. Try again." : 'This event may have been deleted or the URL is incorrect.'}</p>
-      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={loadFailed ? Astro.url.pathname : '/admin/events'}>{loadFailed ? 'Retry' : 'Back to events'}</a>
+      <a class={cn(buttonVariants({ variant: 'outline' }), 'mt-5')} href={loadFailed ? Astro.url.pathname : '/admin/events'}>
+        {loadFailed && <RefreshCw aria-hidden="true" />}
+        {loadFailed ? 'Retry' : 'Back to events'}
+      </a>
     </section>
   )}
 </AdminLayout>
@@ -468,6 +500,9 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
 
   const watermarkForms = Array.from(document.querySelectorAll<HTMLFormElement>('[data-watermark-side]'));
   const watermarkSectionSave = document.querySelector<HTMLButtonElement>('#save-watermarks');
+  const watermarkSaveIcon = document.querySelector<SVGElement>('[data-watermark-save-icon]');
+  const watermarkUploadIcon = document.querySelector<SVGElement>('[data-watermark-upload-icon]');
+  const watermarkSaveLabel = document.querySelector<HTMLElement>('[data-watermark-save-label]');
   const watermarkSectionState = createWatermarkSectionState({
     left: watermarkForms.find((form) => form.dataset.watermarkSide === 'left')?.dataset.hasWatermark === 'true',
     right: watermarkForms.find((form) => form.dataset.watermarkSide === 'right')?.dataset.hasWatermark === 'true',
@@ -480,7 +515,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
   }> = [];
 
   function syncWatermarkSave() {
+    const hasAnyWatermark = watermarkSectionState.hasAnyWatermark;
     if (watermarkSectionSave) watermarkSectionSave.disabled = !watermarkSectionState.canSave;
+    watermarkSaveIcon?.classList.toggle('hidden', !hasAnyWatermark);
+    watermarkUploadIcon?.classList.toggle('hidden', hasAnyWatermark);
+    if (watermarkSaveLabel) watermarkSaveLabel.textContent = hasAnyWatermark ? 'Save' : 'Upload watermark';
   }
 
   document.querySelectorAll<HTMLFormElement>('[data-event-form]').forEach((eventForm) => {
@@ -521,9 +560,9 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     });
   });
 
-  const watermarkEmpty = document.querySelector<HTMLElement>('#watermark-empty');
   const POSTCARD_WIDTH = 1800;
   const POSTCARD_HEIGHT = 1200;
+  const watermarkEmpty = document.querySelector<HTMLElement>('#watermark-empty');
 
   function syncWatermarkEmptyState() {
     const hasPreview = Array.from(document.querySelectorAll<HTMLImageElement>('[data-watermark-preview]'))
@@ -602,8 +641,8 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         watermarkPreview.classList.add('hidden');
         watermarkAspectRatio = 0;
       }
-      syncWatermarkEmptyState();
       syncPlacementInputs();
+      syncWatermarkEmptyState();
       constrainPlacement();
     }
 
@@ -648,7 +687,6 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         watermarkAspectRatio = detachedPreview.naturalHeight / detachedPreview.naturalWidth;
         watermarkPreview.src = objectUrl;
         watermarkPreview.classList.remove('hidden');
-        syncWatermarkEmptyState();
         constrainPlacement();
         const uploadPlacement = placement();
         const uploadUrl = watermarkUploadUrl(watermarkForm.dataset.endpoint ?? '', uploadPlacement, window.location.origin);
@@ -673,6 +711,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         watermarkPreview.src = persistedPreviewSrc;
         removeWatermark?.classList.remove('hidden');
         syncPlacementInputs();
+        syncWatermarkEmptyState();
         window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
           detail: { side, pending: false, hasWatermark: true },
         }));
@@ -716,8 +755,8 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         watermarkAspectRatio = 0;
         setPlacement(placementState.reset());
         updateWatermarkPreview();
-        syncWatermarkEmptyState();
         syncPlacementInputs();
+        syncWatermarkEmptyState();
         watermarkSectionState.markChanged(side, false);
         window.dispatchEvent(new CustomEvent(WATERMARK_UPLOAD_STATE_EVENT, {
           detail: { side, pending: false, hasWatermark: false },
@@ -759,6 +798,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
   }
 
   watermarkForms.forEach(connectWatermarkForm);
+  syncWatermarkEmptyState();
   watermarkSectionSave?.addEventListener('click', async () => {
     if (!watermarkSectionState.canSave) return;
     watermarkControls.forEach((control) => control.normalize());
@@ -781,7 +821,6 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
       syncWatermarkSave();
     }
   });
-  syncWatermarkEmptyState();
   syncWatermarkSave();
 
   function scenePayload(form: HTMLFormElement) {

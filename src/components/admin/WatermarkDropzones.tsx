@@ -72,10 +72,9 @@ function WatermarkDropzone({ side, initialHasWatermark }: WatermarkDropzoneProps
       <span className={[
         'rounded-xl bg-background/85 px-3 py-2 text-xs font-bold text-foreground backdrop-blur-sm transition-opacity',
         'absolute left-1/2 top-6 -translate-x-1/2',
-        hasWatermark && !pending && !isDragActive && !error && 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100',
       ].filter(Boolean).join(' ')}>
-        {pending ? `Uploading ${side}...` : isDragActive ? (hasWatermark ? 'Drop to replace' : 'Drop PNG here') : hasWatermark ? 'Replace watermark' : label}
-        {!hasWatermark && !pending && !isDragActive && <span className="block font-normal text-muted-foreground">Drop or click to choose</span>}
+        <span>{label}</span>
+        <span className="block font-normal text-muted-foreground">Drop or click to choose a png to upload</span>
         {error && <span className="block text-destructive">{error}</span>}
       </span>
     </div>

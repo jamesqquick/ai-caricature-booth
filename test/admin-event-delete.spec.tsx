@@ -13,9 +13,15 @@ afterEach(() => {
 
 describe('event deletion', () => {
   it('uses the reusable dialog and restores focus when cancelled', () => {
-    render(<EventDeleteControl eventName="Demo Event" endpoint="/api/admin/events/demo-event" />);
+    const { container } = render(
+      <EventDeleteControl eventName="Demo Event" endpoint="/api/admin/events/demo-event" />,
+    );
 
     const trigger = screen.getByRole('button', { name: 'Delete event' });
+    expect(trigger.className).toContain('border-destructive/50');
+    expect(trigger.className).toContain('size-11');
+    expect(trigger.className).toContain('sm:w-auto');
+    expect(container.querySelector('svg.lucide-trash-2')).toBeTruthy();
     fireEvent.click(trigger);
     const dialog = screen.getByRole('dialog', { name: 'Delete Demo Event' });
     expect(within(dialog).getByText(/sessions, scenes, and stored images/i)).toBeTruthy();

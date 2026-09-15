@@ -7,6 +7,7 @@ describe('event creation validation', () => {
   it('progressively enhances creation with recoverable field errors and retained values', async () => {
     const source = await readFile(new URL('../src/pages/admin/events/new.astro', import.meta.url), 'utf8');
     expect(source).toContain('method="post" action="/api/admin/events"');
+    expect(source).toContain('<a slot="actions" class={buttonVariants({ variant: \'outline\' })} href="/admin/events">Back to events</a>');
     expect(source).toContain("headers: { 'Content-Type': 'application/json' }");
     expect(source).toContain("field.setAttribute('aria-invalid', 'true')");
     expect(source).toContain("field.setAttribute('aria-errormessage', output.id)");

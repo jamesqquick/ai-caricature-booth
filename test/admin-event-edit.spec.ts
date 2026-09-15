@@ -160,6 +160,7 @@ describe('admin event editing', () => {
   });
 
   it('compiles the editor and update endpoint', async () => {
+    const source = await readFile(new URL('../src/pages/admin/events/[slug].astro', import.meta.url), 'utf8');
     const files = [
       'src/pages/admin/events/[slug].astro',
       'src/pages/api/admin/events/[slug].ts',
@@ -170,6 +171,11 @@ describe('admin event editing', () => {
     }));
 
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
+    expect(source).toContain("import { ExternalLink, Plus, RefreshCw, Save, Upload, X } from 'lucide-react'");
+    expect(source).toContain("buttonVariants({ variant: 'primary'");
+    expect(source).toContain("buttonVariants({ variant: 'outline'");
+    expect(source).toContain('{loadFailed && <RefreshCw aria-hidden="true" />}');
+    expect(source).toContain("{loadFailed ? 'Retry' : 'Back to events'}");
   });
 
   it('does not serialize arbitrary error query values into admin HTML', async () => {
