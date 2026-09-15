@@ -61,7 +61,7 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
           {
             featuredScenes.map((scene, index) => (
               <article
-                class={`landing-postcard absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] transition-[transform,box-shadow] duration-[5000ms] hover:-translate-y-2 hover:scale-[1.3] hover:shadow-[0_2.75rem_5.5rem_oklch(5%_.01_55_/.62)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
+                class={`landing-postcard absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] hover:-translate-y-2 hover:scale-[1.3] hover:shadow-[0_2.75rem_5.5rem_oklch(5%_.01_55_/.62)] ${index === 0 ? 'top-[5%] left-[3%] z-[1] rotate-[-8deg]' : index === 1 ? 'top-[18%] right-[4%] z-[2] rotate-[7deg]' : 'bottom-[2%] left-[23%] z-[3] rotate-[-2deg]'}`}
               >
                 <div class="landing-postcard-image relative overflow-hidden bg-muted">
                   <Image
