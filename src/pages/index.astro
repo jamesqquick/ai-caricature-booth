@@ -61,7 +61,7 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
           {
             featuredScenes.map((scene, index) => (
               <article
-                class={`landing-postcard absolute w-[min(18rem,70%)] rounded-[.45rem] bg-card p-2.5 pb-0 text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1]' : index === 1 ? 'top-[18%] right-[4%] z-[2]' : 'bottom-[2%] left-[23%] z-[3]'}`}
+                class={`landing-postcard absolute w-[min(18rem,70%)] overflow-hidden rounded-[.45rem] bg-card text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1]' : index === 1 ? 'top-[18%] right-[4%] z-[2]' : 'bottom-[2%] left-[23%] z-[3]'}`}
                 style={`--postcard-rotation: ${index === 0 ? '-8deg' : index === 1 ? '7deg' : '-2deg'}`}
               >
                 <div class="landing-postcard-image relative overflow-hidden bg-muted">
@@ -76,7 +76,7 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
                     class="block aspect-[3/2] size-full object-cover"
                   />
                 </div>
-                <div class="flex min-h-[3.8rem] items-center justify-between font-display text-base">
+                <div class="flex min-h-[3.8rem] items-center justify-between px-2.5 font-display text-base">
                   <span>{scene.name}</span>
                   <b class="text-[.7rem] tracking-[.12em] text-primary">
                     SF
