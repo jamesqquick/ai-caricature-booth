@@ -33,6 +33,20 @@ export type SessionRecord = {
   updated_at: number;
 };
 
+type SessionDeletionRecord = Pick<SessionRecord, 'id' | 'status' | 'selfie_key' | 'caricature_key' | 'postcard_key'>;
+
+export type SessionDeletionConflictReason = 'active' | 'print-history';
+
+export class SessionDeletionConflictError extends Error {
+  name = 'SessionDeletionConflictError';
+
+  constructor(public readonly reason: SessionDeletionConflictReason) {
+    super(reason === 'active'
+      ? 'Only completed or errored sessions can be deleted.'
+      : 'This session has print job history and cannot be deleted.');
+  }
+}
+
 export function isTerminalSessionStatus(status: SessionStatus) {
   return status === 'completed' || status === 'errored';
 }
@@ -47,6 +61,38 @@ export async function loadSession(database: D1Database, id: string) {
     WHERE id = ${id}
     LIMIT 1
   `);
+}
+
+export async function deleteSessionWithAssets(database: D1Database, id: string) {
+  const db = createDb(database);
+  const session = await db.get<SessionDeletionRecord>(sql`
+    SELECT id, status, selfie_key, caricature_key, postcard_key
+    FROM sessions
+    WHERE id = ${id}
+    LIMIT 1
+  `);
+  if (!session) return { deleted: false, session: null };
+  if (!isTerminalSessionStatus(session.status)) throw new SessionDeletionConflictError('active');
+
+  const printJob = await db.get<{ id: string }>(sql`
+    SELECT id
+    FROM print_jobs
+    WHERE session_id = ${id}
+    LIMIT 1
+  `);
+  if (printJob) throw new SessionDeletionConflictError('print-history');
+
+  const result = await db.run(sql`
+    DELETE FROM sessions
+    WHERE id = ${id}
+      AND status IN ('completed', 'errored')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM print_jobs
+        WHERE print_jobs.session_id = sessions.id
+      )
+  `);
+  return { deleted: result.meta.changes === 1, session };
 }
 
 export async function createPendingSession(
