@@ -1,7 +1,7 @@
 ---
 import { Moon, Sun, Volume2, VolumeX } from 'lucide-react';
 
-import { buttonVariants } from './ui/button';
+import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 
 const navbarIconHover = 'hover:text-primary [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:scale-110 hover:[&_svg]:rotate-[4deg] motion-reduce:[&_svg]:transition-none motion-reduce:hover:[&_svg]:scale-100 motion-reduce:hover:[&_svg]:rotate-0';
@@ -22,12 +22,10 @@ const navbarHomeIconHover = 'transition-transform duration-200 group-hover:scale
   <div
     class="flex items-center gap-3 text-xs font-bold text-muted-foreground max-[800px]:w-full max-[800px]:justify-between"
   >
-    <button
-      class={cn(
-        buttonVariants({ variant: 'outline', size: 'icon' }),
-        navbarIconHover,
-        'text-muted-foreground max-[800px]:ml-auto',
-      )}
+    <Button
+      className={cn(navbarIconHover, 'text-muted-foreground max-[800px]:ml-auto')}
+      variant="outline"
+      size="icon"
       type="button"
       data-sound-toggle
       aria-label="Mute sound"
@@ -37,13 +35,11 @@ const navbarHomeIconHover = 'transition-transform duration-200 group-hover:scale
       <Volume2 data-sound-on-icon aria-hidden="true" />
       <VolumeX className="hidden" data-sound-off-icon aria-hidden="true" />
       <span class="sr-only" data-sound-label>Sound is on</span>
-    </button>
-    <button
-      class={cn(
-        buttonVariants({ variant: 'outline', size: 'icon' }),
-        navbarIconHover,
-        'text-muted-foreground',
-      )}
+    </Button>
+    <Button
+      className={cn(navbarIconHover, 'text-muted-foreground')}
+      variant="outline"
+      size="icon"
       type="button"
       data-theme-toggle
       aria-label="Switch to light theme"
@@ -53,6 +49,6 @@ const navbarHomeIconHover = 'transition-transform duration-200 group-hover:scale
       <Sun className="hidden" data-theme-light-icon aria-hidden="true" />
       <Moon data-theme-dark-icon aria-hidden="true" />
       <span class="sr-only" data-theme-label>Switch to light theme</span>
-    </button>
+    </Button>
   </div>
 </nav>

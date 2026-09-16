@@ -27,8 +27,10 @@ export function SceneStep({ scenes, selectedSceneId, onSelect, onContinue, tagli
           const selected = scene.id === selectedSceneId;
 
           return (
-            <button
-              className="scene-card-visual relative grid min-h-[9.5rem] grid-cols-[auto_1fr] grid-rows-[auto_1fr] gap-x-4 gap-y-3.5 overflow-hidden rounded-[1.1rem] border border-border p-4 text-left text-foreground"
+            <Button
+              variant="unstyled"
+              size="unstyled"
+              className="scene-card-visual relative grid min-h-[9.5rem] grid-cols-[auto_1fr] grid-rows-[auto_1fr] items-stretch justify-stretch gap-x-4 gap-y-3.5 overflow-hidden whitespace-normal rounded-[1.1rem] border border-border p-4 text-left font-normal text-foreground"
               data-selected={selected}
               type="button"
               aria-pressed={selected}
@@ -43,7 +45,7 @@ export function SceneStep({ scenes, selectedSceneId, onSelect, onContinue, tagli
               <span className={`scene-check pointer-events-none absolute right-3 top-3 grid size-6 place-items-center rounded-full border border-current bg-primary text-[.7rem] font-black text-primary-foreground opacity-0 transition-[opacity,transform] duration-150 ${selected ? 'scale-100 opacity-100' : 'scale-75'}`} aria-hidden="true">
                 <Check size={13} strokeWidth={3} />
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

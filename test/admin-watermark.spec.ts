@@ -670,8 +670,8 @@ describe('admin event watermark', () => {
     expect(editor).toContain('text="Distance from the right edge in pixels."');
     expect(editor.match(/text="Distance from the bottom edge in pixels\."/g)).toHaveLength(2);
     expect(editor.match(/data-watermark-card-header/g)).toHaveLength(2);
-    expect(editor).toContain("class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key_left && 'hidden')} data-remove-watermark type=\"button\"");
-    expect(editor).toContain("class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key && 'hidden')} id=\"remove-watermark\" data-remove-watermark type=\"button\"");
+    expect(editor).toContain("<Button className={cn('shrink-0', !event.watermark_image_key_left && 'hidden')} variant=\"destructiveOutline\" size=\"sm\" data-remove-watermark type=\"button\"");
+    expect(editor).toContain("<Button className={cn('shrink-0', !event.watermark_image_key && 'hidden')} variant=\"destructiveOutline\" size=\"sm\" id=\"remove-watermark\" data-remove-watermark type=\"button\"");
     expect(editor.match(/<X aria-hidden="true" \/>/g)).toHaveLength(2);
     expect(editor.match(/^\s+Remove$/gm)).toHaveLength(2);
     expect(editor).toContain('data-watermark-side="left"');
@@ -679,7 +679,7 @@ describe('admin event watermark', () => {
     expect(editor).toContain('Postcard preview');
     expect(editor).toContain('id="watermark-empty">Choose PNGs to preview and upload them.</p>');
     expect(editor).toContain('syncWatermarkEmptyState');
-    expect(editor).toContain("class={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'shrink-0')} id=\"save-watermarks\" type=\"button\" disabled");
+    expect(editor).toContain('<Button className="shrink-0" size="sm" id="save-watermarks" type="button" disabled>');
     expect(editor).toContain("<Save className={event.watermark_image_key || event.watermark_image_key_left ? undefined : 'hidden'} aria-hidden=\"true\" data-watermark-save-icon />");
     expect(editor).toContain("<Upload className={event.watermark_image_key || event.watermark_image_key_left ? 'hidden' : undefined} aria-hidden=\"true\" data-watermark-upload-icon />");
     expect(editor).toContain("<span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload'}</span>");

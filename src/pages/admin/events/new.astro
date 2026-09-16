@@ -1,5 +1,5 @@
 ---
-import { buttonVariants } from '../../../components/ui/button';
+import { Button, buttonVariants } from '../../../components/ui/button';
 import { Select } from '../../../components/ui/select';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
@@ -34,7 +34,7 @@ export const prerender = false;
       <p class="m-0 text-sm text-destructive" id="status-error" data-field-error="status" hidden></p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      <button class={buttonVariants({ variant: 'primary' })} type="submit">Create draft event</button>
+      <Button type="submit">Create draft event</Button>
       <p class="m-0 text-sm text-muted-foreground" id="create-event-status" role="status" aria-live="polite"></p>
     </div>
   </form>

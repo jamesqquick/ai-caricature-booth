@@ -20,7 +20,9 @@ describe('sound preference', () => {
     const source = await readFile(new NodeURL('../src/components/Navbar.astro', import.meta.url), 'utf8');
 
     expect(source).toContain("import { Moon, Sun, Volume2, VolumeX } from 'lucide-react'");
-    expect(source).toContain("buttonVariants({ variant: 'outline', size: 'icon' })");
+    expect(source).toContain("import { Button } from './ui/button'");
+    expect(source).toContain('variant="outline"');
+    expect(source).toContain('size="icon"');
     expect(source).toContain('data-sound-on-icon');
     expect(source).toContain('data-sound-off-icon');
     expect(source).toContain('hover:text-primary');

@@ -129,6 +129,8 @@
 html { background: var(--ink); font-synthesis: none; text-rendering: optimizeLegibility; }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--ink); color: var(--paper); }
 button, a { font: inherit; }
+a[href]:not([aria-disabled='true']), summary:not([aria-disabled='true']), select:not(:disabled), [role='button']:not(button):not(:disabled):not([disabled]):not([aria-disabled='true']) { cursor: pointer; }
+a[href][aria-disabled='true'], summary[aria-disabled='true'], select:disabled, [role='button']:not(button):disabled, [role='button']:not(button)[disabled], [role='button']:not(button)[aria-disabled='true'] { cursor: default; }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-offset: 4px; }
 ::selection { background: var(--ring); color: var(--background); }
 
