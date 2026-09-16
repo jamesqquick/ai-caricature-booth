@@ -240,6 +240,11 @@ describe('admin session detail', () => {
     const source = await readFile(fileURLToPath(sessionDetailSource), 'utf8');
     expect(source).toContain("console.error('Admin session detail load failed'");
     expect(source).toContain('const responseStatus = loadFailed ? 503');
-    expect(source).toContain("loadFailed ? 'Retry' : 'Back to dashboard'");
+    expect(source).toContain("Couldn't load the session. Return to Sessions and try opening it again.");
+    expect(source).not.toContain('Try again without changing the URL.');
+    expect(source.match(/href="\/admin\/sessions"/g)).toHaveLength(2);
+    expect(source.match(/Back to sessions/g)).toHaveLength(2);
+    expect(source).not.toContain('Back to dashboard');
+    expect(source).not.toContain("loadFailed ? 'Retry'");
   });
 });

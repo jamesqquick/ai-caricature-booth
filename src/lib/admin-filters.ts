@@ -1,6 +1,8 @@
 import { SESSION_STATUSES, type SessionStatus } from '../db/sessions';
 
-export const ADMIN_PAGE_SIZE = 30 as const;
+export const ADMIN_DASHBOARD_PAGE_SIZE = 10 as const;
+export const ADMIN_SESSION_PAGE_SIZE = 30 as const;
+export type AdminPageSize = typeof ADMIN_DASHBOARD_PAGE_SIZE | typeof ADMIN_SESSION_PAGE_SIZE;
 export const ADMIN_TIME_RANGES = ['24h', '7d', '30d', 'all'] as const;
 export type AdminTimeRange = (typeof ADMIN_TIME_RANGES)[number];
 
@@ -11,12 +13,12 @@ export type AdminFilters = {
   to?: number;
   range?: AdminTimeRange;
   page: number;
-  pageSize: typeof ADMIN_PAGE_SIZE;
+  pageSize: AdminPageSize;
 };
 
 export class AdminFilterValidationError extends Error {
   constructor(
-    public readonly field: 'eventId' | 'status' | 'from' | 'to' | 'range' | 'page',
+    public readonly field: 'eventId' | 'status' | 'from' | 'to' | 'range' | 'page' | 'pageSize',
     message: string,
   ) {
     super(message);
@@ -25,6 +27,10 @@ export class AdminFilterValidationError extends Error {
 }
 
 type AdminFilterInput = URLSearchParams | Record<string, string | null | undefined>;
+type NormalizeAdminFilterOptions = {
+  pageSize?: AdminPageSize;
+  paginate?: boolean;
+};
 
 function getFilterValue(input: AdminFilterInput, field: string) {
   const value = input instanceof URLSearchParams ? input.get(field) : input[field];
@@ -41,6 +47,48 @@ function parsePositiveInteger(value: string, field: 'eventId' | 'page') {
     throw new AdminFilterValidationError(field, `${field} must be a positive integer.`);
   }
   return parsed;
+}
+
+export function parseAdminPageSize(value: string): AdminPageSize {
+  if (value !== String(ADMIN_DASHBOARD_PAGE_SIZE) && value !== String(ADMIN_SESSION_PAGE_SIZE)) {
+    throw new AdminFilterValidationError('pageSize', 'pageSize must be 10 or 30.');
+  }
+
+  return Number(value) as AdminPageSize;
+}
+
+export function adminSessionsPublicSearchParams(filters: AdminFilters, includePage = true) {
+  const params = new URLSearchParams();
+  if (filters.eventId !== undefined) params.set('eventId', String(filters.eventId));
+  if (filters.status !== undefined) params.set('status', filters.status);
+  if (filters.from !== undefined) params.set('from', new Date(filters.from * 1000).toISOString());
+  if (filters.to !== undefined) params.set('to', new Date(filters.to * 1000).toISOString());
+  if (includePage && filters.page > 1) params.set('page', String(filters.page));
+  return params;
+}
+
+export function canonicalAdminSessionsFilterUrl(params: URLSearchParams, filters: AdminFilters) {
+  if (!params.has('pageSize')) return null;
+
+  const query = adminSessionsPublicSearchParams(filters).toString();
+  return query ? `/admin/sessions?${query}` : '/admin/sessions';
+}
+
+export function canonicalAdminSessionsPageUrl(
+  params: URLSearchParams,
+  requestedPage: number,
+  totalPages: number,
+) {
+  const lastValidPage = Math.max(totalPages, 1);
+  if (requestedPage <= lastValidPage) return null;
+
+  const canonicalParams = new URLSearchParams(params);
+  canonicalParams.delete('pageSize');
+  if (lastValidPage === 1) canonicalParams.delete('page');
+  else canonicalParams.set('page', String(lastValidPage));
+
+  const query = canonicalParams.toString();
+  return query ? `/admin/sessions?${query}` : '/admin/sessions';
 }
 
 function parseDate(value: string, field: 'from' | 'to') {
@@ -73,7 +121,11 @@ function parseDate(value: string, field: 'from' | 'to') {
   return parsed / 1000;
 }
 
-export function normalizeAdminFilters(input: AdminFilterInput, now = Date.now()): AdminFilters {
+export function normalizeAdminFilters(
+  input: AdminFilterInput,
+  now = Date.now(),
+  { pageSize = ADMIN_SESSION_PAGE_SIZE, paginate = true }: NormalizeAdminFilterOptions = {},
+): AdminFilters {
   const eventIdValue = getFilterValue(input, 'eventId');
   const statusValue = getFilterValue(input, 'status');
   const fromValue = getFilterValue(input, 'from');
@@ -95,7 +147,7 @@ export function normalizeAdminFilters(input: AdminFilterInput, now = Date.now())
   const rangeStart = range && range !== 'all'
     ? Math.floor((now - Number(range.slice(0, -1)) * (range.endsWith('h') ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000)) / 1000)
     : undefined;
-  const page = pageValue === undefined ? 1 : parsePositiveInteger(pageValue, 'page');
+  const page = !paginate || pageValue === undefined ? 1 : parsePositiveInteger(pageValue, 'page');
 
   if (from !== undefined && to !== undefined && from > to) {
     throw new AdminFilterValidationError('from', 'from must be earlier than or equal to to.');
@@ -111,6 +163,6 @@ export function normalizeAdminFilters(input: AdminFilterInput, now = Date.now())
       ? {}
       : { from: rangeStart, to: Math.floor(now / 1000) }),
     page,
-    pageSize: ADMIN_PAGE_SIZE,
+    pageSize,
   };
 }

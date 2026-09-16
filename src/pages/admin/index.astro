@@ -5,7 +5,11 @@ import PageHeader from '../../components/admin/PageHeader.astro';
 import { loadAdminEventOptions, loadAdminSessions, loadAdminStatistics } from '../../db/admin';
 import { SESSION_STATUSES } from '../../db/sessions';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { AdminFilterValidationError, normalizeAdminFilters } from '../../lib/admin-filters';
+import {
+  ADMIN_DASHBOARD_PAGE_SIZE,
+  AdminFilterValidationError,
+  normalizeAdminFilters,
+} from '../../lib/admin-filters';
 import { toAdminSessionListResult } from '../../lib/admin-session-list';
 
 export const prerender = false;
@@ -15,7 +19,7 @@ let queryError: string | null = null;
 
 try {
   const params = new URLSearchParams(Astro.url.searchParams);
-  const filters = normalizeAdminFilters(params);
+  const filters = normalizeAdminFilters(params, undefined, { pageSize: ADMIN_DASHBOARD_PAGE_SIZE, paginate: false });
   const [events, sessionResult, stats] = await Promise.all([
     loadAdminEventOptions(env.DB),
     loadAdminSessions(env.DB, filters),

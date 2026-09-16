@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadAdminSessions, loadAdminSessionStats } from '../src/db/admin';
-import { normalizeAdminFilters } from '../src/lib/admin-filters';
+import { ADMIN_DASHBOARD_PAGE_SIZE, normalizeAdminFilters } from '../src/lib/admin-filters';
 
 type QueryCall = {
   sql: string;
@@ -135,5 +135,20 @@ describe('admin session data', () => {
     });
     const statsQuery = calls.find((call) => call.sql.includes('completion_rate'));
     expect(statsQuery?.values).toEqual([7, 'completed', filters.from, filters.to]);
+  });
+
+  it('uses the dashboard page size for SQL limit and offset', async () => {
+    const { database, calls } = createFakeDatabase();
+    const filters = normalizeAdminFilters(
+      new URLSearchParams({ page: '3' }),
+      undefined,
+      { pageSize: ADMIN_DASHBOARD_PAGE_SIZE },
+    );
+
+    const result = await loadAdminSessions(database, filters);
+
+    const sessionQuery = calls.find((call) => call.sql.includes('ORDER BY'));
+    expect(sessionQuery?.values).toEqual([10, 20]);
+    expect(result).toMatchObject({ page: 3, pageSize: 10 });
   });
 });

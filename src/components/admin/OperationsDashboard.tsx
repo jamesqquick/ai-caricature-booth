@@ -1,61 +1,33 @@
-import { Eye } from 'lucide-react';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import { Button, buttonVariants } from '../ui/button';
-import { Input } from '../ui/input';
-import { Select } from '../ui/select';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { ImagePlaceholder, ImagePreview } from './ImagePreview';
-import { SessionDeleteControl } from './SessionDeleteControl';
+import { useState } from 'react';
+import { AdminSessionsList, type AdminSessionResult } from './AdminSessionsList';
+import { buttonVariants } from '../ui/button';
 import type { AdminEventOption, AdminStatistics } from '../../db/admin';
 import type { SessionStatus } from '../../db/sessions';
-import { ADMIN_PAGE_SIZE, type AdminFilters } from '../../lib/admin-filters';
-import type { AdminSessionListItem } from '../../lib/admin-session-list';
-
-const POLL_INTERVAL_MS = 15_000;
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
-
-function dateInputValue(timestamp: number | undefined) {
-  return timestamp === undefined ? '' : new Date(timestamp * 1000).toISOString().slice(0, 10);
-}
-type SessionResult = {
-  sessions: AdminSessionListItem[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-};
+import type { AdminFilters } from '../../lib/admin-filters';
 
 type Props = {
   events: AdminEventOption[];
   statuses: readonly SessionStatus[];
   initialFilters: AdminFilters;
-  initialSessionResult: SessionResult;
+  initialSessionResult: AdminSessionResult;
   initialStats: AdminStatistics;
+  initialSessionsLoadError?: string | null;
 };
 
-function formatStatus(status: SessionStatus) {
-  if (status === 'errored') return 'Failed';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function filtersToSearchParams(filters: AdminFilters) {
+function statsSearchParams(filters: AdminFilters) {
   const params = new URLSearchParams();
   if (filters.eventId !== undefined) params.set('eventId', String(filters.eventId));
   if (filters.status !== undefined) params.set('status', filters.status);
   if (filters.from !== undefined) params.set('from', new Date(filters.from * 1000).toISOString());
   if (filters.to !== undefined) params.set('to', new Date(filters.to * 1000).toISOString());
-  if (filters.page > 1) params.set('page', String(filters.page));
   return params;
 }
 
-function statusTone(status: SessionStatus) {
-  if (status === 'completed') return 'border-success/35 bg-success/10 text-success';
-  if (status === 'errored') return 'border-destructive/35 bg-destructive/10 text-destructive';
-  return 'border-primary/35 bg-primary/10 text-primary';
+async function loadDashboardStats(filters: AdminFilters, signal: AbortSignal) {
+  const query = statsSearchParams(filters).toString();
+  const response = await fetch(`/api/admin/stats${query ? `?${query}` : ''}`, { signal });
+  if (!response.ok) throw new Error('Admin statistics polling request failed.');
+  return response.json() as Promise<AdminStatistics>;
 }
 
 function formatPipelineDuration(durationMs: number | null) {
@@ -64,154 +36,15 @@ function formatPipelineDuration(durationMs: number | null) {
   return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
-function postcardImageUrl(sessionId: string, variant: 'full' | 'thumbnail' = 'full') {
-  const suffix = variant === 'thumbnail' ? '?variant=thumbnail' : '';
-  return `/api/admin/sessions/${encodeURIComponent(sessionId)}/images/postcard${suffix}`;
-}
-
 export function OperationsDashboard({
   events,
   statuses,
   initialFilters,
   initialSessionResult,
   initialStats,
+  initialSessionsLoadError = null,
 }: Props) {
-  const [filters, setFilters] = useState(initialFilters);
-  const [sessionResult, setSessionResult] = useState(initialSessionResult);
   const [stats, setStats] = useState(initialStats);
-  const [isStale, setIsStale] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [recoveryAnnouncement, setRecoveryAnnouncement] = useState('');
-  const [retrySequence, setRetrySequence] = useState(0);
-  const isInitialRender = useRef(true);
-  const staleRef = useRef(false);
-
-  useEffect(() => {
-    let disposed = false;
-    let timeout: number | undefined;
-    let controller: AbortController | undefined;
-
-    const schedulePoll = () => {
-      if (disposed || document.visibilityState === 'hidden') return;
-      timeout = window.setTimeout(async () => {
-        await refresh();
-        schedulePoll();
-      }, POLL_INTERVAL_MS);
-    };
-
-    const refresh = async () => {
-      if (disposed || document.visibilityState === 'hidden') return;
-      setIsRefreshing(true);
-      controller?.abort();
-      const refreshController = new AbortController();
-      controller = refreshController;
-      const query = filtersToSearchParams(filters).toString();
-      const suffix = query ? `?${query}` : '';
-
-      try {
-        const [sessionsResponse, statsResponse] = await Promise.all([
-          fetch(`/api/admin/sessions${suffix}`, { signal: refreshController.signal }),
-          fetch(`/api/admin/stats${suffix}`, { signal: refreshController.signal }),
-        ]);
-        if (!sessionsResponse.ok || !statsResponse.ok) {
-          throw new Error('Admin polling request failed.');
-        }
-
-        const [nextSessionResult, nextStats] = await Promise.all([
-          sessionsResponse.json() as Promise<SessionResult>,
-          statsResponse.json() as Promise<AdminStatistics>,
-        ]);
-        if (disposed) return;
-
-        setSessionResult(nextSessionResult);
-        setStats(nextStats);
-        setRecoveryAnnouncement(staleRef.current ? 'Dashboard data is current again.' : '');
-        staleRef.current = false;
-        setIsStale(false);
-      } catch (error) {
-        if (disposed || (error instanceof DOMException && error.name === 'AbortError')) return;
-        staleRef.current = true;
-        setRecoveryAnnouncement('');
-        setIsStale(true);
-      } finally {
-        if (!disposed && controller === refreshController) setIsRefreshing(false);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      const visible = document.visibilityState !== 'hidden';
-      window.clearTimeout(timeout);
-
-      if (!visible) {
-        controller?.abort();
-        return;
-      }
-
-      void refresh().finally(schedulePoll);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    if (isInitialRender.current) {
-      isInitialRender.current = false;
-      schedulePoll();
-    } else {
-      void refresh().finally(schedulePoll);
-    }
-
-    return () => {
-      disposed = true;
-      window.clearTimeout(timeout);
-      controller?.abort();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [filters, retrySequence]);
-
-  const replaceFilters = (nextFilters: AdminFilters) => {
-    const params = filtersToSearchParams(nextFilters);
-    const query = params.toString();
-    window.history.replaceState(null, '', query ? `/admin?${query}` : '/admin');
-    setFilters(nextFilters);
-  };
-
-  const updateEvent = (value: string) => {
-    replaceFilters({
-      ...filters,
-      ...(value ? { eventId: Number(value) } : { eventId: undefined }),
-      page: 1,
-    });
-  };
-
-  const updateStatus = (value: string) => {
-    replaceFilters({
-      ...filters,
-      ...(value ? { status: value as SessionStatus } : { status: undefined }),
-      page: 1,
-    });
-  };
-
-  const updateDate = (field: 'from' | 'to', value: string) => {
-    const timestamp = value
-      ? Date.parse(`${value}T${field === 'to' ? '23:59:59' : '00:00:00'}Z`) / 1000
-      : undefined;
-    replaceFilters({ ...filters, [field]: timestamp, page: 1 });
-  };
-
-  const resetFilters = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    replaceFilters({ page: 1, pageSize: ADMIN_PAGE_SIZE });
-  };
-
-  const updatePage = (event: MouseEvent<HTMLAnchorElement>, page: number) => {
-    event.preventDefault();
-    replaceFilters({ ...filters, page });
-  };
-
-  const pageHref = (page: number) => {
-    const params = filtersToSearchParams({ ...filters, page });
-    const query = params.toString();
-    return query ? `/admin?${query}` : '/admin';
-  };
 
   const cards = [
     { label: 'Total', value: stats.total.toLocaleString('en-US') },
@@ -222,84 +55,21 @@ export function OperationsDashboard({
   ];
 
   return (
-    <div aria-busy={isRefreshing}>
-      <form
-        className="mt-8 grid grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_repeat(2,minmax(8rem,1fr))_auto] items-end gap-3 rounded-[var(--radius-surface)] border border-border bg-card p-5 max-[980px]:grid-cols-2 max-[560px]:grid-cols-1"
-        method="get"
-        action="/admin"
-        aria-label="Dashboard filters"
+    <div>
+      <AdminSessionsList
+        events={events}
+        statuses={statuses}
+        initialFilters={initialFilters}
+        initialSessionResult={initialSessionResult}
+        initialLoadError={initialSessionsLoadError}
+        relatedData={{ load: loadDashboardStats, commit: setStats }}
+        showPagination={false}
+        sessionsAction={(
+          <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href="/admin/sessions">
+            View all sessions
+          </a>
+        )}
       >
-        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
-          Event
-          <Select
-            className="min-h-11 rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            name="eventId"
-            value={filters.eventId ?? ''}
-            onChange={(event) => updateEvent(event.target.value)}
-          >
-            <option value="">All events</option>
-            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
-          </Select>
-        </label>
-
-        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
-          From
-          <Input
-            className="rounded-lg px-3 font-sans text-sm normal-case tracking-normal"
-            name="from"
-            size="sm"
-            type="date"
-            value={dateInputValue(filters.from)}
-            onChange={(event) => updateDate('from', event.target.value)}
-          />
-        </label>
-
-        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
-          To
-          <Input
-            className="rounded-lg px-3 font-sans text-sm normal-case tracking-normal"
-            name="to"
-            size="sm"
-            type="date"
-            value={dateInputValue(filters.to)}
-            onChange={(event) => updateDate('to', event.target.value)}
-          />
-        </label>
-
-        <label className="grid gap-2 font-label text-[.68rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground">
-          Status
-          <Select
-            className="min-h-11 rounded-lg border border-input bg-background px-3 font-sans text-sm normal-case tracking-normal text-foreground focus:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            name="status"
-            value={filters.status ?? ''}
-            onChange={(event) => updateStatus(event.target.value)}
-          >
-            <option value="">All statuses</option>
-            {statuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
-          </Select>
-        </label>
-
-        <a
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-border px-5 text-sm font-bold text-muted-foreground no-underline hover:border-primary hover:text-foreground"
-          href="/admin"
-          onClick={resetFilters}
-        >
-          Reset
-        </a>
-      </form>
-
-      <span className="sr-only" role="status" aria-live="polite">{isRefreshing ? 'Refreshing dashboard data...' : ''}</span>
-      <span className="sr-only" role="status" aria-live="polite">{recoveryAnnouncement}</span>
-
-      {isStale && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">
-          <span>Dashboard data couldn't be refreshed. Showing the most recent data.</span>
-          <Button variant="unstyled" size="unstyled" className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
-            Retry now
-          </Button>
-        </div>
-      )}
-
       <section className="mt-6 grid grid-cols-5 gap-px overflow-hidden rounded-[var(--radius-surface)] border border-border bg-border max-[900px]:grid-cols-2 max-[520px]:grid-cols-1" aria-labelledby="dashboard-stats-heading">
         <h2 className="sr-only" id="dashboard-stats-heading">Session statistics</h2>
         {cards.map((card) => (
@@ -346,115 +116,7 @@ export function OperationsDashboard({
           ) : <p className="mt-6 mb-0 text-sm text-muted-foreground">No scenes have been used in this window.</p>}
         </section>
       </div>
-
-      <section className="mt-8" aria-labelledby="latest-jobs-heading">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="m-0 font-display text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-.04em]" id="latest-jobs-heading">Recent sessions</h2>
-          </div>
-          <p className="m-0 text-sm text-muted-foreground">{sessionResult.total.toLocaleString('en-US')} {sessionResult.total === 1 ? 'session' : 'sessions'}</p>
-        </div>
-
-        {sessionResult.sessions.length === 0 ? (
-          <div className="rounded-[var(--radius-surface)] border border-dashed border-border bg-card p-8 text-center">
-            <h3 className="m-0 font-display text-xl">No sessions found</h3>
-            <p className="mt-2 mb-0 text-sm leading-[1.6] text-muted-foreground">No sessions match the selected event, status, or dates.</p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto rounded-[var(--radius-surface)] border border-border bg-card">
-              <table className="w-full min-w-[62rem] border-collapse text-left text-sm">
-                 <caption className="sr-only">Filtered booth sessions</caption>
-                <thead className="border-b border-border bg-muted">
-                  <tr>
-                    {['Postcard', 'Session', 'Event', 'Scene', 'Status', 'Updated', 'Actions'].map((heading) => (
-                      <th className="px-4 py-3 font-label text-[.62rem] font-extrabold uppercase tracking-[.1em] text-muted-foreground" key={heading} scope="col">{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {sessionResult.sessions.map((session) => {
-                    const updatedAt = new Date(session.updatedAt * 1000);
-                    return (
-                      <tr className="align-top hover:bg-muted/50" key={session.id}>
-                        <td className="px-4 py-4">
-                          {session.hasPostcard ? (
-                            <div className="w-28">
-                              <ImagePreview
-                                src={postcardImageUrl(session.id, 'thumbnail')}
-                                fullSrc={postcardImageUrl(session.id)}
-                                alt={`Final postcard for session ${session.id}`}
-                                compact
-                                showDownload={false}
-                              />
-                            </div>
-                          ) : (
-                            <ImagePlaceholder label={`No postcard preview for session ${session.id}`} compact />
-                          )}
-                        </td>
-                        <th className="max-w-44 px-4 py-4 font-label text-xs font-semibold" scope="row">
-                          <span className="block overflow-hidden text-ellipsis whitespace-nowrap" title={session.id}>{session.id}</span>
-                        </th>
-                        <td className="px-4 py-4">
-                          <span className="block font-semibold">{session.eventName}</span>
-                          <span className="mt-1 block font-label text-[.62rem] text-muted-foreground">{session.eventSlug}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="block">{session.sceneName ?? 'Unnamed scene'}</span>
-                          <span className="mt-1 block font-label text-[.62rem] text-muted-foreground">{session.sceneId}</span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 font-label text-[.62rem] font-extrabold uppercase tracking-[.08em] ${statusTone(session.status)}`}>
-                            {formatStatus(session.status)}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-muted-foreground">
-                          <time dateTime={updatedAt.toISOString()}>{dateFormatter.format(updatedAt)} UTC</time>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <a
-                                    className={buttonVariants({ variant: 'outline', size: 'icon' })}
-                                    href={`/admin/sessions/${encodeURIComponent(session.id)}`}
-                                    aria-label={`View session ${session.id}`}
-                                  >
-                                    <Eye aria-hidden="true" />
-                                  </a>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">View session</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <SessionDeleteControl
-                              sessionId={session.id}
-                              endpoint={`/api/admin/sessions/${encodeURIComponent(session.id)}`}
-                              redirectTo={pageHref(1)}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {sessionResult.totalPages > 1 && (
-              <nav className="mt-4 flex items-center justify-between gap-4" aria-label="Generation jobs pagination">
-                {sessionResult.page > 1 ? (
-                  <a className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={pageHref(sessionResult.page - 1)} onClick={(event) => updatePage(event, sessionResult.page - 1)}>Previous</a>
-                ) : <span />}
-                <span className="text-sm text-muted-foreground">Page {sessionResult.page} of {sessionResult.totalPages}</span>
-                {sessionResult.page < sessionResult.totalPages ? (
-                  <a className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={pageHref(sessionResult.page + 1)} onClick={(event) => updatePage(event, sessionResult.page + 1)}>Next</a>
-                ) : <span />}
-              </nav>
-            )}
-          </>
-        )}
-      </section>
+      </AdminSessionsList>
     </div>
   );
 }
