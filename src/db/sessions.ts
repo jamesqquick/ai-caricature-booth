@@ -56,7 +56,9 @@ export async function createPendingSession(
   const db = createDb(database);
   const result = await db.run(sql`
     INSERT INTO sessions (id, event_id, status, scene_id, scene_name, selfie_key, selfie_sha256, workflow_instance_id, updated_at)
-    VALUES (${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.scene_name}, ${input.selfie_key}, ${input.selfie_sha256}, ${input.workflow_instance_id}, unixepoch())
+    SELECT ${input.id}, ${input.event_id}, 'pending', ${input.scene_id}, ${input.scene_name}, ${input.selfie_key}, ${input.selfie_sha256}, ${input.workflow_instance_id}, unixepoch()
+    FROM event_scenes
+    WHERE event_id = ${input.event_id} AND id = ${input.scene_id}
     ON CONFLICT(id) DO NOTHING
   `);
   return { session: await loadSession(database, input.id), created: result.meta.changes === 1 };
