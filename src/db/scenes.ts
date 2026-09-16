@@ -15,6 +15,14 @@ export class SceneConflictError extends Error {
   }
 }
 
+export class SceneDeletionConflictError extends Error {
+  name = 'SceneDeletionConflictError';
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 export async function loadScenesByEvent(database: D1Database, eventId: number): Promise<PublicScene[]> {
   const db = createDb(database);
   return db.all<PublicScene>(sql`
@@ -86,6 +94,39 @@ export async function updateEventScene(database: D1Database, eventId: number, sc
 
   if (result.meta.changes === 1) return loadAdminScene(database, eventId, sceneId);
   return loadAdminScene(database, eventId, sceneId);
+}
+
+export async function deleteEventScene(database: D1Database, eventId: number, sceneId: string) {
+  const result = await database.prepare(`
+    DELETE FROM event_scenes
+    WHERE event_id = ? AND id = ?
+      AND (
+        EXISTS (
+          SELECT 1 FROM events
+          WHERE id = ? AND status <> 'active'
+        )
+        OR EXISTS (
+          SELECT 1 FROM event_scenes AS other
+          WHERE other.event_id = ? AND other.id <> ?
+        )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM sessions
+        WHERE event_id = ? AND scene_id = ?
+          AND status NOT IN ('completed', 'errored')
+      )
+  `).bind(eventId, sceneId, eventId, eventId, sceneId, eventId, sceneId).run();
+
+  if (result.meta.changes === 1) return true;
+  if (!await loadAdminScene(database, eventId, sceneId)) return false;
+  const inProgressSession = await database.prepare(`
+    SELECT 1 FROM sessions
+    WHERE event_id = ? AND scene_id = ?
+      AND status NOT IN ('completed', 'errored')
+    LIMIT 1
+  `).bind(eventId, sceneId).first();
+  if (inProgressSession) throw new SceneDeletionConflictError('Scenes used by in-progress sessions cannot be deleted.');
+  throw new SceneDeletionConflictError('Active events must have at least one scene.');
 }
 
 async function loadAdminScene(database: D1Database, eventId: number, sceneId: string): Promise<AdminScene | null> {

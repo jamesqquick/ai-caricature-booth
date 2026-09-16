@@ -1,9 +1,10 @@
 ---
 import { env } from 'cloudflare:workers';
-import { ExternalLink, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react';
 import { EventFeedback } from '../../../components/admin/EventFeedback';
 import { EventDuplicateControl } from '../../../components/admin/EventDuplicateControl';
 import { EventDeleteControl } from '../../../components/admin/EventDeleteControl';
+import { SceneDeleteDialog } from '../../../components/admin/SceneDeleteDialog';
 import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones';
 import PageHeader from '../../../components/admin/PageHeader.astro';
 import { buttonVariants } from '../../../components/ui/button';
@@ -63,6 +64,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         </PageHeader>
       </div>
       <EventFeedback client:load saved={saved} feedbackCode={feedbackCode} />
+      <SceneDeleteDialog client:load />
 
       <nav class="mt-8 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-border bg-card/60 p-1" aria-label="Event settings">
         {tabs.map((tab) => (
@@ -275,7 +277,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
         <div class="grid max-w-3xl gap-3" id="scene-list">
           <p class="m-0 rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground" id="scene-empty" hidden={scenes.length > 0}>No scenes configured yet. Add the first scene above before activating this event.</p>
           {scenes.map((scene, index) => (
-            <details class="group overflow-hidden rounded-[var(--radius-surface)] border border-border bg-card/40 open:bg-card/65" name="scene-editor" data-scene-accordion open={index === 0}>
+            <details class="group overflow-hidden rounded-[var(--radius-surface)] border border-border bg-card/40 open:bg-card/65" name="scene-editor" data-scene-accordion data-scene-id={scene.id} open={index === 0}>
               <summary class="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
                 <span class="min-w-0">
                   <span class="block truncate font-display text-lg font-semibold" data-scene-title>{scene.name}</span>
@@ -293,6 +295,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
                   <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
                     <Save aria-hidden="true" />
                     Save
+                  </button>
+                  <button class={buttonVariants({ variant: 'destructiveOutline', size: 'sm' })} type="button" data-delete-scene>
+                    <Trash2 aria-hidden="true" />
+                    Delete
                   </button>
                 </div>
                 <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
@@ -321,6 +327,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
                   <Save aria-hidden="true" />
                   Save
                 </button>
+                <button class={buttonVariants({ variant: 'destructiveOutline', size: 'sm' })} type="button" data-delete-scene>
+                  <Trash2 aria-hidden="true" />
+                  Delete
+                </button>
               </div>
               <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
             </form>
@@ -342,6 +352,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
 
 <script>
   import { toast } from 'sonner';
+  import {
+    SCENE_DELETED_EVENT,
+    SCENE_DELETE_REQUEST_EVENT,
+    type SceneDeleteRequestDetail,
+  } from '../../../components/admin/SceneDeleteDialog';
   import {
     createLatestOperationToken,
     createWatermarkPlacementState,
@@ -857,6 +872,34 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
   document.querySelectorAll<HTMLFormElement>('[data-scene-form]').forEach(connectSceneForm);
   document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]').forEach(connectSceneAccordion);
 
+  document.addEventListener('click', (event) => {
+    const trigger = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-delete-scene]') : null;
+    if (!trigger) return;
+    const sceneAccordion = trigger.closest<HTMLDetailsElement>('[data-scene-accordion]');
+    const sceneForm = trigger.closest<HTMLFormElement>('[data-scene-form]');
+    const sceneId = sceneAccordion?.dataset.sceneId;
+    const sceneName = sceneAccordion?.querySelector<HTMLElement>('[data-scene-title]')?.textContent?.trim();
+    if (!sceneForm?.dataset.endpoint || !sceneId || !sceneName) return;
+    window.dispatchEvent(new CustomEvent<SceneDeleteRequestDetail>(SCENE_DELETE_REQUEST_EVENT, {
+      detail: { endpoint: sceneForm.dataset.endpoint, sceneId, sceneName, trigger },
+    }));
+  });
+
+  window.addEventListener(SCENE_DELETED_EVENT, (event) => {
+    const { sceneId } = (event as CustomEvent<{ sceneId: string }>).detail;
+    const sceneAccordion = Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]'))
+      .find((accordion) => accordion.dataset.sceneId === sceneId);
+    if (!sceneAccordion) return;
+    const nextFocus = sceneAccordion.nextElementSibling?.querySelector<HTMLElement>('summary')
+      ?? sceneAccordion.previousElementSibling?.querySelector<HTMLElement>('summary')
+      ?? document.querySelector<HTMLElement>('#add-scene-form input');
+    sceneAccordion.remove();
+    const remainingScenes = document.querySelectorAll('[data-scene-accordion]').length;
+    const empty = document.querySelector<HTMLElement>('#scene-empty');
+    if (empty) empty.hidden = remainingScenes > 0;
+    nextFocus?.focus();
+  });
+
   const addSceneForm = document.querySelector<HTMLFormElement>('#add-scene-form');
   addSceneForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -872,6 +915,7 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     const sceneList = document.querySelector<HTMLElement>('#scene-list');
     const sceneAccordion = template?.content.firstElementChild?.cloneNode(true);
     if (!(sceneAccordion instanceof HTMLDetailsElement) || !sceneList) return;
+    sceneAccordion.dataset.sceneId = result.scene.id;
     const sceneForm = sceneAccordion.querySelector<HTMLFormElement>('[data-scene-form]');
     if (!sceneForm) return;
     sceneForm.dataset.endpoint = `${addSceneForm.dataset.endpoint}/${encodeURIComponent(result.scene.id)}`;
@@ -889,7 +933,8 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
     connectSceneAccordion(sceneAccordion);
     document.querySelectorAll<HTMLDetailsElement>('[data-scene-accordion]').forEach((accordion) => accordion.open = false);
     sceneList.insertAdjacentElement('beforeend', sceneAccordion);
-    document.querySelector<HTMLElement>('#scene-empty')?.remove();
+    const empty = document.querySelector<HTMLElement>('#scene-empty');
+    if (empty) empty.hidden = true;
     addSceneForm.reset();
     const summary = sceneAccordion.querySelector<HTMLElement>('summary');
     summary?.focus();

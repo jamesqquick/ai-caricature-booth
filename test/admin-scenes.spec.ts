@@ -311,6 +311,12 @@ describe('event scene runtime wiring', () => {
         pipeline_ms INTEGER,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE event_scenes (
+        event_id INTEGER NOT NULL,
+        id TEXT NOT NULL,
+        PRIMARY KEY (event_id, id)
+      );
+      INSERT INTO event_scenes (event_id, id) VALUES (1, 'event-scene');
     `);
 
     const result = await createPendingSession(asD1(sqlite), {
@@ -342,6 +348,20 @@ describe('event scene runtime wiring', () => {
 
     expect(conflict.created).toBe(false);
     expect(conflict.session).toMatchObject({ workflow_instance_id: 'workflow-1' });
+
+    sqlite.prepare('DELETE FROM event_scenes WHERE event_id = ? AND id = ?').run(1, 'event-scene');
+    const deletedScene = await createPendingSession(asD1(sqlite), {
+      id: 'session-2',
+      event_id: 1,
+      scene_id: 'event-scene',
+      scene_name: 'Event Scene',
+      selfie_key: 'sessions/session-2/selfie.jpg',
+      selfie_sha256: 'sha256',
+      workflow_instance_id: 'workflow-2',
+    });
+
+    expect(deletedScene.created).toBe(false);
+    expect(deletedScene.session == null).toBe(true);
   });
 
   it('loads route scenes from D1 and passes them into Photobooth', async () => {
