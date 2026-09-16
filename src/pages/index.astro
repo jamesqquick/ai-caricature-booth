@@ -18,6 +18,45 @@ const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
 const featuredScenes = scenes.slice(0, 3);
 const galleryScenes = scenes.slice(0, 4);
 const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
+const pipelineStages = [
+  {
+    title: "Capture",
+    label: "Browser camera",
+    headline: "Take a selfie.",
+    detail: "Take a photo directly in the browser.",
+    icons: [{ type: "camera", label: "Browser camera" }],
+  },
+  {
+    title: "Store",
+    label: "Cloudflare R2",
+    headline: "Store in R2.",
+    detail: "Your selfie uploads privately to Cloudflare R2 before any generation begins.",
+    icons: [{ src: "/icons/cloudflare/r2.svg", label: "Cloudflare R2" }],
+  },
+  {
+    title: "Check",
+    label: "Workers AI",
+    headline: "Check for SFW.",
+    detail: "Workers AI runs a safety check before your photo moves to the generation step.",
+    icons: [{ src: "/icons/cloudflare/workers-ai.svg", label: "Workers AI" }],
+  },
+  {
+    title: "Create",
+    label: "Cloudflare Workflows · Replicate",
+    headline: "Create caricature.",
+    detail: "A Cloudflare Workflow coordinates Replicate as it draws your custom caricature.",
+    icons: [
+      { src: "/icons/cloudflare/workflows.svg", label: "Cloudflare Workflows" },
+    ],
+  },
+  {
+    title: "Overlay",
+    label: "Cloudflare Images",
+    headline: "Add watermark.",
+    detail: "Cloudflare Images adds the watermark and final postcard treatment, ready to download or share.",
+    icons: [{ src: "/icons/cloudflare/images.svg", label: "Cloudflare Images" }],
+  },
+];
 ---
 
 <BoothLayout
@@ -100,7 +139,7 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
             [
               [
                 "01 · CAPTURE",
-                "Take a photo directly in the browser. No app or account required.",
+                "Take a photo directly in the browser.",
               ],
               [
                 "02 · GENERATE",
@@ -191,98 +230,150 @@ const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
         class="mx-auto w-[min(100%_-_3rem,74rem)] border-t border-border py-[clamp(4rem,9vw,7rem)] max-[800px]:w-[min(100%_-_2rem,40rem)]"
         id="pipeline"
       >
-        <SectionHeader
-          title="Six steps from selfie to postcard."
-        />
-        <div class="pipeline-visual overflow-hidden border border-border bg-[color-mix(in_oklch,var(--card),var(--background)_34%)]" data-pipeline aria-label="Animated image processing pipeline">
-          <div class="grid grid-cols-[minmax(16rem,1fr)_minmax(14rem,.8fr)] items-center gap-[clamp(1.5rem,5vw,5rem)] bg-[radial-gradient(circle_at_25%_50%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_18rem)] p-[clamp(1.25rem,4vw,3rem)] max-[800px]:grid-cols-1">
-            <div class="flex min-h-[15rem] flex-col justify-between p-3">
-              <span class="font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">SELFIE · CARICATURE · POSTCARD</span>
-              <span class="pipeline-result-canvas relative mt-3 block aspect-[3/2] min-h-0 overflow-hidden border border-dashed border-primary/55 bg-[repeating-linear-gradient(135deg,transparent_0_.55rem,color-mix(in_oklch,var(--primary)_5%,transparent)_.56rem_1.12rem)]" aria-hidden="true">
-                <span class="pipeline-result-placeholder">AWAITING IMAGE</span>
+        <SectionHeader title="How it works" />
+        <div class="pipeline-visual relative overflow-hidden border border-border bg-[color-mix(in_oklch,var(--card),var(--background)_34%)]" data-pipeline data-stage="0" role="region" aria-label="Animated image processing pipeline">
+          <button class="pipeline-toggle absolute right-4 top-4 z-20 grid size-11 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground transition-[border-color,color,transform] duration-150 hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-95" type="button" data-pipeline-toggle aria-label="Pause animation" aria-pressed="false">
+            <svg data-pipeline-pause-icon viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>
+            <svg data-pipeline-play-icon viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+          </button>
+          <div class="grid grid-cols-[minmax(16rem,1fr)_minmax(14rem,.8fr)] items-center gap-[clamp(1.5rem,5vw,5rem)] bg-[radial-gradient(circle_at_25%_50%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_18rem)] p-[clamp(1.25rem,4vw,3rem)] max-[800px]:grid-cols-1 max-[800px]:pt-16">
+            <div class="flex min-h-[15rem] flex-col justify-center p-3">
+              <span class="pipeline-result-canvas relative block aspect-[3/2] min-h-0 overflow-hidden border border-dashed border-primary/55 bg-[repeating-linear-gradient(135deg,transparent_0_.55rem,color-mix(in_oklch,var(--primary)_5%,transparent)_.56rem_1.12rem)]" aria-hidden="true">
                 <img class="pipeline-result-image" src="/demo-selfie.jpeg" alt="" />
                 <img class="pipeline-result-caricature" src="/demo-caricature.jpeg" alt="" />
+                <span class="pipeline-result-scan"></span>
                 <span class="pipeline-result-ink"></span>
+                <span class="pipeline-shutter"></span>
+                <span class="pipeline-shutter-flash"></span>
+                <span class="pipeline-loader"></span>
                 <span class="pipeline-result-details">
-                  <span>CARICATURE</span>
+                  <span>WATERMARK</span>
                   <span>POSTCARD</span>
                 </span>
               </span>
-              <span class="mt-3 flex items-center justify-between gap-2">
-                <span class="font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">selfie.jpg</span>
-                <span class="text-primary" aria-hidden="true">→</span>
-                <span class="font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">postcard.png</span>
-              </span>
             </div>
-            <div class="self-center">
-              <span class="font-label text-[.62rem] font-extrabold uppercase tracking-[.14em] text-primary">
-                SELFIE TO POSTCARD
-              </span>
-              <h3 class="mt-3 font-display text-[clamp(1.8rem,4vw,3.6rem)] leading-[.95] tracking-[-.06em]">
-                One selfie.<br />One finished postcard.
-              </h3>
-              <p class="mt-4 max-w-[28ch] leading-[1.55] text-muted-foreground">
-                Watch your selfie become a caricature and then a finished postcard.
-              </p>
+            <div class="pipeline-copy-stack self-center">
+              {
+                pipelineStages.map((stage, index) => (
+                  <article class="pipeline-copy" data-pipeline-copy={index} aria-hidden={index !== 0 ? "true" : "false"}>
+                    <div class="pipeline-copy-icons" aria-hidden="true">
+                      {stage.icons.map((icon) => (
+                        "src" in icon ? (
+                          <span class="pipeline-product-icon" style={`--pipeline-icon: url('${icon.src}')`}></span>
+                        ) : icon.type === "camera" ? (
+                          <svg viewBox="0 0 24 24"><path d="M8.5 6 10 4h4l1.5 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
+                        ) : null
+                      ))}
+                    </div>
+                    <span class="font-label text-[.62rem] font-extrabold uppercase tracking-[.14em] text-primary">
+                      0{index + 1} · {stage.label}
+                    </span>
+                    <h3 class="mt-3 font-display text-[clamp(1.8rem,4vw,3.6rem)] leading-[.95] tracking-[-.06em]">
+                      {stage.headline}
+                    </h3>
+                    <p class="mt-4 max-w-[34ch] leading-[1.55] text-muted-foreground">
+                      {stage.detail}
+                    </p>
+                  </article>
+                ))
+              }
             </div>
           </div>
 
-          <div class="pipeline-divider" aria-hidden="true">
-            <span>BEHIND THE SCENES</span>
-          </div>
-
-          <div class="relative mt-5 grid grid-cols-6 gap-px bg-border max-[800px]:grid-cols-2 max-[520px]:grid-cols-1" role="list" aria-label="Technology pipeline">
+          <div class="pipeline-rail relative grid grid-cols-5 gap-px bg-border max-[800px]:grid-cols-2" role="list" aria-label="Technology pipeline">
             {
-              [
-                ["◎", "Take Selfie", "Camera", "Take a selfie with your device camera."],
-                ["↥", "Upload Image", "Cloudflare R2", "The booth uploads your photo to Cloudflare R2."],
-                ["◇", "Check Image", "Workers AI · Image Moderation", "Workers AI checks the photo before generation."],
-                ["✦", "Create Caricature", "Cloudflare Workflows · Replicate", "Replicate creates a caricature using the selected scene."],
-                ["▣", "Make It a Postcard", "Cloudflare Images · Overlay", "The caricature gets its scene and postcard details."],
-                ["⇩", "Download & Share", "Browser download + Web Share", "Download the postcard or share its link."],
-              ].map(([icon, title, copy, detail], index) => (
-                <div class="pipeline-node relative z-[1] flex min-h-[14.5rem] flex-col gap-1.5 border-b-2 border-b-transparent bg-background p-5 transition-[background-color,border-color,transform] duration-200 max-[800px]:min-h-48 max-[520px]:min-h-0" data-pipeline-node={index} role="listitem">
-                  <span class="text-2xl text-primary" aria-hidden="true">{icon}</span>
-                  {index === 0 && <span class="pipeline-node-storage" aria-hidden="true">R2 BUCKET</span>}
+              pipelineStages.map((stage, index) => (
+                <div class={`pipeline-node relative z-[1] flex min-h-[13rem] flex-col gap-2 border-b-2 border-b-transparent bg-background p-5 transition-[background-color,border-color,transform] duration-200 max-[800px]:min-h-[11rem] ${index === pipelineStages.length - 1 ? 'max-[800px]:col-span-2' : ''}`} data-pipeline-node={index} data-state={index === 0 ? "active" : "pending"} role="listitem" aria-current={index === 0 ? "step" : undefined}>
+                  <div class="pipeline-node-icons" aria-hidden="true">
+                    {stage.icons.map((icon) => (
+                      "src" in icon ? (
+                        <span class="pipeline-product-icon" style={`--pipeline-icon: url('${icon.src}')`}></span>
+                      ) : icon.type === "camera" ? (
+                        <svg viewBox="0 0 24 24"><path d="M8.5 6 10 4h4l1.5 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
+                      ) : null
+                    ))}
+                  </div>
                   <span class="mt-auto font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">0{index + 1}</span>
-                  <b class="font-display text-[1.05rem] leading-[1.1]">{title}</b>
-                  <small class="font-label text-[.58rem] font-semibold uppercase leading-[1.3] tracking-[.08em] text-muted-foreground">{copy}</small>
-                  <span class="mt-2 max-w-[18ch] text-[.8rem] leading-[1.45] text-muted-foreground">{detail}</span>
+                  <b class="font-display text-[1.05rem] leading-[1.1]">{stage.title}</b>
+                  <small class="font-label text-[.58rem] font-semibold uppercase leading-[1.3] tracking-[.08em] text-muted-foreground">{stage.label}</small>
                 </div>
               ))
             }
           </div>
-          <p class="pipeline-status m-0 flex items-center gap-2 p-4 font-label text-[.58rem] font-semibold uppercase tracking-[.12em] text-muted-foreground" aria-live="polite">
-            <span class="pipeline-status-dot" aria-hidden="true"></span>
-            <span>PROCESS OVERVIEW · SIX STEPS</span>
-          </p>
+          <p class="sr-only">The booth captures your selfie, stores it with Cloudflare R2, checks it with Workers AI, creates a caricature with Cloudflare Workflows and Replicate, then adds the watermark with Cloudflare Images.</p>
         </div>
         <script>
-          const pipeline = document.querySelector('[data-pipeline]');
-          const pipelineNodes = pipeline
-            ? [...pipeline.querySelectorAll('[data-pipeline-node]')]
-            : [];
-          let pipelineStage = 0;
+          const pipeline = document.querySelector<HTMLElement>('[data-pipeline]');
 
-          const updatePipelineStage = () => {
-            pipelineNodes.forEach((node, index) => {
-              node.setAttribute(
-                'data-state',
-                index < pipelineStage
-                  ? 'complete'
-                  : index === pipelineStage
-                    ? 'active'
-                    : 'pending',
-              );
+          if (pipeline) {
+            const pipelineNodes = [...pipeline.querySelectorAll<HTMLElement>('[data-pipeline-node]')];
+            const pipelineCopies = [...pipeline.querySelectorAll<HTMLElement>('[data-pipeline-copy]')];
+            const toggle = document.querySelector<HTMLButtonElement>('[data-pipeline-toggle]');
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+            let pipelineStage = 0;
+            let intervalId: number | undefined;
+            let isPaused = false;
+
+            const updatePipelineStage = (stageIndex: number, showComplete = false) => {
+              pipeline.dataset.stage = String(stageIndex);
+              pipelineNodes.forEach((node, index) => {
+                const state = showComplete ? 'complete' : index < stageIndex ? 'complete' : index === stageIndex ? 'active' : 'pending';
+                node.dataset.state = state;
+                if (state === 'active') node.setAttribute('aria-current', 'step');
+                else node.removeAttribute('aria-current');
+              });
+              pipelineCopies.forEach((copy, index) => copy.setAttribute('aria-hidden', String(index !== stageIndex)));
+            };
+
+            const stopPipeline = () => {
+              if (intervalId !== undefined) window.clearInterval(intervalId);
+              intervalId = undefined;
+            };
+
+            const schedulePipeline = () => {
+              if (reducedMotion.matches || isPaused) return;
+              intervalId = window.setInterval(() => {
+                pipelineStage = (pipelineStage + 1) % pipelineNodes.length;
+                updatePipelineStage(pipelineStage);
+              }, 3400);
+            };
+
+            const restartStageAnimation = () => {
+              delete pipeline.dataset.stage;
+              void pipeline.offsetWidth;
+              pipeline.dataset.stage = String(pipelineStage);
+            };
+
+            const startPipeline = () => {
+              stopPipeline();
+              isPaused = false;
+              pipelineStage = reducedMotion.matches ? 4 : 0;
+              updatePipelineStage(pipelineStage, reducedMotion.matches);
+              if (toggle) {
+                toggle.hidden = reducedMotion.matches;
+                toggle.setAttribute('aria-pressed', 'false');
+                toggle.setAttribute('aria-label', 'Pause animation');
+              }
+              pipeline.dataset.paused = 'false';
+              schedulePipeline();
+            };
+
+            toggle?.addEventListener('click', () => {
+              isPaused = !isPaused;
+              stopPipeline();
+              pipeline.dataset.paused = String(isPaused);
+              toggle.setAttribute('aria-pressed', String(isPaused));
+              toggle.setAttribute('aria-label', isPaused ? 'Resume animation' : 'Pause animation');
+              if (!isPaused) restartStageAnimation();
+              schedulePipeline();
             });
-          };
 
-          if (pipelineNodes.length) {
-            updatePipelineStage();
-            window.setInterval(() => {
-              pipelineStage = (pipelineStage + 1) % pipelineNodes.length;
-              updatePipelineStage();
-            }, 1800);
+            reducedMotion.addEventListener('change', startPipeline);
+            window.addEventListener('pagehide', stopPipeline);
+            window.addEventListener('pageshow', (event) => {
+              if (event.persisted) startPipeline();
+            });
+            startPipeline();
           }
         </script>
       </section>
