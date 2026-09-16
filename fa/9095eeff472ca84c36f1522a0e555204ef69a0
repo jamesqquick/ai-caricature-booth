@@ -1,0 +1,73 @@
+src/components/AttendeePrintControl.tsx
+  s_ca0349d7f4ec66::t_e459c4550f0237 7,209-211,222
+src/components/Navbar.astro
+  s_ca0349d7f4ec66::t_cc8f0b378ef615 4,25-28,38-42,52
+src/components/Stepper.tsx
+  s_ca0349d7f4ec66::t_bd5993950c3d9c 1-2,26-29,38
+src/components/admin/AdminNavbar.astro
+  s_ca0349d7f4ec66::t_9a497b3447f626 5,32-35,43,47-50,57,92-95,105
+src/components/admin/ImagePreview.tsx
+  s_ca0349d7f4ec66::t_f7f7b3b2dcd4dc 2,62,65-66,81
+src/components/admin/OperationsDashboard.tsx
+  s_4e52ff0be6211b::t_8471526753d0cc 3,297,299
+src/components/admin/PrintHistory.tsx
+  s_ca0349d7f4ec66::t_d613cc5ba88983 268
+src/components/steps/CameraStep.tsx
+  s_ca0349d7f4ec66::t_9fae5bedead539 205-208,214
+src/components/steps/SceneStep.tsx
+  s_ca0349d7f4ec66::t_b2f11f64c1117c 30-33,48
+src/components/ui/alert-dialog.tsx
+  s_ca0349d7f4ec66::t_d85050176da54b 4,73-75,83-85
+src/components/ui/button.tsx
+  s_ca0349d7f4ec66::t_c0a2f92690c084 7,18,21,25,28-34
+src/components/ui/popup-overlay.tsx
+  s_4e52ff0be6211b::t_22d37620d6f4a0 4,69,75,82,84-85,92
+src/components/ui/tooltip-hint.tsx
+  s_ca0349d7f4ec66::t_c041961d6d5a77 2,15,17-18,23
+src/pages/admin/events/[slug].astro
+  s_ca0349d7f4ec66::t_9447437aa94069 10,86,90,126,129,149,152,217,220,244,247,269,272,295,298-299,302,326,329-330,333
+src/pages/admin/events/new.astro
+  s_ca0349d7f4ec66::t_5ba75ae3172812 2,37
+src/pages/p/[sessionId].astro
+  s_ca0349d7f4ec66::t_0279263b1edd32 11,96-99,114
+src/styles/global.css
+  s_ca0349d7f4ec66::t_e9d8f8569f34d2 132-133
+test/admin-event-edit.spec.ts
+  s_ca0349d7f4ec66::t_c9f5a6c3f6e6bc 174-175
+test/admin-navbar.spec.ts
+  s_ca0349d7f4ec66::t_5ace0cf9e35667 55-57
+test/admin-watermark.spec.ts
+  s_ca0349d7f4ec66::t_0f2e59f7c4106c 673-674,682
+test/button-policy.spec.ts
+  s_ca0349d7f4ec66::t_5b5ccbbfdf217d 1-38
+test/button.spec.tsx
+  s_ca0349d7f4ec66::t_c69676c81b23a0 36-45,47-66
+test/sound.spec.ts
+  s_ca0349d7f4ec66::t_30596a3fe58bd0 23-25
+test/theme.spec.ts
+  s_ca0349d7f4ec66::t_5e7c78a5e08e20 13-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fa9095eeff472ca84c36f1522a0e555204ef69a0",
+  "prompts": {},
+  "sessions": {
+    "s_4e52ff0be6211b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f55410d69ffeEs59QTJRH63ncc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_ca0349d7f4ec66": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5574f853ffePcqakvVG3C3RpA",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
