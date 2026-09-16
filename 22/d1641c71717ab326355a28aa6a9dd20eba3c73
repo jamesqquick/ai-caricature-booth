@@ -1,0 +1,61 @@
+src/components/AttendeePrintControl.tsx
+  s_b3d4914c0f33c9::t_b25dbb4699f092 7,209-211,222
+src/components/Navbar.astro
+  s_b3d4914c0f33c9::t_277cc9128a2dee 4,25-28,38-42,52
+src/components/Stepper.tsx
+  s_b3d4914c0f33c9::t_68dd79ef9ca2b8 1-2,26-29,38
+src/components/admin/AdminNavbar.astro
+  s_b3d4914c0f33c9::t_23c04d8cac9f77 5,32-35,43,47-50,57,92-95,105
+src/components/admin/ImagePreview.tsx
+  s_b3d4914c0f33c9::t_c5d201d82d2b87 2,62,65-66,81
+src/components/admin/PrintHistory.tsx
+  s_b3d4914c0f33c9::t_c903902601b746 268
+src/components/steps/CameraStep.tsx
+  s_b3d4914c0f33c9::t_699a5e6c8fe341 205-208,214
+src/components/steps/SceneStep.tsx
+  s_b3d4914c0f33c9::t_63a08c1f52872b 30-33,48
+src/components/ui/alert-dialog.tsx
+  s_b3d4914c0f33c9::t_2cdf358dfdcc6e 4,73-75,83-85
+src/components/ui/button.tsx
+  s_b3d4914c0f33c9::t_8c7bf0e36a279e 7,18,21,25,28-34
+src/components/ui/tooltip-hint.tsx
+  s_b3d4914c0f33c9::t_173413ebc7a450 2,15,17-18,23
+src/pages/admin/events/[slug].astro
+  s_b3d4914c0f33c9::t_c062d5c05e00a8 10,86,90,126,129,149,152,217,220,244,247,269,272,295,298-299,302,326,329-330,333
+src/pages/admin/events/new.astro
+  s_b3d4914c0f33c9::t_25248dbbe53f6d 2,37
+src/pages/p/[sessionId].astro
+  s_b3d4914c0f33c9::t_f722f9f247d286 11,96-99,114
+src/styles/global.css
+  s_b3d4914c0f33c9::t_ab804317ae1b03 132-133
+test/admin-event-edit.spec.ts
+  s_b3d4914c0f33c9::t_57273d6e95e613 174-175
+test/admin-navbar.spec.ts
+  s_b3d4914c0f33c9::t_d6b1df878d8efe 55-57
+test/admin-watermark.spec.ts
+  s_b3d4914c0f33c9::t_dc05f033eff23b 673-674,682
+test/button-policy.spec.ts
+  s_b3d4914c0f33c9::t_d5692e11786824 1-38
+test/button.spec.tsx
+  s_b3d4914c0f33c9::t_88af467fe509f1 36-45,47-66
+test/sound.spec.ts
+  s_b3d4914c0f33c9::t_68f848c756b58d 23-25
+test/theme.spec.ts
+  s_b3d4914c0f33c9::t_27505c409baa61 13-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "22d1641c71717ab326355a28aa6a9dd20eba3c73",
+  "prompts": {},
+  "sessions": {
+    "s_b3d4914c0f33c9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f557616c1ffes3c9ZLsyH4aNBo",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
