@@ -1,0 +1,37 @@
+src/components/Navbar.astro
+  s_9aed2359b783e7::t_67e568ea33e533 4,25-28,38-42,52
+src/components/admin/AdminNavbar.astro
+  s_9aed2359b783e7::t_a57381d2f1a59e 5,32-35,43,47-50,57,92-95,105
+src/components/ui/popup-overlay.tsx
+  s_cec85b8e9b945d::t_a578ac93d4b274 4,69,75,82,84-85,92
+src/pages/admin/events/[slug].astro
+  s_9aed2359b783e7::t_99fc9436b8fbde 10,86,90,126,129,149,152,217,220,244,247,269,272,295,298-299,302,326,329-330,333
+src/pages/admin/events/new.astro
+  s_9aed2359b783e7::t_7a0c79513a5520 2,37
+src/pages/p/[sessionId].astro
+  s_9aed2359b783e7::t_d7a82a0c301412 11,96-99,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "986915a2380213e619a8a375df936fdc9efc3019",
+  "prompts": {},
+  "sessions": {
+    "s_9aed2359b783e7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5525ed32ffewOg6mk6c1n7Xt7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_cec85b8e9b945d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f554b206affe3EybK36VLT8D0U",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
