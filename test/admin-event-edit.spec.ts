@@ -171,7 +171,8 @@ describe('admin event editing', () => {
 
     expect(results.flatMap((result) => result.diagnostics)).toEqual([]);
     expect(source).toContain("import { ExternalLink, Plus, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react'");
-    expect(source).toContain("buttonVariants({ variant: 'primary'");
+    expect(source).toContain("import { Button, buttonVariants } from '../../../components/ui/button'");
+    expect(source).toContain('<Button type="submit">');
     expect(source).toContain("buttonVariants({ variant: 'outline'");
     expect(source).toContain('{loadFailed && <RefreshCw aria-hidden="true" />}');
     expect(source).toContain("{loadFailed ? 'Retry' : 'Back to events'}");

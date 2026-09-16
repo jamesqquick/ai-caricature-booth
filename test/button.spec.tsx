@@ -33,8 +33,37 @@ describe('Button', () => {
     expect(buttonVariants({ size: 'icon' })).toContain('size-11');
   });
 
+  it.each([
+    ['sm', 'text-xs', 'text-sm'],
+    ['lg', 'text-base', 'text-sm'],
+  ] as const)('preserves the %s typography', (size, expectedClass, conflictingClass) => {
+    const classes = buttonVariants({ size });
+
+    expect(classes).toContain(expectedClass);
+    expect(classes).not.toContain(conflictingClass);
+  });
+
   it('shows a pointer cursor for enabled controls', () => {
-    expect(buttonVariants()).toContain('cursor-pointer');
+    const classes = buttonVariants();
+
+    expect(classes).toContain('cursor-pointer');
+    expect(classes).toContain('disabled:cursor-default');
+    expect(classes).toContain('aria-disabled:cursor-default');
+  });
+
+  it('supports bespoke controls without visual defaults', () => {
+    const classes = buttonVariants({ variant: 'unstyled', size: 'unstyled' });
+
+    expect(classes).toContain('cursor-pointer');
+    expect(classes).toContain('bg-transparent');
+    expect(classes).toContain('min-h-0');
+    expect(classes).not.toContain('border-primary');
+    expect(classes).not.toContain('min-h-12');
+    expect(classes).not.toContain('rounded-full');
+    expect(classes).not.toContain('text-sm');
+    expect(classes).not.toContain('font-bold');
+    expect(classes).not.toContain('transition-[');
+    expect(classes).not.toContain('[&_svg]:size-4');
   });
 
   it('passes the button contract through Slot', () => {

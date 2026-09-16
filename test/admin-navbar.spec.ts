@@ -52,7 +52,9 @@ describe('admin mobile navigation', () => {
     const source = await readFile(new NodeURL('../src/components/admin/AdminNavbar.astro', import.meta.url), 'utf8');
 
     expect(source).toContain("import { Menu, Moon, Sun, X } from 'lucide-react'");
-    expect(source).toContain("buttonVariants({ variant: 'outline', size: 'icon' })");
+    expect(source).toContain("import { Button } from '../ui/button'");
+    expect(source).toContain('variant="outline"');
+    expect(source).toContain('size="icon"');
     expect(source).toContain('data-admin-menu-toggle');
     expect(source).toContain('data-admin-menu-close');
     expect(source).toContain('hover:text-primary');

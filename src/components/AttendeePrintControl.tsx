@@ -4,6 +4,7 @@ import type { PrintJobStatus } from '../db/print-jobs';
 import { fetchWithDeadline, RequestDeadlineError } from '../lib/fetch-with-deadline';
 import { setPrintActive } from '../lib/print-activity';
 import { readPrintCapability } from '../lib/print-capability-storage';
+import { Button } from './ui/button';
 
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_INTERVAL_MS = 8_000;
@@ -205,7 +206,9 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
 
   return (
     <div className="contents">
-      <button
+      <Button
+        variant="unstyled"
+        size="unstyled"
         className="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full border border-[oklch(76%_.14_150)] bg-[oklch(76%_.14_150)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[.5deg] hover:border-[oklch(82%_.12_150)] hover:bg-[oklch(82%_.12_150)] hover:shadow-[0_.75rem_2rem_oklch(60%_.14_150_/.25)] active:translate-y-0 disabled:pointer-events-none disabled:cursor-default disabled:opacity-60 max-[600px]:w-full"
         type="button"
         disabled={disabled}
@@ -216,7 +219,7 @@ export function AttendeePrintControl({ eventId, sessionId }: Props) {
           <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z" />
         </svg>
         <span>{buttonLabel}</span>
-      </button>
+      </Button>
       {error ? (
         <span className="sr-only" role="alert">{error}</span>
       ) : (

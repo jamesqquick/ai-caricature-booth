@@ -8,6 +8,7 @@ import { loadSession } from "../../db/sessions";
 import { ReviewTimeoutPrompt } from "../../components/ReviewTimeoutPrompt";
 import { AttendeePrintControl } from "../../components/AttendeePrintControl";
 import { Toaster } from "../../components/ui/sonner";
+import { Button } from "../../components/ui/button";
 import { isGenerationReview } from "../../lib/review-entry";
 
 export const prerender = false;
@@ -92,8 +93,10 @@ const title = isAvailable
               </svg>
               <span>Download</span>
             </a>
-             <button
-               class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full border border-[oklch(71%_.2_330)] bg-[oklch(71%_.2_330)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-1deg] hover:border-[oklch(77%_.18_330)] hover:bg-[oklch(77%_.18_330)] hover:shadow-[0_.75rem_2rem_oklch(60%_.2_330_/.28)] active:translate-y-0 max-[600px]:w-full"
+              <Button
+                variant="unstyled"
+                size="unstyled"
+                className="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full border border-[oklch(71%_.2_330)] bg-[oklch(71%_.2_330)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-1deg] hover:border-[oklch(77%_.18_330)] hover:bg-[oklch(77%_.18_330)] hover:shadow-[0_.75rem_2rem_oklch(60%_.2_330_/.28)] active:translate-y-0 max-[600px]:w-full"
               type="button"
               data-share
               aria-label="Share postcard"
@@ -108,7 +111,7 @@ const title = isAvailable
                 </>
               </svg>
               <span>Share</span>
-            </button>
+             </Button>
              <AttendeePrintControl client:load eventId={session!.event_id} sessionId={sessionId} />
              <a
                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[oklch(82%_.17_85)] bg-[oklch(82%_.17_85)] px-[1.15rem] font-bold text-[oklch(16%_.025_55)] no-underline transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:rotate-[-.5deg] hover:border-[oklch(88%_.15_85)] hover:bg-[oklch(88%_.15_85)] hover:shadow-[0_.75rem_2rem_oklch(65%_.17_85_/.25)] active:translate-y-0 max-[600px]:w-full"

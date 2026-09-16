@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { Button } from './button';
 
 type PopupOverlayProps = {
   open: boolean;
@@ -64,28 +65,30 @@ export function PopupOverlay({ open, label, closeLabel = 'Close dialog', size = 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
       role="presentation"
       onClick={onClose}
     >
       <div
         ref={dialogRef}
-        className={`relative max-h-[calc(100dvh-2rem)] w-full ${size === 'compact' ? 'max-w-lg' : 'max-w-5xl'} overflow-y-auto rounded-[var(--radius-surface)] border border-border bg-card p-4 shadow-2xl outline-none sm:p-6`}
+        className={`relative max-h-[calc(100dvh-2rem)] w-full ${size === 'compact' ? 'max-w-lg' : 'max-w-5xl'} cursor-default overflow-y-auto rounded-[var(--radius-surface)] border border-border bg-card p-4 shadow-2xl outline-none sm:p-6`}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           className="absolute right-3 top-3 z-10 inline-flex size-11 items-center justify-center rounded-full border border-border bg-card text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
           onClick={onClose}
           aria-label={closeLabel}
           title={closeLabel}
         >
           <X aria-hidden="true" size={18} strokeWidth={2.5} />
-        </button>
+        </Button>
         {children}
       </div>
     </div>

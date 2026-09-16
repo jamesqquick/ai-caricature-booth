@@ -7,7 +7,7 @@ import { EventDeleteControl } from '../../../components/admin/EventDeleteControl
 import { SceneDeleteDialog } from '../../../components/admin/SceneDeleteDialog';
 import { WatermarkDropzones } from '../../../components/admin/WatermarkDropzones';
 import PageHeader from '../../../components/admin/PageHeader.astro';
-import { buttonVariants } from '../../../components/ui/button';
+import { Button, buttonVariants } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Select } from '../../../components/ui/select';
 import { TooltipHint } from '../../../components/ui/tooltip-hint';
@@ -83,11 +83,11 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <h2 class="m-0 font-display text-xl font-semibold" id="watermark-heading">Postcard watermarks</h2>
             <p class="mb-0 mt-2 text-sm text-muted-foreground">Upload independent PNGs displayed in the bottom corners of generated postcards.</p>
           </div>
-          <button class={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'shrink-0')} id="save-watermarks" type="button" disabled>
+          <Button className="shrink-0" size="sm" id="save-watermarks" type="button" disabled>
             <Save className={event.watermark_image_key || event.watermark_image_key_left ? undefined : 'hidden'} aria-hidden="true" data-watermark-save-icon />
             <Upload className={event.watermark_image_key || event.watermark_image_key_left ? 'hidden' : undefined} aria-hidden="true" data-watermark-upload-icon />
             <span data-watermark-save-label>{event.watermark_image_key || event.watermark_image_key_left ? 'Save' : 'Upload'}</span>
-          </button>
+          </Button>
         </div>
         <div class="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
           <div class="grid gap-2">
@@ -123,10 +123,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form-left" data-watermark-side="left" data-has-watermark={event.watermark_image_key_left ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark?side=left`} novalidate>
             <div class="flex items-center justify-between gap-3" data-watermark-card-header>
               <h3 class="m-0 font-display text-lg font-semibold">Left watermark</h3>
-              <button class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key_left && 'hidden')} data-remove-watermark type="button">
+              <Button className={cn('shrink-0', !event.watermark_image_key_left && 'hidden')} variant="destructiveOutline" size="sm" data-remove-watermark type="button">
                 <X aria-hidden="true" />
                 Remove
-              </button>
+              </Button>
             </div>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
@@ -146,10 +146,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <form class="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4" id="watermark-form" data-watermark-side="right" data-has-watermark={event.watermark_image_key ? 'true' : 'false'} data-endpoint={`/api/admin/events/${encodeURIComponent(event.slug)}/watermark`} novalidate>
             <div class="flex items-center justify-between gap-3" data-watermark-card-header>
               <h3 class="m-0 font-display text-lg font-semibold">Right watermark</h3>
-              <button class={cn(buttonVariants({ variant: 'destructiveOutline', size: 'sm' }), 'shrink-0', !event.watermark_image_key && 'hidden')} id="remove-watermark" data-remove-watermark type="button">
+              <Button className={cn('shrink-0', !event.watermark_image_key && 'hidden')} variant="destructiveOutline" size="sm" id="remove-watermark" data-remove-watermark type="button">
                 <X aria-hidden="true" />
                 Remove
-              </button>
+              </Button>
             </div>
             <div class="grid grid-cols-3 gap-3">
               <div class="grid min-w-0 gap-2">
@@ -214,10 +214,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           </div>
         </div>
           <div class="flex flex-wrap items-center gap-3">
-            <button class={buttonVariants({ variant: 'primary' })} type="submit">
+            <Button type="submit">
               <Save aria-hidden="true" />
               Save
-            </button>
+            </Button>
             <a class={cn(buttonVariants({ variant: 'outline' }), event.status !== 'active' && 'hidden')} id="attendee-page-link" href={`/e/${encodeURIComponent(event.slug)}`}>
               <ExternalLink aria-hidden="true" />
               View attendee page
@@ -241,10 +241,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
             <textarea class="min-h-32 rounded-xl border border-border bg-card px-4 py-3 text-foreground" id="scene_constraints" name="scene_constraints" maxlength="2000">{event.scene_constraints ?? ''}</textarea>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            <button class={buttonVariants({ variant: 'primary' })} type="submit">
+            <Button type="submit">
               <Save aria-hidden="true" />
               Save
-            </button>
+            </Button>
             <p class="m-0 text-sm text-muted-foreground" role="status" aria-live="polite" data-event-status></p>
           </div>
         </section>
@@ -266,10 +266,10 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
           <label class="grid gap-2 font-label text-sm font-bold">Description<input class="min-h-11 rounded-xl border border-border bg-card px-3 font-sans font-normal text-foreground" name="description" required maxlength="300" /></label>
           <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
           <div class="flex flex-wrap items-center gap-3">
-            <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+            <Button size="sm" type="submit">
               <Plus aria-hidden="true" />
               Add
-            </button>
+            </Button>
             <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
           </div>
         </form>
@@ -292,14 +292,14 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
                 <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300">{scene.description}</textarea></label>
                 <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000">{scene.prompt}</textarea></label>
                 <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                  <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+                  <Button size="sm" type="submit">
                     <Save aria-hidden="true" />
                     Save
-                  </button>
-                  <button class={buttonVariants({ variant: 'destructiveOutline', size: 'sm' })} type="button" data-delete-scene>
+                  </Button>
+                  <Button variant="destructiveOutline" size="sm" type="button" data-delete-scene>
                     <Trash2 aria-hidden="true" />
                     Delete
-                  </button>
+                  </Button>
                 </div>
                 <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
               </form>
@@ -323,14 +323,14 @@ if (!event) Astro.response.status = loadFailed ? 503 : 404;
               <label class="grid gap-2 font-label text-sm font-bold">Description<textarea class="min-h-24 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="description" required maxlength="300"></textarea></label>
               <label class="grid gap-2 font-label text-sm font-bold">Image prompt<textarea class="min-h-32 rounded-xl border border-border bg-card px-3 py-2 font-sans font-normal text-foreground" name="prompt" required maxlength="2000"></textarea></label>
               <div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-                <button class={buttonVariants({ variant: 'primary', size: 'sm' })} type="submit">
+                <Button size="sm" type="submit">
                   <Save aria-hidden="true" />
                   Save
-                </button>
-                <button class={buttonVariants({ variant: 'destructiveOutline', size: 'sm' })} type="button" data-delete-scene>
+                </Button>
+                <Button variant="destructiveOutline" size="sm" type="button" data-delete-scene>
                   <Trash2 aria-hidden="true" />
                   Delete
-                </button>
+                </Button>
               </div>
               <p class="m-0 min-h-5 text-sm text-muted-foreground" role="status" aria-live="polite" data-scene-status></p>
             </form>
