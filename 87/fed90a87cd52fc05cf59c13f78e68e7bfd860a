@@ -1,0 +1,55 @@
+src/components/admin/AdminSessionsList.tsx
+  s_4c0fbefc77b262::t_9934cd865a6405 1-479
+src/components/admin/OperationsDashboard.tsx
+  s_ca0349d7f4ec66::t_31355ad9221942 1-2,6,12,14,17,26-30,45,58-71,120
+src/lib/admin-filters.ts
+  s_ca0349d7f4ec66::t_20f908dc70d0a5 3-5,16,21,30-33,52-93,124-128,150,166
+src/lib/admin-layout.ts
+  s_ca0349d7f4ec66::t_c1d1915b5528a6 6
+src/pages/admin/sessions/index.astro
+  s_4c0fbefc77b262::t_f61ba4ecc56332 1-113
+src/pages/api/admin/sessions.ts
+  s_ca0349d7f4ec66::t_fa1a4b93bae61f 4,11-13
+test/admin-api.spec.ts
+  s_9aed2359b783e7::t_29775aab2299e5 1,43-46,91-112
+test/admin-dashboard.spec.ts
+  s_ca0349d7f4ec66::t_e52fb370418624 13,60-61,73-100
+test/admin-filters.spec.ts
+  s_ca0349d7f4ec66::t_82800ca719a1eb 3-4,6-8,16-28,47,97-156
+test/admin-sessions-index.spec.ts
+  s_4c0fbefc77b262::t_cc7b220138ca76 1-75
+test/admin-sessions-list.spec.tsx
+  s_4c0fbefc77b262::t_521af8fc3cbbe3 1-316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "87fed90a87cd52fc05cf59c13f78e68e7bfd860a",
+  "prompts": {},
+  "sessions": {
+    "s_4c0fbefc77b262": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f554df977ffeioQamMxV92Ofi1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_9aed2359b783e7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5525ed32ffewOg6mk6c1n7Xt7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    },
+    "s_ca0349d7f4ec66": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f5574f853ffePcqakvVG3C3RpA",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
