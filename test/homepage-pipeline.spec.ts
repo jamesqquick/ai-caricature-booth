@@ -40,7 +40,7 @@ describe('homepage generation pipeline', () => {
     expect(source).toContain('data-pipeline-play-icon');
     expect(source).toContain('class="pipeline-loader"');
     expect(source).toContain('restartStageAnimation()');
-    expect(source).toMatch(/<div class="pipeline-visual[^>]*data-pipeline[^>]*>\s*<button[^>]*data-pipeline-toggle/);
+    expect(source).toMatch(/<div class="pipeline-visual[^>]*data-pipeline[^>]*>\s*<Button[^>]*data-pipeline-toggle/);
     expect(source).toContain('<span>WATERMARK</span>');
     expect(source).not.toContain('<span>CARICATURE</span>');
     expect(source).not.toContain('pipeline-divider');

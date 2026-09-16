@@ -1,6 +1,7 @@
 ---
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
+import { Button } from "../components/ui/button";
 import { Image } from "astro:assets";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
@@ -232,10 +233,10 @@ const pipelineStages = [
       >
         <SectionHeader title="How it works" />
         <div class="pipeline-visual relative overflow-hidden border border-border bg-[color-mix(in_oklch,var(--card),var(--background)_34%)]" data-pipeline data-stage="0" role="region" aria-label="Animated image processing pipeline">
-          <button class="pipeline-toggle absolute right-4 top-4 z-20 grid size-11 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground transition-[border-color,color,transform] duration-150 hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-95" type="button" data-pipeline-toggle aria-label="Pause animation" aria-pressed="false">
+          <Button variant="unstyled" size="unstyled" className="pipeline-toggle absolute right-4 top-4 z-20 grid size-11 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground transition-[border-color,color,transform] duration-150 hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-95" type="button" data-pipeline-toggle aria-label="Pause animation" aria-pressed="false">
             <svg data-pipeline-pause-icon viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>
             <svg data-pipeline-play-icon viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
-          </button>
+          </Button>
           <div class="grid grid-cols-[minmax(16rem,1fr)_minmax(14rem,.8fr)] items-center gap-[clamp(1.5rem,5vw,5rem)] bg-[radial-gradient(circle_at_25%_50%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_18rem)] p-[clamp(1.25rem,4vw,3rem)] max-[800px]:grid-cols-1 max-[800px]:pt-16">
             <div class="flex min-h-[15rem] flex-col justify-center p-3">
               <span class="pipeline-result-canvas relative block aspect-[3/2] min-h-0 overflow-hidden border border-dashed border-primary/55 bg-[repeating-linear-gradient(135deg,transparent_0_.55rem,color-mix(in_oklch,var(--primary)_5%,transparent)_.56rem_1.12rem)]" aria-hidden="true">
