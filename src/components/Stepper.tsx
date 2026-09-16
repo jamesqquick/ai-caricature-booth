@@ -1,3 +1,5 @@
+import { Button } from './ui/button';
+
 type Step = {
   id: string;
   label: string;
@@ -21,8 +23,10 @@ export function Stepper({ steps, activeIndex, onSceneClick }: StepperProps) {
             aria-label={`${step.label}, ${index === activeIndex ? 'current step' : index < activeIndex ? 'completed' : 'upcoming'}`}
           >
             {step.id === 'scene' && onSceneClick ? (
-              <button
-                className="inline-flex items-center gap-2 bg-transparent p-0 text-inherit"
+              <Button
+                variant="unstyled"
+                size="unstyled"
+                className="inline-flex items-center gap-2 bg-transparent p-0 font-[inherit] text-inherit"
                 type="button"
                 onClick={onSceneClick}
                 aria-label="Return to scene selection"
@@ -31,7 +35,7 @@ export function Stepper({ steps, activeIndex, onSceneClick }: StepperProps) {
                   {index + 1}
                 </span>
                 <small className="text-[.65rem] font-bold uppercase tracking-[.12em] max-[800px]:hidden">{step.label}</small>
-              </button>
+              </Button>
             ) : (
               <>
                 <span className={`grid size-7 place-items-center rounded-full border border-current text-[.65rem] font-extrabold ${index < activeIndex ? 'bg-primary text-primary-foreground' : index === activeIndex ? 'border-2 border-foreground text-foreground' : ''}`}>

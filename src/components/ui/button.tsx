@@ -4,7 +4,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '../../lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex cursor-pointer items-center justify-center gap-2 rounded-full whitespace-nowrap text-sm font-bold no-underline transition-[background-color,color,opacity,transform,box-shadow] duration-200 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'cursor-pointer disabled:cursor-default aria-disabled:cursor-default disabled:pointer-events-none [&_svg]:pointer-events-none',
   {
     variants: {
       variant: {
@@ -15,14 +15,23 @@ const buttonVariants = cva(
         destructiveOutline: 'border border-destructive/50 bg-transparent text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive',
         ghost: 'bg-transparent px-2 text-muted-foreground hover:text-foreground',
         contrast: 'border border-foreground bg-foreground text-background hover:-translate-y-0.5 hover:opacity-90 active:translate-y-0',
+        unstyled: 'bg-transparent text-inherit',
       },
       size: {
-        default: 'min-h-12 px-6',
+        default: 'min-h-12 px-6 text-sm',
         sm: 'min-h-11 px-4 text-xs',
         lg: 'min-h-14 px-8 text-base',
         icon: 'size-11 p-0',
+        unstyled: 'min-h-0 p-0',
       },
     },
+    compoundVariants: [
+      {
+        variant: ['primary', 'secondary', 'outline', 'destructive', 'destructiveOutline', 'ghost', 'contrast'],
+        className:
+          'inline-flex items-center justify-center gap-2 rounded-full whitespace-nowrap font-bold no-underline transition-[background-color,color,opacity,transform,box-shadow] duration-200 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0',
+      },
+    ],
     defaultVariants: {
       variant: 'primary',
       size: 'default',

@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import { buttonVariants } from '../ui/button';
+import { Button, buttonVariants } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select } from '../ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -294,9 +294,9 @@ export function OperationsDashboard({
       {isStale && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">
           <span>Dashboard data couldn't be refreshed. Showing the most recent data.</span>
-          <button className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
+          <Button variant="unstyled" size="unstyled" className="inline-flex min-h-11 items-center rounded-full border border-foreground/40 px-4 font-bold hover:border-foreground" type="button" onClick={() => setRetrySequence((value) => value + 1)}>
             Retry now
-          </button>
+          </Button>
         </div>
       )}
 

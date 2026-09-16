@@ -202,14 +202,16 @@ export function CameraStep({ onUsePhoto }: Props) {
         <div className="flex flex-col items-center justify-center text-center">
           {status !== 'preview' ? (
             <>
-              <button
-                className="relative mb-5 size-[clamp(5.4rem,10vw,7rem)] rounded-full border-[7px] border-foreground bg-primary shadow-[0_0_0_7px_oklch(95%_.015_75_/.12)] transition-transform duration-150 hover:enabled:scale-[1.04] active:enabled:scale-95 disabled:cursor-wait disabled:opacity-30"
+              <Button
+                variant="unstyled"
+                size="unstyled"
+                className="relative mb-5 size-[clamp(5.4rem,10vw,7rem)] rounded-full border-[7px] border-foreground bg-primary shadow-[0_0_0_7px_oklch(95%_.015_75_/.12)] transition-transform duration-150 hover:enabled:scale-[1.04] active:enabled:scale-95 disabled:pointer-events-auto disabled:cursor-wait disabled:opacity-30"
                 type="button"
                 disabled={status !== 'live'}
                 onClick={() => void beginCountdown()}
               >
                 <span className="sr-only">Take photo</span>
-              </button>
+              </Button>
             </>
           ) : (
             <div className="flex w-full max-w-xs flex-col gap-3">

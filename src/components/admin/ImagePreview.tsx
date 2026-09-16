@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../ui/button';
 import { PopupOverlay } from '../ui/popup-overlay';
 
 type ImagePreviewProps = {
@@ -58,9 +59,11 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
             className="absolute inset-0 z-10 border-0"
           />
         )}
-        <button
+        <Button
           ref={triggerRef}
           type="button"
+          variant="unstyled"
+          size="unstyled"
           className={`block w-full cursor-zoom-in rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 ${compact ? 'h-full min-h-16' : 'min-h-56'}`}
           onClick={() => setIsOpen(true)}
           aria-label={`Expand ${alt}`}
@@ -75,7 +78,7 @@ export function ImagePreview({ src, alt, downloadHref, fullSrc = src, compact = 
             onLoad={() => setStatus('loaded')}
             onError={() => setStatus('error')}
           />
-        </button>
+        </Button>
       </div>
       {showDownload && downloadHref && (
         <a className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary hover:text-primary" href={downloadHref} aria-label={`Download ${alt}`} download>

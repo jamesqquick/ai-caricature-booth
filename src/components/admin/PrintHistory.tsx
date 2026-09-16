@@ -265,7 +265,7 @@ export function PrintHistory({ sessionId, hasPostcard, initialJobs }: Props) {
 
       {alert && (
         <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-foreground" role="alert">
-          {alert} <button type="button" className="font-bold underline" onClick={refreshNow}>Check print history</button>
+          {alert} <Button type="button" variant="unstyled" size="unstyled" className="font-bold underline" onClick={refreshNow}>Check print history</Button>
         </div>
       )}
       <span className="sr-only" role="status" aria-live="polite">{isMutating ? 'Updating print queue.' : ''}</span>
