@@ -3,6 +3,7 @@ import { ADMIN_EMAIL_HEADER } from './admin-access';
 export const ADMIN_NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin' },
   { label: 'Events', href: '/admin/events' },
+  { label: 'Sessions', href: '/admin/sessions' },
 ] as const;
 
 export function getAdminEmail(request: Request) {

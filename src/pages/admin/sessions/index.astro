@@ -1,0 +1,113 @@
+---
+import { env } from 'cloudflare:workers';
+import {
+  AdminSessionsList,
+  type AdminLoadErrorRecovery,
+} from '../../../components/admin/AdminSessionsList';
+import PageHeader from '../../../components/admin/PageHeader.astro';
+import { loadAdminEventOptions, loadAdminSessions } from '../../../db/admin';
+import { SESSION_STATUSES } from '../../../db/sessions';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import {
+  ADMIN_SESSION_PAGE_SIZE,
+  AdminFilterValidationError,
+  canonicalAdminSessionsFilterUrl,
+  canonicalAdminSessionsPageUrl,
+  normalizeAdminFilters,
+} from '../../../lib/admin-filters';
+import { toAdminSessionListResult } from '../../../lib/admin-session-list';
+
+export const prerender = false;
+
+type SessionsPage = {
+  events: Awaited<ReturnType<typeof loadAdminEventOptions>>;
+  filters: ReturnType<typeof normalizeAdminFilters>;
+  sessionResult: ReturnType<typeof toAdminSessionListResult> | null;
+  initialLoadError: string | null;
+  initialLoadErrorRecovery: AdminLoadErrorRecovery;
+};
+
+let sessionsPage: SessionsPage | null = null;
+let filterError: string | null = null;
+
+try {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  const filters = normalizeAdminFilters(params, undefined, { pageSize: ADMIN_SESSION_PAGE_SIZE });
+  const canonicalFilterUrl = canonicalAdminSessionsFilterUrl(params, filters);
+  if (canonicalFilterUrl) return Astro.redirect(canonicalFilterUrl);
+
+  const [eventsResult, sessionsResult] = await Promise.allSettled([
+    loadAdminEventOptions(env.DB),
+    loadAdminSessions(env.DB, filters),
+  ]);
+
+  if (eventsResult.status === 'rejected') {
+    console.error('Admin session event options load failed', eventsResult.reason);
+  }
+  if (sessionsResult.status === 'rejected') {
+    console.error('Admin sessions list load failed', sessionsResult.reason);
+    Astro.response.status = 503;
+  }
+
+  const sessionResult = sessionsResult.status === 'fulfilled'
+    ? toAdminSessionListResult(sessionsResult.value)
+    : null;
+  if (sessionResult) {
+    const canonicalUrl = canonicalAdminSessionsPageUrl(params, filters.page, sessionResult.totalPages);
+    if (canonicalUrl) return Astro.redirect(canonicalUrl);
+  }
+
+  sessionsPage = {
+    events: eventsResult.status === 'fulfilled' ? eventsResult.value : [],
+    filters,
+    sessionResult,
+    initialLoadError: eventsResult.status === 'rejected' || sessionsResult.status === 'rejected'
+      ? "Some session data couldn't be loaded. Try again."
+      : null,
+    initialLoadErrorRecovery: eventsResult.status === 'rejected'
+      ? { type: 'reload' }
+      : { type: 'refresh' },
+  };
+} catch (error) {
+  if (error instanceof AdminFilterValidationError) {
+    Astro.response.status = 400;
+    filterError = `Invalid ${error.field} filter. Update the filters and try again.`;
+  } else {
+    throw error;
+  }
+}
+---
+
+<AdminLayout
+  title="Sessions · Booth Admin"
+  description="Browse and filter booth sessions by event, status, and date."
+>
+  <PageHeader
+    title="Sessions"
+    description="Browse and filter booth sessions by event, status, and date."
+  />
+
+  {sessionsPage ? (
+    <AdminSessionsList
+      client:load
+      events={sessionsPage.events}
+      statuses={SESSION_STATUSES}
+      initialFilters={sessionsPage.filters}
+      initialSessionResult={sessionsPage.sessionResult}
+      initialLoadError={sessionsPage.initialLoadError}
+      initialLoadErrorRecovery={sessionsPage.initialLoadErrorRecovery}
+      showPagination={true}
+      basePath="/admin/sessions"
+      dataLabel="Session"
+    />
+  ) : (
+    <section class="mt-8 rounded-[var(--radius-surface)] border border-destructive/40 bg-destructive/10 p-6" role="alert" aria-labelledby="sessions-filter-error-heading">
+      <p class="m-0 font-label text-[.68rem] font-extrabold uppercase tracking-[.14em] text-destructive">Invalid filters</p>
+      <h2 class="mt-3 mb-2 font-display text-xl" id="sessions-filter-error-heading">Unable to filter sessions</h2>
+      <p class="m-0 text-sm leading-[1.6] text-muted-foreground">{filterError}</p>
+      <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin/sessions">
+        Clear filters
+      </a>
+    </section>
+  )}
+</AdminLayout>

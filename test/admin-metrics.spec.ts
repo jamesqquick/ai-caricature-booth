@@ -74,7 +74,7 @@ describe('admin metrics', () => {
   });
 
   it('keeps dashboard date inputs on the compact shared size', async () => {
-    const files = ['src/components/admin/OperationsDashboard.tsx', 'src/components/admin/MetricsOverview.astro'];
+    const files = ['src/components/admin/AdminSessionsList.tsx', 'src/components/admin/MetricsOverview.astro'];
 
     for (const file of files) {
       const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');

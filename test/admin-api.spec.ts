@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminFilterValidationError } from '../src/lib/admin-filters';
 
 const fakeEnv = vi.hoisted(() => ({ DB: {} }));
@@ -40,6 +40,10 @@ const sessionResult = {
 const statsResult = { total: 1, completed: 1, errored: 0, inFlight: 0, completionRate: 100 };
 
 describe('admin APIs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('returns only the fields rendered by the polling dashboard', async () => {
     loadAdminSessions.mockResolvedValue(sessionResult);
 
@@ -82,6 +86,28 @@ describe('admin APIs', () => {
       pageSize: 30,
     });
     expect(JSON.stringify(body)).not.toMatch(/eventId|createdAt|completedAt|errorMessage|workflowId|hasSelfie|hasCaricature|(?:selfie|caricature|postcard)Key/);
+  });
+
+  it.each([10, 30])('accepts the supported pageSize=%i contract', async (pageSize) => {
+    loadAdminSessions.mockResolvedValue({ ...sessionResult, pageSize });
+
+    const response = await getSessions({ url: new URL(`https://booth.test/api/admin/sessions?pageSize=${pageSize}`) });
+
+    expect(response.status).toBe(200);
+    expect(loadAdminSessions).toHaveBeenCalledWith(fakeEnv.DB, {
+      page: 1,
+      pageSize,
+    });
+  });
+
+  it.each(['', '9', '20', '31', '10.0', '10.5', 'abc'])('rejects unsupported pageSize=%j values', async (pageSize) => {
+    const response = await getSessions({ url: new URL(`https://booth.test/api/admin/sessions?pageSize=${pageSize}`) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'pageSize must be 10 or 30.',
+      field: 'pageSize',
+    });
   });
 
   it('returns stats using the same normalized filter contract', async () => {

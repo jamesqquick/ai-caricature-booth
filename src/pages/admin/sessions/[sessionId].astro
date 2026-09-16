@@ -53,6 +53,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
             client:load
             sessionId={session.id}
             endpoint={`/api/admin/sessions/${encodeURIComponent(session.id)}`}
+            redirectTo="/admin/sessions"
           />
         </div>
       </PageHeader>
@@ -111,13 +112,13 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
       <PrintHistory client:load sessionId={session.id} hasPostcard={session.hasPostcard} initialJobs={printJobs} />
       <SessionTimeline session={session} />
       <SessionImages session={session} />
-      <a class="mt-8 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin">Back to dashboard</a>
+      <a class="mt-8 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin/sessions">Back to sessions</a>
     </>
   ) : (
     <section class="rounded-[var(--radius-surface)] border border-dashed border-border bg-muted/30 p-8 text-center" role="alert">
        <h1 class="m-0 font-display text-3xl">{loadFailed ? 'Unable to load session' : isValidSessionId ? 'Session not found' : 'Invalid session ID'}</h1>
-       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? "Couldn't load the session. Try again without changing the URL." : isValidSessionId ? 'This session may have been deleted or the URL is incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
-       <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href={loadFailed ? Astro.url.pathname : '/admin'}>{loadFailed ? 'Retry' : 'Back to dashboard'}</a>
-    </section>
+       <p class="mb-0 mt-2 text-muted-foreground">{loadFailed ? "Couldn't load the session. Return to Sessions and try opening it again." : isValidSessionId ? 'This session may have been deleted or the URL is incorrect.' : 'Session IDs must use letters, numbers, hyphens, or underscores.'}</p>
+       <a class="mt-5 inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-bold text-foreground no-underline hover:border-primary" href="/admin/sessions">Back to sessions</a>
+     </section>
   )}
 </AdminLayout>

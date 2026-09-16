@@ -10,6 +10,7 @@ const files = {
   table: 'src/components/admin/SessionTable.astro',
   badge: 'src/components/admin/StatusBadge.astro',
 } as const;
+const sessionsListComponent = 'src/components/admin/AdminSessionsList.tsx';
 
 async function readSource(file: keyof typeof files) {
   return readFile(new URL(`../${files[file]}`, import.meta.url), 'utf8');
@@ -56,7 +57,8 @@ describe('admin dashboard', () => {
     const source = await readSource('page');
 
     expect(source).toContain("import { env } from 'cloudflare:workers'");
-    expect(source).toContain('normalizeAdminFilters(params)');
+    expect(source).toContain('ADMIN_DASHBOARD_PAGE_SIZE');
+    expect(source).toContain('normalizeAdminFilters(params, undefined, { pageSize: ADMIN_DASHBOARD_PAGE_SIZE, paginate: false })');
     expect(source).not.toContain('setUTCDate');
     expect(source).toMatch(/Promise\.all\(\[\s*loadAdminEventOptions\(env\.DB\),\s*loadAdminSessions\(env\.DB, filters\),\s*loadAdminStatistics\(env\.DB, filters\),/);
     expect(source).toContain('title="Dashboard"');
@@ -66,6 +68,34 @@ describe('admin dashboard', () => {
     expect(source).toContain('initialFilters={dashboard.filters}');
     expect(source).toContain('initialSessionResult={dashboard.sessionResult}');
     expect(source).toContain('initialStats={dashboard.stats}');
+  });
+
+  it('keeps dashboard polling in the sessions list lifecycle', async () => {
+    const dashboardSource = await readFile(new URL('../src/components/admin/OperationsDashboard.tsx', import.meta.url), 'utf8');
+
+    expect(dashboardSource).not.toContain('useEffect');
+    expect(dashboardSource).not.toContain('POLL_INTERVAL_MS');
+    expect(dashboardSource).not.toContain('visibilitychange');
+    expect(dashboardSource).toContain('relatedData={{ load: loadDashboardStats, commit: setStats }}');
+    expect(dashboardSource).toContain('showPagination={false}');
+    expect(dashboardSource).toContain('href="/admin/sessions"');
+    expect(dashboardSource).toContain('View all sessions');
+  });
+
+  it('preserves the dashboard page size across polling, filter changes, pagination, and reset', async () => {
+    const source = await readFile(new URL(`../${sessionsListComponent}`, import.meta.url), 'utf8');
+    const filtersSource = await readFile(new URL('../src/lib/admin-filters.ts', import.meta.url), 'utf8');
+    const publicParamsSource = filtersSource.match(/export function adminSessionsPublicSearchParams[\s\S]*?\n}/)?.[0];
+
+    expect(source).toContain("params.set('pageSize', String(filters.pageSize))");
+    expect(source).toMatch(/function sessionsSearchParams[\s\S]*params\.set\('pageSize'/);
+    expect(publicParamsSource).toBeDefined();
+    expect(publicParamsSource).not.toContain("params.set('pageSize'");
+    expect(source).toMatch(/const updateEvent[\s\S]*?replaceFilters\(\{\s*\.\.\.filters,/);
+    expect(source).toMatch(/const updateStatus[\s\S]*?replaceFilters\(\{\s*\.\.\.filters,/);
+    expect(source).toContain('replaceFilters({ ...filters, [field]: timestamp, page: 1 })');
+    expect(source).toContain('filterUrl({ ...filters, page })');
+    expect(source).toContain('replaceFilters({ page: 1, pageSize: initialFilters.pageSize })');
   });
 
   it('renders GET filters and all requested statistics', async () => {

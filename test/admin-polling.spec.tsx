@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OperationsDashboard } from '../src/components/admin/OperationsDashboard';
@@ -25,7 +26,7 @@ const initialSession = {
 const initialSessionResult = {
   sessions: [initialSession],
   page: 1,
-  pageSize: 30,
+  pageSize: 10,
   total: 1,
   totalPages: 1,
 };
@@ -57,7 +58,7 @@ function renderDashboard() {
         { id: 8, name: 'Second Event', slug: 'second-event', status: 'draft' },
       ]}
       statuses={['pending', 'uploading', 'moderating', 'generating', 'compositing', 'completed', 'errored']}
-      initialFilters={{ page: 1, pageSize: 30 }}
+      initialFilters={{ page: 1, pageSize: 10 }}
       initialSessionResult={initialSessionResult}
       initialStats={initialStats}
     />,
@@ -74,10 +75,10 @@ function renderFilteredDashboard() {
         status: 'completed',
         from: 86_400,
         to: 172_799,
-        page: 4,
-        pageSize: 30,
+        page: 1,
+        pageSize: 10,
       }}
-      initialSessionResult={{ ...initialSessionResult, page: 4, totalPages: 4 }}
+      initialSessionResult={{ ...initialSessionResult, totalPages: 4 }}
       initialStats={initialStats}
     />,
   );
@@ -117,7 +118,7 @@ describe('OperationsDashboard polling', () => {
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
 
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions?pageSize=10', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(fetch).toHaveBeenCalledWith('/api/admin/stats', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Completed')).toBeTruthy();
     expect(screen.getByText('100%')).toBeTruthy();
@@ -138,6 +139,43 @@ describe('OperationsDashboard polling', () => {
     const row = screen.getByRole('row', { name: /session-1/ });
     expect(within(row).getByRole('link', { name: 'View session session-1' }).getAttribute('href')).toBe('/admin/sessions/session-1');
     expect(within(row).getByRole('button', { name: 'Delete session session-1' })).toBeTruthy();
+  });
+
+  it('hides dashboard pagination even when the session result has multiple pages', () => {
+    render(
+      <OperationsDashboard
+        events={[]}
+        statuses={['pending', 'completed']}
+        initialFilters={{ page: 1, pageSize: 10 }}
+        initialSessionResult={{ ...initialSessionResult, total: 21, totalPages: 3 }}
+        initialStats={initialStats}
+      />,
+    );
+
+    expect(screen.queryByRole('navigation', { name: 'Sessions pagination' })).toBeNull();
+    expect(screen.queryByText('Page 1 of 3')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+  });
+
+  it('ignores and removes an incoming hidden page query', async () => {
+    window.history.replaceState(null, '', '/admin?eventId=7&page=2');
+    render(
+      <OperationsDashboard
+        events={[]}
+        statuses={['pending', 'completed']}
+        initialFilters={{ eventId: 7, page: 2, pageSize: 10 }}
+        initialSessionResult={{ ...initialSessionResult, page: 1, total: 21, totalPages: 3 }}
+        initialStats={initialStats}
+      />,
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?eventId=7');
+
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions?eventId=7&pageSize=10', expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/stats?eventId=7', expect.any(Object));
   });
 
   it('uses a page-1 delete redirect that preserves nonempty filters', async () => {
@@ -172,7 +210,7 @@ describe('OperationsDashboard polling', () => {
       <OperationsDashboard
         events={[]}
         statuses={['pending', 'completed']}
-        initialFilters={{ page: 1, pageSize: 30 }}
+        initialFilters={{ page: 1, pageSize: 10 }}
         initialSessionResult={{ ...initialSessionResult, sessions: [{ ...initialSession, status: 'completed', hasPostcard: true }] }}
         initialStats={initialStats}
       />,
@@ -195,9 +233,34 @@ describe('OperationsDashboard polling', () => {
     fireEvent.change(screen.getByLabelText('Event'), { target: { value: '8' } });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions?eventId=8', expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions?eventId=8&pageSize=10', expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/stats?eventId=8', expect.any(Object));
     expect(window.location.pathname).toBe('/admin');
     expect(window.location.search).toBe('?eventId=8');
+  });
+
+  it('preserves the server snapshot through StrictMode replay and still refreshes filters immediately', async () => {
+    render(
+      <StrictMode>
+        <OperationsDashboard
+          events={[{ id: 8, name: 'Second Event', slug: 'second-event', status: 'draft' }]}
+          statuses={['pending', 'completed']}
+          initialFilters={{ page: 1, pageSize: 10 }}
+          initialSessionResult={initialSessionResult}
+          initialStats={initialStats}
+        />
+      </StrictMode>,
+    );
+
+    await act(async () => Promise.resolve());
+    expect(fetch).not.toHaveBeenCalled();
+    expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Event'), { target: { value: '8' } });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/sessions?eventId=8&pageSize=10', expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith('/api/admin/stats?eventId=8', expect.any(Object));
   });
 
   it('keeps the last successful rows and shows a stale warning after a failed poll', async () => {
@@ -212,6 +275,78 @@ describe('OperationsDashboard polling', () => {
     expect(screen.getByRole('button', { name: 'Retry now' })).toBeTruthy();
   });
 
+  it('retains the prior paired snapshot when sessions succeed but statistics fail after a filter change', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      return Promise.resolve(url.startsWith('/api/admin/stats')
+        ? new Response('{}', { status: 503 })
+        : new Response(JSON.stringify({
+          ...initialSessionResult,
+          sessions: [{ ...initialSession, status: 'completed', completedAt: 400 }],
+        })));
+    }));
+    renderDashboard();
+
+    fireEvent.change(screen.getByLabelText('Event'), { target: { value: '8' } });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
+    expect(screen.getByText('0%')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Showing the most recent data/));
+  });
+
+  it('retains the prior paired snapshot when statistics succeed but sessions fail after a filter change', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      return Promise.resolve(url.startsWith('/api/admin/sessions')
+        ? new Response('{}', { status: 503 })
+        : new Response(JSON.stringify(completedStats)));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderDashboard();
+
+    fireEvent.change(screen.getByLabelText('Event'), { target: { value: '8' } });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
+    expect(screen.getByText('0%')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Showing the most recent data/));
+  });
+
+  it('retries both resources atomically and announces recovery after a statistics-only failure', async () => {
+    let statsShouldFail = true;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/admin/stats')) {
+        return Promise.resolve(statsShouldFail
+          ? new Response('{}', { status: 503 })
+          : new Response(JSON.stringify(completedStats)));
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        ...initialSessionResult,
+        sessions: [{ ...initialSession, status: 'completed', completedAt: 400 }],
+      })));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderDashboard();
+
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Generating')).toBeTruthy();
+    expect(screen.getByText('0%')).toBeTruthy();
+
+    statsShouldFail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/admin/sessions'))).toHaveLength(2);
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/admin/stats'))).toHaveLength(2);
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('Dashboard data is current again.')).toBeTruthy();
+      expect(within(screen.getByRole('row', { name: /session-1/ })).getByText('Completed')).toBeTruthy();
+      expect(screen.getByText('100%')).toBeTruthy();
+    });
+  });
+
   it('marks refreshes busy and announces recovery while keeping the last good snapshot', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 503 })).mockResolvedValueOnce(new Response('{}', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -222,9 +357,10 @@ describe('OperationsDashboard polling', () => {
 
     fetchMock.mockImplementation(successfulFetch);
     fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
-    expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('true');
+    const sessionsList = container.querySelector('[aria-busy="true"]');
+    expect(sessionsList).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Dashboard data is current again.')).toBeTruthy());
-    expect(container.firstElementChild?.getAttribute('aria-busy')).toBe('false');
+    expect(sessionsList?.getAttribute('aria-busy')).toBe('false');
     expect(screen.queryByText(/Last successful update:/)).toBeNull();
   });
 

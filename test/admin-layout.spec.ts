@@ -8,6 +8,7 @@ describe('admin layout', () => {
     expect(ADMIN_NAV_ITEMS).toEqual([
       { label: 'Dashboard', href: '/admin' },
       { label: 'Events', href: '/admin/events' },
+      { label: 'Sessions', href: '/admin/sessions' },
     ]);
   });
 
@@ -22,7 +23,10 @@ describe('admin layout', () => {
   it('marks only the matching navigation section active', () => {
     expect(isAdminNavItemActive('/admin', '/admin')).toBe(true);
     expect(isAdminNavItemActive('/admin/events/summer-party', '/admin/events')).toBe(true);
+    expect(isAdminNavItemActive('/admin/sessions', '/admin/sessions')).toBe(true);
+    expect(isAdminNavItemActive('/admin/sessions/session-123', '/admin/sessions')).toBe(true);
     expect(isAdminNavItemActive('/admin/events', '/admin')).toBe(false);
+    expect(isAdminNavItemActive('/admin/sessions/session-123', '/admin/events')).toBe(false);
   });
 
   it('keeps the mobile menu keyboard-contained, scrollable, and scroll-locked', async () => {
