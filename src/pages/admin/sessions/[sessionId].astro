@@ -53,6 +53,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
             client:load
             sessionId={session.id}
             endpoint={`/api/admin/sessions/${encodeURIComponent(session.id)}`}
+            redirectTo="/admin/sessions"
           />
         </div>
       </PageHeader>

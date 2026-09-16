@@ -241,6 +241,7 @@ describe('admin session detail', () => {
     expect(source).toContain("console.error('Admin session detail load failed'");
     expect(source).toContain('const responseStatus = loadFailed ? 503');
     expect(source).toContain("Couldn't load the session. Return to Sessions and try opening it again.");
+    expect(source).toContain('redirectTo="/admin/sessions"');
     expect(source).not.toContain('Try again without changing the URL.');
     expect(source.match(/href="\/admin\/sessions"/g)).toHaveLength(2);
     expect(source.match(/Back to sessions/g)).toHaveLength(2);
