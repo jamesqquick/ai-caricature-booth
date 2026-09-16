@@ -1,7 +1,7 @@
 import { transform } from '@astrojs/compiler';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEvent, updateEvent } from '../src/db/events';
 import { composeGenerationPrompt, GENERATION_SAFETY_INSTRUCTION } from '../src/lib/generation-prompt';
 import { SceneValidationError, validateEventPrompts, validateEventUpdate, validateScene } from '../src/lib/event-validation';
@@ -10,7 +10,7 @@ const fakeEnv = vi.hoisted(() => ({ DB: {} as D1Database }));
 vi.mock('cloudflare:workers', () => ({ env: fakeEnv }));
 
 import { GET as listScenes, POST as createScene } from '../src/pages/api/admin/events/[slug]/scenes';
-import { PUT as updateScene } from '../src/pages/api/admin/events/[slug]/scenes/[sceneId]';
+import { DELETE as deleteScene, PUT as updateScene } from '../src/pages/api/admin/events/[slug]/scenes/[sceneId]';
 import { POST as updateAdminEvent } from '../src/pages/api/admin/events/[slug]';
 
 const adminHeaders = { 'Content-Type': 'application/json', 'x-booth-admin-email': 'admin@example.com' };
@@ -83,6 +83,12 @@ function createDatabase() {
       sort_order INTEGER NOT NULL,
       PRIMARY KEY (event_id, id)
     );
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      event_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      scene_id TEXT NOT NULL
+    );
     INSERT INTO events (id, slug, name, status) VALUES
       (1, 'active-event', 'Active Event', 'active'),
       (2, 'draft-event', 'Draft Event', 'draft');
@@ -112,6 +118,10 @@ const validScene = {
 
 beforeEach(() => {
   createDatabase();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('scene validation and prompt composition', () => {
@@ -160,8 +170,13 @@ describe('admin scene endpoints', () => {
       request: jsonRequest('/api/admin/events/active-event/scenes/first', 'PUT', validScene, false),
       params: { slug: 'active-event', sceneId: 'first' },
     });
+    const remove = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/first', { method: 'DELETE' }),
+      params: { slug: 'active-event', sceneId: 'first' },
+    });
     expect(list.status).toBe(403);
     expect(update.status).toBe(403);
+    expect(remove.status).toBe(403);
   });
 
   it('adds at the end and returns 409 for a duplicate event-scoped ID', async () => {
@@ -197,6 +212,75 @@ describe('admin scene endpoints', () => {
     const list = await listScenes({ request: new Request('https://booth.test', { headers: adminHeaders }), params: { slug: 'active-event' } });
     expect((await list.json() as { scenes: Array<{ id: string; sort_order: number }> }).scenes)
       .toMatchObject([{ id: 'first', sort_order: 1 }, { id: 'second', sort_order: 2 }]);
+  });
+
+  it('deletes a scene only from the event resolved by the route', async () => {
+    const response = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/second', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'second' },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: true, sceneId: 'second' });
+
+    const missing = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/other', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'other' },
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it('blocks deleting the last scene from an active event but allows it for a draft event', async () => {
+    const firstDelete = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/second', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'second' },
+    });
+    expect(firstDelete.status).toBe(200);
+
+    const blocked = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/first', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'first' },
+    });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toEqual({ error: 'Active events must have at least one scene.' });
+
+    const draftDelete = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/draft-event/scenes/other', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'draft-event', sceneId: 'other' },
+    });
+    expect(draftDelete.status).toBe(200);
+  });
+
+  it('blocks deleting a scene used by an in-progress session', async () => {
+    const sqlite = createDatabase();
+    sqlite.prepare('INSERT INTO sessions (id, event_id, status, scene_id) VALUES (?, ?, ?, ?)')
+      .run('session-1', 1, 'generating', 'second');
+
+    const response = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/second', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'second' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Scenes used by in-progress sessions cannot be deleted.' });
+  });
+
+  it('returns deletion-specific copy without disclosing database errors', async () => {
+    const sentinel = 'scene-delete-database-sentinel';
+    fakeEnv.DB = {
+      prepare() {
+        throw new Error(sentinel);
+      },
+    } as unknown as D1Database;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await deleteScene({
+      request: new Request('https://booth.test/api/admin/events/active-event/scenes/second', { method: 'DELETE', headers: adminHeaders }),
+      params: { slug: 'active-event', sceneId: 'second' },
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Couldn't delete the scene." });
+    expect(consoleError).toHaveBeenCalledWith('Admin scene request failed', expect.objectContaining({ message: sentinel }));
   });
 
   it('returns field-level 400 errors for invalid scene data', async () => {
@@ -382,16 +466,27 @@ describe('event activation and editor wiring', () => {
 
     expect(addSceneIndex).toBeGreaterThan(-1);
     expect(addSceneIndex).toBeLessThan(sceneListIndex);
-    expect(source).toContain('data-scene-accordion open={index === 0}');
+    expect(source).toContain('data-scene-accordion data-scene-id={scene.id} open={index === 0}');
     expect(source).toContain('name="scene-editor" data-scene-accordion');
     expect(source).toContain("accordion.addEventListener('toggle'");
     expect(source).toContain('if (other !== accordion) other.open = false;');
     expect(source).not.toContain('lg:grid-cols-2');
     expect(source).toContain('id="scene-empty"');
-    expect(source).toContain("document.querySelector<HTMLElement>('#scene-empty')?.remove()");
+    expect(source).toContain('if (empty) empty.hidden = true;');
     expect(source).toContain('summary?.focus()');
     expect(source).toContain('`Scene added: ${sceneData.name}.`');
     expect(source).not.toContain("const addStatus = addSceneForm.querySelector<HTMLElement>('[data-scene-status]')");
+  });
+
+  it('wires scene delete buttons through the shared confirmation dialog', async () => {
+    const source = await readFile(new URL('../src/pages/admin/events/[slug].astro', import.meta.url), 'utf8');
+
+    expect(source).toContain('<SceneDeleteDialog client:load />');
+    expect(source).toContain('data-delete-scene');
+    expect(source).toContain('SCENE_DELETE_REQUEST_EVENT');
+    expect(source).toContain('SCENE_DELETED_EVENT');
+    expect(source).toContain('sceneAccordion.remove()');
+    expect(source).toContain('empty.hidden = remainingScenes > 0');
   });
 
   it('captures add and edit payloads before mutateScene disables form controls', async () => {
