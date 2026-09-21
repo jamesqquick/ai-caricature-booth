@@ -192,6 +192,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 .postcard-caption b { color: var(--primary); }
 .postcard-demo { background: oklch(15% 0.018 55); }
 .landing-gallery-image::after { position: absolute; inset: 0; background: repeating-linear-gradient(18deg, transparent 0 6px, color-mix(in oklch, var(--primary) 30%, transparent) 7px 8px); content: ''; opacity: .45; }
+.landing-postcard-image { border-bottom: 1px solid color-mix(in oklch, var(--foreground) 22%, transparent); border-radius: 0; }
+.landing-postcard { transform: rotate(var(--postcard-rotation)); transition: transform 1s cubic-bezier(.22, 1, .36, 1), box-shadow 1s cubic-bezier(.22, 1, .36, 1); }
+.landing-postcard-image::before { position: absolute; inset: -40%; z-index: 1; background: linear-gradient(110deg, transparent 38%, color-mix(in oklch, var(--paper) 58%, transparent) 50%, transparent 62%); content: ''; opacity: 0; pointer-events: none; transform: translateX(-80%) rotate(8deg); transition: opacity 180ms ease, transform 500ms cubic-bezier(.22, 1, .36, 1); }
+.landing-postcard:hover { z-index: 10; transform: translateY(-.5rem) rotate(var(--postcard-rotation)) scale(1.3); box-shadow: 0 2.75rem 5.5rem oklch(5% .01 55 / .62); }
+.landing-postcard:hover .landing-postcard-image::before { opacity: .7; transform: translateX(80%) rotate(8deg); }
 
 .comparison-slider { --comparison-position: 50%; isolation: isolate; box-shadow: 0 1.5rem 4rem oklch(5% .01 55 / .2); }
 .comparison-image { pointer-events: none; user-select: none; }
@@ -295,5 +300,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .landing-postcard { transition-duration: .01ms !important; }
   .pipeline-result-scan, .pipeline-result-ink, .pipeline-save-icon, .pipeline-watermark-target, .pipeline-shutter-flash, .pipeline-loader { opacity: 0 !important; }
 }
