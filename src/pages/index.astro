@@ -2,6 +2,7 @@
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { Button } from "../components/ui/button";
+import { Save } from "lucide-react";
 import { Image } from "astro:assets";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
@@ -244,6 +245,10 @@ const pipelineStages = [
                 <img class="pipeline-result-caricature" src="/demo-caricature.jpeg" alt="" />
                 <span class="pipeline-result-scan"></span>
                 <span class="pipeline-result-ink"></span>
+                <span class="pipeline-save-icon" aria-hidden="true">
+                  <Save aria-hidden="true" strokeWidth={2.5} />
+                </span>
+                <span class="pipeline-watermark-target" aria-hidden="true"></span>
                 <span class="pipeline-shutter"></span>
                 <span class="pipeline-shutter-flash"></span>
                 <span class="pipeline-loader"></span>
@@ -311,8 +316,9 @@ const pipelineStages = [
             const pipelineCopies = [...pipeline.querySelectorAll<HTMLElement>('[data-pipeline-copy]')];
             const toggle = document.querySelector<HTMLButtonElement>('[data-pipeline-toggle]');
             const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+            const pipelineStageDurations = [1500, 3400, 3400, 3400, 3400];
             let pipelineStage = 0;
-            let intervalId: number | undefined;
+            let timeoutId: number | undefined;
             let isPaused = false;
 
             const updatePipelineStage = (stageIndex: number, showComplete = false) => {
@@ -327,16 +333,17 @@ const pipelineStages = [
             };
 
             const stopPipeline = () => {
-              if (intervalId !== undefined) window.clearInterval(intervalId);
-              intervalId = undefined;
+              if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+              timeoutId = undefined;
             };
 
             const schedulePipeline = () => {
               if (reducedMotion.matches || isPaused) return;
-              intervalId = window.setInterval(() => {
+              timeoutId = window.setTimeout(() => {
                 pipelineStage = (pipelineStage + 1) % pipelineNodes.length;
                 updatePipelineStage(pipelineStage);
-              }, 3400);
+                schedulePipeline();
+              }, pipelineStageDurations[pipelineStage]);
             };
 
             const restartStageAnimation = () => {
