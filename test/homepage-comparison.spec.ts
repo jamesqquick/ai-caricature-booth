@@ -11,6 +11,8 @@ describe('homepage before and after comparison', () => {
     expect(source).toContain('data-comparison');
     expect(source).toContain('data-comparison-input');
     expect(source).toContain('type="range"');
+    expect(source).toContain('style="--comparison-position: 33%;"');
+    expect(source).toContain('value="33"');
     expect(source).toContain('aria-label="Compare selfie and final result"');
     expect(source).toContain("--comparison-position");
     expect(source).toContain("comparisonInput.value}%");
