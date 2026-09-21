@@ -2,6 +2,7 @@
 import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { Button } from "../components/ui/button";
+import { PostcardGallery } from "../components/PostcardGallery";
 import { Save } from "lucide-react";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
@@ -14,6 +15,10 @@ const events = await loadActiveEvents(env.DB);
 const sceneSets = await Promise.all(events.map(async (event) => (await loadScenesByEvent(env.DB, event.id)).map(toPublicScene)));
 const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
 const galleryScenes = scenes.slice(0, 4);
+const galleryCards = Array.from({ length: 6 }, (_, index) => ({
+  scene: galleryScenes[index % galleryScenes.length],
+  index,
+}));
 const pipelineStages = [
   {
     title: "Capture",
@@ -182,32 +187,7 @@ const pipelineStages = [
         id="gallery"
       >
         <SectionHeader title="Example caricature postcards" />
-        <div class="grid grid-cols-4 gap-4 max-[800px]:grid-cols-2">
-          {
-            galleryScenes.map((scene, index) => (
-              <article
-                class="overflow-hidden rounded-2xl border border-border bg-card"
-              >
-                <div class="landing-gallery-image relative grid aspect-[3/2] place-items-center overflow-hidden bg-muted">
-                  <span class="font-display text-[5rem] font-semibold text-primary/70" aria-hidden="true">
-                    0{index + 1}
-                  </span>
-                  <small class="absolute left-3 top-3 z-[1] font-label text-[.52rem] tracking-[.14em]">
-                    POSTCARD 0{index + 1}
-                  </small>
-                </div>
-                <div class="flex items-center justify-between gap-2 p-4">
-                  <>
-                    <b class="text-sm">{scene.name}</b>
-                    <span class="font-label text-[.58rem] text-muted-foreground">
-                      EXAMPLE
-                    </span>
-                  </>
-                </div>
-              </article>
-            ))
-          }
-        </div>
+        <PostcardGallery client:load cards={galleryCards.map(({ scene, index }) => ({ sceneName: scene.name, index }))} />
       </section>
 
       <section

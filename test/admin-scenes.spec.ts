@@ -382,6 +382,8 @@ describe('event scene runtime wiring', () => {
     expect(route).toContain('scenes.slice(0, 4)');
     expect(route).toContain('aria-label="Before and after selfie comparison"');
     expect(route).toContain('src="/demo-postcard.jpg"');
+    expect(route).toContain('PostcardGallery');
+    expect(route).toContain('Array.from({ length: 6 }');
   });
 
   it('initializes Photobooth from the first provided scene and has no static scene import', async () => {
