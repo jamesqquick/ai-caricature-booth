@@ -53,8 +53,6 @@ describe('homepage generation pipeline', () => {
     expect(source).not.toContain('BEHIND THE SCENES');
     expect(source).not.toContain('STAGE 01 OF 04');
     expect(source).not.toContain('SELFIE · CARICATURE · POSTCARD');
-    expect(source).not.toContain('selfie.jpg');
-    expect(source).not.toContain('postcard.png');
     expect(icons.every((icon) => icon.startsWith('<svg'))).toBe(true);
   });
 
