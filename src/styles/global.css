@@ -196,7 +196,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--ring); outline-
 .comparison-slider { --comparison-position: 50%; isolation: isolate; box-shadow: 0 1.5rem 4rem oklch(5% .01 55 / .2); }
 .comparison-image { pointer-events: none; user-select: none; }
 .comparison-before { right: 0; z-index: 2; clip-path: inset(0 calc(100% - var(--comparison-position)) 0 0); }
-.comparison-before .comparison-image { width: 100%; }
+.comparison-before .comparison-image { width: 100%; object-fit: contain; object-position: left center; background: var(--muted-surface); }
 .comparison-divider { position: absolute; z-index: 4; top: 0; bottom: 0; left: var(--comparison-position); width: 2px; background: var(--paper); box-shadow: 0 0 0 1px color-mix(in oklch, var(--background) 35%, transparent); pointer-events: none; transform: translateX(-50%); }
 .comparison-handle { position: absolute; top: 50%; left: 50%; display: flex; width: 3.25rem; height: 3.25rem; align-items: center; justify-content: center; gap: .3rem; border: 2px solid var(--background); border-radius: 50%; background: var(--primary); color: var(--primary-foreground); box-shadow: 0 0 0 3px color-mix(in oklch, var(--paper) 75%, transparent), 0 .5rem 1.5rem oklch(5% .01 55 / .35); transform: translate(-50%, -50%); }
 .comparison-handle span { width: .35rem; height: .8rem; border-right: 2px solid currentColor; border-left: 2px solid currentColor; }

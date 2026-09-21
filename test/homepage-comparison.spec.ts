@@ -16,5 +16,8 @@ describe('homepage before and after comparison', () => {
     expect(source).toContain("comparisonInput.value}%");
     expect(source).not.toContain('landing-postcard');
     expect(source).not.toContain('id="compare"');
+
+    const styles = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
+    expect(styles).toContain('object-fit: contain; object-position: left center');
   });
 });
