@@ -29,7 +29,7 @@ describe('homepage generation pipeline', () => {
     expect(source).toContain("pipeline.dataset.stage = String(stageIndex)");
     expect(source).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
     expect(source).toContain('data-pipeline-toggle');
-    expect(source).toContain('}, 3400)');
+    expect(source).toContain('const pipelineStageDurations = [1500, 3400, 3400, 3400, 3400];');
     expect(source).toContain("window.addEventListener('pageshow'");
     expect(source).toContain('reducedMotion.matches ? 4 : 0');
     expect(source).toContain('role="region" aria-label="Animated image processing pipeline"');
@@ -39,6 +39,11 @@ describe('homepage generation pipeline', () => {
     expect(source).toContain('data-pipeline-pause-icon');
     expect(source).toContain('data-pipeline-play-icon');
     expect(source).toContain('class="pipeline-loader"');
+    expect(source).toContain('class="pipeline-save-icon"');
+    expect(source).toContain('class="pipeline-watermark-target"');
+    expect(source).toContain('import { Save } from "lucide-react";');
+    expect(source).toContain('<Save aria-hidden="true"');
+    expect(source).not.toContain('Paintbrush');
     expect(source).toContain('restartStageAnimation()');
     expect(source).toMatch(/<div class="pipeline-visual[^>]*data-pipeline[^>]*>\s*<Button[^>]*data-pipeline-toggle/);
     expect(source).toContain('<span>WATERMARK</span>');
@@ -77,7 +82,17 @@ describe('homepage generation pipeline', () => {
     expect(styles).toContain('@keyframes pipeline-generate-ink');
     expect(styles).toContain(".pipeline-visual[data-stage='1'] .pipeline-loader");
     expect(styles).toContain(".pipeline-visual[data-stage='3'] .pipeline-loader");
+    expect(styles).toContain(".pipeline-visual[data-stage='1'] .pipeline-save-icon");
+    expect(styles).toContain(".pipeline-visual[data-stage='4'] .pipeline-watermark-target");
+    expect(styles).toContain('.pipeline-save-icon { top: .75rem; left: .75rem; width: 3.25rem; height: 3.25rem; }');
+    expect(styles).toContain('.pipeline-save-icon svg { width: 2.65rem;');
+    expect(styles).toContain('.pipeline-watermark-target { right: .75rem; bottom: .75rem;');
     expect(styles).toContain(".pipeline-visual[data-paused='true'] .pipeline-loader");
+    expect(styles).toContain(".pipeline-visual[data-paused='true'] .pipeline-save-icon");
+    expect(styles).toContain(".pipeline-visual[data-paused='true'] .pipeline-watermark-target");
+    expect(styles).toContain('@keyframes pipeline-save');
+    expect(styles).toContain('@keyframes pipeline-watermark-target');
+    expect(styles).toContain('@keyframes pipeline-watermark-reveal');
     expect(styles).not.toContain('CAMERA READY');
     expect(styles).not.toContain('UPLOADING TO R2');
     expect(styles).not.toContain('SAFETY CHECK');
@@ -90,5 +105,7 @@ describe('homepage generation pipeline', () => {
     expect(styles).not.toContain('.pipeline-divider');
     expect(styles).not.toContain('.pipeline-status-dot');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(styles).toContain('.pipeline-save-icon, .pipeline-watermark-target, .pipeline-shutter-flash, .pipeline-loader');
+    expect(styles).toContain(".pipeline-visual[data-stage='0'] .pipeline-shutter { opacity: 1; animation: pipeline-shutter-press 1.5s");
   });
 });
