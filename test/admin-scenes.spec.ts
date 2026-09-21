@@ -373,22 +373,15 @@ describe('event scene runtime wiring', () => {
     expect(route).toContain('scenes={scenes}');
   });
 
-  it('uses the first nonempty event scene set for landing-page previews', async () => {
+  it('uses the first nonempty event scene set for landing-page content', async () => {
     const route = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/index.astro' })).resolves.toBeTruthy();
-    expect(route).toContain('import { Image } from "astro:assets"');
-    expect(route).toContain('sfPostcard1');
-    expect(route).toContain('sfPostcard2');
-    expect(route).toContain('sfPostcard3');
-    expect(route).toContain('sizes="(min-width: 801px) 18rem, 70vw"');
-    expect(route).toContain('landing-postcard');
-    expect(route).toContain('SF');
-    expect(route).not.toContain('AI CARICATURE');
     expect(route).toContain('.map(toPublicScene)');
     expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
-    expect(route).toContain('scenes.slice(0, 3)');
     expect(route).toContain('scenes.slice(0, 4)');
+    expect(route).toContain('aria-label="Before and after selfie comparison"');
+    expect(route).toContain('src="/demo-postcard.jpg"');
   });
 
   it('initializes Photobooth from the first provided scene and has no static scene import', async () => {

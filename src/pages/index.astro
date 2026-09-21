@@ -3,23 +3,17 @@ import BoothLayout from "../layouts/BoothLayout.astro";
 import SectionHeader from "../components/SectionHeader.astro";
 import { Button } from "../components/ui/button";
 import { Save } from "lucide-react";
-import { Image } from "astro:assets";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
 import { loadScenesByEvent } from "../db/scenes";
 import { toPublicScene } from "../data/scenes";
-import sfPostcard1 from "../assets/sf-postcard-1.jpg";
-import sfPostcard2 from "../assets/sf-postcard-2.jpg";
-import sfPostcard3 from "../assets/sf-postcard-3.jpg";
 
 export const prerender = false;
 
 const events = await loadActiveEvents(env.DB);
 const sceneSets = await Promise.all(events.map(async (event) => (await loadScenesByEvent(env.DB, event.id)).map(toPublicScene)));
 const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
-const featuredScenes = scenes.slice(0, 3);
 const galleryScenes = scenes.slice(0, 4);
-const featuredPostcards = [sfPostcard1, sfPostcard2, sfPostcard3];
 const pipelineStages = [
   {
     title: "Capture",
@@ -96,37 +90,55 @@ const pipelineStages = [
         </div>
 
         <div
-          class="relative min-h-[31rem] max-[800px]:min-h-[27rem]"
-          aria-label="Example caricature postcards"
+          class="relative flex min-h-[31rem] items-center justify-center max-[800px]:min-h-0"
+          aria-label="Before and after selfie comparison"
         >
-          {
-            featuredScenes.map((scene, index) => (
-              <article
-                class={`landing-postcard absolute w-[min(18rem,70%)] overflow-hidden rounded-[.45rem] bg-card text-foreground shadow-[0_2.5rem_5rem_oklch(5%_.01_55_/.5)] ${index === 0 ? 'top-[5%] left-[3%] z-[1]' : index === 1 ? 'top-[18%] right-[4%] z-[2]' : 'bottom-[2%] left-[23%] z-[3]'}`}
-                style={`--postcard-rotation: ${index === 0 ? '-8deg' : index === 1 ? '7deg' : '-2deg'}`}
-              >
-                <div class="landing-postcard-image relative overflow-hidden bg-muted">
-                  <Image
-                    src={featuredPostcards[index]}
-                    alt={`Example ${scene.name} caricature postcard`}
-                    width={1800}
-                    height={1200}
-                    layout="constrained"
-                    sizes="(min-width: 801px) 18rem, 70vw"
-                    loading={index === 0 ? "eager" : "lazy"}
-                    class="block aspect-[3/2] size-full object-cover"
-                  />
-                </div>
-                <div class="flex min-h-[3.8rem] items-center justify-between px-2.5 font-display text-base">
-                  <span>{scene.name}</span>
-                  <b class="text-[.7rem] tracking-[.12em] text-primary">
-                    SF
-                  </b>
-                </div>
-              </article>
-            ))
-          }
+          <div
+            class="comparison-slider relative aspect-[3/2] w-full max-w-[34rem] overflow-hidden rounded-[var(--radius-media)] border border-border bg-card"
+            data-comparison
+            style="--comparison-position: 50%;"
+          >
+            <img
+              class="comparison-image absolute inset-0 size-full object-cover"
+              src="/demo-postcard.jpg"
+              alt="Finished AI postcard"
+              loading="eager"
+            />
+            <div class="comparison-before absolute inset-0 overflow-hidden" aria-hidden="true">
+              <img
+                class="comparison-image absolute inset-0 size-full max-w-none object-cover"
+                src="/demo-selfie.jpg"
+                alt=""
+              />
+            </div>
+            <div class="comparison-label comparison-label-before" aria-hidden="true">Selfie</div>
+            <div class="comparison-label comparison-label-after" aria-hidden="true">Final result</div>
+            <div class="comparison-divider" aria-hidden="true">
+              <span class="comparison-handle">
+                <span></span>
+                <span></span>
+              </span>
+            </div>
+            <input
+              class="comparison-input"
+              data-comparison-input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="50"
+              aria-label="Compare selfie and final result"
+            />
+          </div>
         </div>
+        <script>
+          const comparison = document.querySelector<HTMLElement>('[data-comparison]');
+          const comparisonInput = comparison?.querySelector<HTMLInputElement>('[data-comparison-input]');
+
+          comparisonInput?.addEventListener('input', () => {
+            comparison?.style.setProperty('--comparison-position', `${comparisonInput.value}%`);
+          });
+        </script>
       </section>
 
       <section
