@@ -5,7 +5,7 @@ type Prediction = {
   error?: string;
 };
 
-const MODEL = 'google/nano-banana';
+const MODEL = 'google/nano-banana-2';
 const MAX_WAIT_MS = 120_000;
 
 export async function generateCaricature(token: string, selfie: Uint8Array, prompt: string) {
