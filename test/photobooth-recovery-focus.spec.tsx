@@ -52,7 +52,7 @@ describe('Photobooth recovery focus', () => {
   it('focuses the camera and preserves its selected scene after recovery', async () => {
     renderPhotobooth();
     fireEvent.click(screen.getByRole('button', { name: /Rooftop/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Take selfie' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use mock photo' }));
     expect(screen.getByRole('alert').textContent).toContain('Failed for Rooftop');
 
@@ -66,11 +66,16 @@ describe('Photobooth recovery focus', () => {
     expect(screen.getByRole('button', { name: /Rooftop/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('allows vertical scrolling at every viewport width', () => {
+  it('constrains the camera shell while leaving other steps scrollable', () => {
     const { container } = renderPhotobooth();
     const booth = container.querySelector('main');
 
     expect(booth?.classList.contains('overflow-y-auto')).toBe(true);
-    expect(booth?.classList.contains('overflow-hidden')).toBe(false);
+    expect(booth?.classList.contains('camera-shell')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Take selfie' }));
+
+    expect(booth?.classList.contains('camera-shell')).toBe(true);
+    expect(booth?.classList.contains('overflow-hidden')).toBe(true);
   });
 });

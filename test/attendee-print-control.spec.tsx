@@ -47,7 +47,7 @@ describe('AttendeePrintControl', () => {
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    const button = screen.getByRole('button', { name: 'Print postcard' });
+    const button = screen.getByRole('button', { name: 'Print' });
     fireEvent.click(button);
     fireEvent.click(button);
 
@@ -83,7 +83,7 @@ describe('AttendeePrintControl', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
     const retry = await screen.findByRole('button', { name: 'Try print again' });
     expect(screen.getByRole('status').textContent).toContain('The print failed');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The print failed. You can send a fresh print request.'));
@@ -103,7 +103,7 @@ describe('AttendeePrintControl', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()));
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
 
     expect(await screen.findByRole('button', { name: 'Check print request' })).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toMatch(/couldn't (?:request|read)|unavailable/i);
@@ -121,7 +121,7 @@ describe('AttendeePrintControl', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
     const { unmount } = render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Print queued' })).toBeTruthy());
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
     expect(pollSignal?.aborted).toBe(false);
@@ -147,7 +147,7 @@ describe('AttendeePrintControl', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<AttendeePrintControl eventId={7} sessionId={sessionId} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Print postcard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
     expect((window as Window & { __printJobActive?: boolean }).__printJobActive).toBe(true);
     const firstBody = fetchMock.mock.calls[0]?.[1]?.body;
 

@@ -23,10 +23,11 @@ type Props = {
   scenes: PublicScene[];
 };
 
-export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, scenePickerHeading, scenes }: Props) {
+export function Photobooth({ eventSlug, scenePickerHeading, scenes }: Props) {
   const [state, dispatch] = useReducer(boothReducer, scenes[0]?.id ?? null, createInitialBoothState);
   const stageRef = useRef<HTMLElement>(null);
   const previousStepRef = useRef(state.step);
+  const isCameraStep = state.step === 'camera';
   const activeIndex = stepLabels.findIndex((step) => step.id === state.step);
   const selectedScene = scenes.find((scene) => scene.id === state.sceneId) ?? null;
   const finishGeneration = (sessionId: string, printToken: string) => completeGenerationNavigation(sessionId, printToken);
@@ -39,20 +40,20 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
   }, [state.step]);
 
   return (
-    <main className="relative isolate grid min-h-dvh grid-rows-[auto_1fr_auto] overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--primary)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)]">
+    <main className={`relative isolate grid grid-rows-[auto_minmax(0,1fr)] overflow-x-hidden bg-[radial-gradient(circle_at_15%_12%,color-mix(in_oklch,var(--primary)_12%,transparent),transparent_27rem),radial-gradient(circle_at_88%_84%,oklch(65%_0.13_300_/_0.08),transparent_30rem),var(--ink)] ${isCameraStep ? 'camera-shell h-dvh min-h-0 overflow-hidden' : 'min-h-dvh overflow-y-auto'}`}>
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-10 opacity-[0.16]" aria-hidden="true" />
       <Stepper
         steps={stepLabels}
         activeIndex={activeIndex}
+        showSoundToggle={state.step === 'scene'}
         onSceneClick={state.step === 'scene' ? undefined : () => dispatch({ type: 'change-scene' })}
       />
 
-      <section className="grid min-h-0 items-start justify-items-center px-[clamp(1.5rem,4vw,4rem)] pb-[clamp(1.5rem,4vw,4rem)] pt-[clamp(4rem,10vh,8rem)] max-[800px]:px-4 max-[800px]:pb-8 max-[800px]:pt-2" aria-live="polite" ref={stageRef}>
+      <section className={isCameraStep ? 'grid h-full min-h-0 w-full items-stretch justify-items-center overflow-hidden px-[clamp(.5rem,2vw,1.25rem)] py-[clamp(.5rem,2dvh,1.25rem)]' : 'grid min-h-0 items-start justify-items-center px-[clamp(1.5rem,4vw,4rem)] pb-[clamp(1.5rem,4vw,4rem)] pt-[clamp(4rem,10vh,8rem)] max-[800px]:px-4 max-[800px]:pb-8 max-[800px]:pt-2'} aria-live="polite" ref={stageRef}>
         {state.step === 'scene' && (
           <SceneStep
             scenes={scenes}
             selectedSceneId={state.sceneId}
-            tagline={tagline}
             heading={scenePickerHeading}
             onSelect={(sceneId) => dispatch({ type: 'select-scene', sceneId })}
             onContinue={() => dispatch({ type: 'open-camera' })}
@@ -75,10 +76,6 @@ export function Photobooth({ eventName, eventSlug, tagline, kioskIdleSubhead, sc
         )}
       </section>
 
-      <footer className="flex justify-between gap-4 border-t border-border px-[clamp(1.25rem,4vw,4rem)] py-3.5 pb-[max(.85rem,env(safe-area-inset-bottom))] text-[.62rem] font-bold uppercase tracking-[.12em] text-muted-foreground max-[520px]:flex-col max-[520px]:items-start">
-        <span>{eventName}</span>
-        <span>{kioskIdleSubhead}</span>
-      </footer>
     </main>
   );
 }

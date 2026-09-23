@@ -16,6 +16,6 @@ const title = event ? `${event.name} · Caricature Booth` : "Page not found · C
 if (!event) Astro.response.status = 404;
 ---
 
-<BoothLayout title={title} description={event?.tagline}>
+<BoothLayout title={title} description={event?.tagline} showNavbar={false}>
   {event ? <Photobooth client:load eventName={event.name} eventSlug={event.slug} tagline={event.tagline} kioskIdleSubhead={event.kiosk_idle_subhead} scenePickerHeading={event.scene_picker_heading} scenes={scenes} /> : <EventNotFound />}
 </BoothLayout>

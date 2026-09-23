@@ -49,15 +49,13 @@ const title = isAvailable
   title={title}
   description="Your finished caricature postcard."
   noIndex
+  showNavbar={false}
 >
   {
     isAvailable && postcardUrl ? (
        <main class="mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-5xl content-start gap-8 px-[clamp(1.25rem,5vw,4rem)] py-[clamp(2rem,7vh,5rem)] max-[1000px]:min-h-0 max-[1000px]:pt-6">
-         <div class="flex items-center justify-between gap-8 max-[600px]:gap-4">
-           <div>
-              <p class="mb-4 font-label text-[.72rem] font-semibold uppercase tracking-[.2em] text-primary">Your caricature is complete</p>
-             <h1 class="m-0 max-w-[10ch] whitespace-nowrap font-display text-[clamp(2.7rem,5vw,5.2rem)] font-semibold leading-[.92] tracking-[-.06em] max-[1000px]:max-w-[12ch] max-[600px]:text-[clamp(1.75rem,8vw,2.7rem)]">Postcard ready</h1>
-             </div>
+         <h1 class="sr-only">Finished caricature postcard</h1>
+         <div class="flex justify-end">
              {qrCode && (
                <div class="flex w-28 shrink-0 flex-col items-center gap-2.5 max-[600px]:w-20">
                  <img
