@@ -48,7 +48,7 @@ async function responseJob(response: Response, requireId: boolean) {
 }
 
 const buttonCopy: Record<PrintState, string> = {
-  idle: 'Print postcard',
+  idle: 'Print',
   submitting: 'Requesting print...',
   pending: 'Print queued',
   printing: 'Printing postcard',

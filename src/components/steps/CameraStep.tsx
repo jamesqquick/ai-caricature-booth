@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowRight, RotateCcw } from 'lucide-react';
+import { AlertCircle, Check, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { playCountdownTick } from '../../lib/sound';
@@ -167,10 +167,10 @@ export function CameraStep({ onUsePhoto }: Props) {
   }
 
   return (
-    <div className="step-enter w-full max-w-[64rem]">
+    <div className="step-enter grid h-full min-h-0 w-full max-w-[64rem]">
       <h1 className="sr-only" data-step-focus tabIndex={-1}>Take your photo.</h1>
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative aspect-[4/5] w-full max-w-[34rem] justify-self-center overflow-hidden rounded-[clamp(1.2rem,3vw,2rem)] border border-border bg-card">
+      <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] justify-items-center gap-[clamp(.5rem,1.5dvh,1rem)] max-[500px]:h-auto max-[500px]:self-start max-[500px]:grid-rows-[auto_auto]">
+        <div className="relative h-full min-h-0 w-auto max-w-full aspect-[4/5] self-center justify-self-center overflow-hidden rounded-[clamp(1.2rem,3vw,2rem)] border border-border bg-card max-[800px]:h-auto max-[800px]:w-full max-[800px]:max-h-full">
           <video className="size-full object-cover scale-x-[-1]" ref={videoRef} playsInline muted autoPlay hidden={status === 'preview'} />
           {photoDataUrl && <img className="size-full object-cover" src={photoDataUrl} alt="Your captured photo" />}
           <div className="pointer-events-none absolute inset-[16%_18%] rounded-[48%_48%_44%_44%] border border-dashed border-foreground/55" aria-hidden="true" />
@@ -178,7 +178,7 @@ export function CameraStep({ onUsePhoto }: Props) {
           <span className="absolute bottom-4 right-4 size-9 border-b-[3px] border-r-[3px] border-solid border-primary" aria-hidden="true" />
 
           {status === 'starting' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[oklch(13%_.015_55_/.88)] p-8 text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-[oklch(13%_.015_55_/.88)] p-8 text-center">
               <span className="size-10 animate-spin rounded-full border-[3px] border-foreground/15 border-t-primary" aria-hidden="true" />
               <strong>Starting camera</strong>
               <small className="max-w-[31ch] leading-6 text-foreground/80">Choose Allow if your browser asks for permission.</small>
@@ -199,13 +199,13 @@ export function CameraStep({ onUsePhoto }: Props) {
           {status === 'countdown' && <div className="absolute inset-0 flex items-center justify-center bg-[oklch(13%_.015_55_/.38)] font-display text-[clamp(7rem,20vw,13rem)] font-semibold leading-none text-center text-shadow-[0_0_2rem_oklch(95%_.015_75_/.4)]" aria-label={`Photo in ${countdown}`}>{countdown}</div>}
         </div>
 
-        <div className="flex flex-col items-center justify-center text-center">
+        <div className="flex min-h-[calc(clamp(4.5rem,10vmin,7rem)+clamp(.5rem,2dvh,1.25rem))] flex-col items-center justify-center text-center">
           {status !== 'preview' ? (
             <>
               <Button
                 variant="unstyled"
                 size="unstyled"
-                className="relative mb-5 size-[clamp(5.4rem,10vw,7rem)] rounded-full border-[7px] border-foreground bg-primary shadow-[0_0_0_7px_oklch(95%_.015_75_/.12)] transition-transform duration-150 hover:enabled:scale-[1.04] active:enabled:scale-95 disabled:pointer-events-auto disabled:cursor-wait disabled:opacity-30"
+                className="relative mb-[clamp(.5rem,2dvh,1.25rem)] size-[clamp(4.5rem,10vmin,7rem)] rounded-full border-[7px] border-foreground bg-primary shadow-[0_0_0_7px_oklch(95%_.015_75_/.12)] transition-transform duration-150 hover:enabled:scale-[1.04] active:enabled:scale-95 disabled:pointer-events-auto disabled:cursor-wait disabled:opacity-30"
                 type="button"
                 disabled={status !== 'live'}
                 onClick={() => void beginCountdown()}
@@ -214,11 +214,11 @@ export function CameraStep({ onUsePhoto }: Props) {
               </Button>
             </>
           ) : (
-            <div className="flex w-full max-w-xs flex-col gap-3">
-              <Button type="button" onClick={() => photoDataUrl && onUsePhoto(photoDataUrl)}>
-                Use this photo <ArrowRight aria-hidden="true" />
+            <div className="flex w-full max-w-md gap-3">
+              <Button className="flex-1" type="button" onClick={() => photoDataUrl && onUsePhoto(photoDataUrl)}>
+                <Check aria-hidden="true" /> Use
               </Button>
-              <Button variant="secondary" type="button" onClick={retake}>
+              <Button className="flex-1" variant="secondary" type="button" onClick={retake}>
                 <RotateCcw aria-hidden="true" /> Retake
               </Button>
             </div>

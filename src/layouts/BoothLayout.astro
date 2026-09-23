@@ -6,12 +6,14 @@ type Props = {
   title: string;
   description?: string;
   noIndex?: boolean;
+  showNavbar?: boolean;
 };
 
 const {
   title,
   description = 'Choose a New York scene, take a photo, and preview your caricature postcard.',
   noIndex = false,
+  showNavbar = true,
 } = Astro.props;
 ---
 
@@ -35,7 +37,7 @@ const {
     </script>
   </head>
   <body>
-    <Navbar />
+    {showNavbar && <Navbar />}
     <slot />
     <script>
       import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
