@@ -55,24 +55,21 @@ const title = isAvailable
     isAvailable && postcardUrl ? (
        <main class="mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-5xl content-start gap-8 px-[clamp(1.25rem,5vw,4rem)] py-[clamp(2rem,7vh,5rem)] max-[1000px]:min-h-0 max-[1000px]:pt-6">
          <h1 class="sr-only">Finished caricature postcard</h1>
-         <div class="flex justify-end">
-             {qrCode && (
-               <div class="flex w-28 shrink-0 flex-col items-center gap-2.5 max-[600px]:w-20">
-                 <img
-                   src={qrCode}
+          <div class="w-full">
+            <figure class="relative m-0 w-full rotate-[1deg] overflow-hidden shadow-[0_2.5rem_6rem_oklch(5%_.01_55_/.55)] max-[1000px]:rotate-[-.8deg]">
+              {qrCode && (
+                <div class="pointer-events-none absolute right-4 top-4 z-10 rounded-[.35rem] bg-white p-1.5 shadow-[0_.75rem_1.5rem_oklch(5%_.01_55_/.28)] max-[600px]:right-2 max-[600px]:top-2 max-[400px]:right-1.5 max-[400px]:top-1.5 max-[400px]:p-1">
+                  <img
+                    src={qrCode}
                     alt="QR code to open your digital postcard"
-                   width="160"
-                   height="160"
-                   class="size-28 rounded-[.35rem] border-[.5rem] border-solid border-white max-[600px]:size-20 max-[600px]:border-[.35rem]"
-                 />
-                  <p class="m-0 w-40 text-center font-label text-[.68rem] font-semibold uppercase leading-[1.35] tracking-[.08em] text-muted-foreground max-[600px]:w-28 max-[600px]:text-[.55rem]">Scan for digital copy</p>
-               </div>
-             )}
-           </div>
-         <div class="w-full">
-           <figure class="m-0 w-full rotate-[1deg] overflow-hidden shadow-[0_2.5rem_6rem_oklch(5%_.01_55_/.55)] max-[1000px]:rotate-[-.8deg]">
-             <img
-               src={postcardUrl}
+                    width="160"
+                    height="160"
+                    class="size-24 rounded-[.2rem] max-[600px]:size-16 max-[400px]:size-14"
+                  />
+                </div>
+              )}
+              <img
+                src={postcardUrl}
                alt={`Finished ${event!.name} caricature postcard`}
                width="1800"
                height="1200"
