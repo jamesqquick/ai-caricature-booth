@@ -1,0 +1,19 @@
+src/pages/p/[sessionId].astro
+  s_7f60bdace94d5c::t_552512bb3a4c37 58-63,65-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "989f54e6e34832ab3fd72f78a053a5e34b91ba2f",
+  "prompts": {},
+  "sessions": {
+    "s_7f60bdace94d5c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f312712f0ffenKPH9ACfPWeJDK",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "James Quick <jquick@cloudflare.com>"
+    }
+  }
+}
