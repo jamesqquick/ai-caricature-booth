@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 
 type PostcardGalleryCard = {
   sceneName: string;
-  index: number;
+  imageUrl: string;
 };
 
 type PostcardGalleryProps = {
@@ -19,26 +19,26 @@ export function PostcardGallery({ cards }: PostcardGalleryProps) {
   return (
     <>
       <div className="postcard-gallery" data-postcard-gallery data-active={activeCard === null ? undefined : ''} role="group" aria-label="Example caricature postcards">
-        {cards.map((card) => (
+        {cards.map((card, index) => (
           <Button
-            key={card.index}
+            key={card.imageUrl}
             variant="unstyled"
             size="unstyled"
             className="postcard-gallery-card"
-            data-gallery-card={card.index}
-            data-active={activeCard === card.index ? '' : undefined}
+            data-gallery-card={index}
+            data-active={activeCard === index ? '' : undefined}
             type="button"
             aria-label={`View ${card.sceneName} example postcard`}
             onClick={(event) => {
               triggerRef.current = event.currentTarget;
-              setActiveCard(card.index);
+              setActiveCard(index);
             }}
           >
             <div className="postcard-gallery-photo">
               <img
-                src="/demo-postcard.jpg"
+                src={card.imageUrl}
                 alt={`Example ${card.sceneName} caricature postcard`}
-                loading={card.index === 0 ? 'eager' : 'lazy'}
+                loading={index === 0 ? 'eager' : 'lazy'}
               />
             </div>
           </Button>
@@ -53,7 +53,7 @@ export function PostcardGallery({ cards }: PostcardGalleryProps) {
           returnFocusRef={triggerRef}
         >
           <img
-            src="/demo-postcard.jpg"
+            src={selectedCard.imageUrl}
             alt={`Example ${selectedCard.sceneName} caricature postcard`}
             className="max-h-[calc(100dvh-5rem)] w-full object-contain"
           />

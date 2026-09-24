@@ -373,17 +373,18 @@ describe('event scene runtime wiring', () => {
     expect(route).toContain('scenes={scenes}');
   });
 
-  it('uses the first nonempty event scene set for landing-page content', async () => {
+  it('uses configured completed sessions for landing-page examples', async () => {
     const route = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
     await expect(transform(route, { filename: 'src/pages/index.astro' })).resolves.toBeTruthy();
-    expect(route).toContain('.map(toPublicScene)');
-    expect(route).toContain('sceneSets.find((eventScenes) => eventScenes.length > 0)');
-    expect(route).toContain('scenes.slice(0, 4)');
+    expect(route).toContain('FEATURED_SESSION_IDS.map');
+    expect(route).toContain('loadSession(env.FEATURED_DB, sessionId)');
+    expect(route).toContain('session.status !== "completed"');
+    expect(route).toContain('session.postcard_key');
+    expect(route).toContain('/api/examples/${session.id}');
     expect(route).toContain('aria-label="Before and after selfie comparison"');
     expect(route).toContain('src="/demo-postcard.jpg"');
     expect(route).toContain('PostcardGallery');
-    expect(route).toContain('Array.from({ length: 6 }');
   });
 
   it('initializes Photobooth from the first provided scene and has no static scene import', async () => {
