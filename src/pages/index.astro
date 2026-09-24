@@ -6,19 +6,21 @@ import { PostcardGallery } from "../components/PostcardGallery";
 import { Save } from "lucide-react";
 import { env } from "cloudflare:workers";
 import { loadActiveEvents } from "../db/events";
-import { loadScenesByEvent } from "../db/scenes";
-import { toPublicScene } from "../data/scenes";
+import { loadSession } from "../db/sessions";
+import { FEATURED_SESSION_IDS } from "../data/featured-postcards";
 
 export const prerender = false;
 
 const events = await loadActiveEvents(env.DB);
-const sceneSets = await Promise.all(events.map(async (event) => (await loadScenesByEvent(env.DB, event.id)).map(toPublicScene)));
-const scenes = sceneSets.find((eventScenes) => eventScenes.length > 0) ?? [];
-const galleryScenes = scenes.slice(0, 4);
-const galleryCards = Array.from({ length: 6 }, (_, index) => ({
-  scene: galleryScenes[index % galleryScenes.length],
-  index,
-}));
+const galleryCards = (await Promise.all(FEATURED_SESSION_IDS.map(async (sessionId) => {
+  const session = await loadSession(env.FEATURED_DB, sessionId);
+  if (!session || session.status !== "completed" || !session.postcard_key) return null;
+
+  return {
+    sceneName: session.scene_name ?? "Caricature postcard",
+    imageUrl: `/api/examples/${session.id}`,
+  };
+}))).filter((card): card is NonNullable<typeof card> => card !== null);
 const pipelineStages = [
   {
     title: "Capture",
@@ -187,7 +189,7 @@ const pipelineStages = [
         id="gallery"
       >
         <SectionHeader title="Example caricature postcards" />
-        <PostcardGallery client:load cards={galleryCards.map(({ scene, index }) => ({ sceneName: scene.name, index }))} />
+        <PostcardGallery client:load cards={galleryCards} />
       </section>
 
       <section

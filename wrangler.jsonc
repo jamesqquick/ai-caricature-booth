@@ -17,17 +17,28 @@
     "run_worker_first": ["/mcp", "/admin", "/admin/*", "/api/admin", "/api/admin/*"]
   },
   "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "ai-caricature-booth-db",
-      "migrations_dir": "./drizzle/migrations"
-    }
+      {
+        "binding": "DB",
+        "database_name": "ai-caricature-booth-db",
+        "migrations_dir": "./drizzle/migrations"
+      },
+      {
+        "binding": "FEATURED_DB",
+        "database_name": "ai-caricature-booth-db",
+        "database_id": "9524d781-e607-4d24-a432-a751005e2781",
+        "remote": true
+      }
   ],
   "r2_buckets": [
-    {
-      "binding": "SELFIES",
-      "bucket_name": "ai-caricature-booth-selfies"
-    }
+      {
+        "binding": "SELFIES",
+        "bucket_name": "ai-caricature-booth-selfies"
+      },
+      {
+        "binding": "FEATURED_SELFIES",
+        "bucket_name": "ai-caricature-booth-selfies",
+        "remote": true
+      }
   ],
   "images": {
     "binding": "IMAGES",
