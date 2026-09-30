@@ -28,19 +28,18 @@ Camera access requires `localhost` or HTTPS. A plain HTTP LAN address will not e
 
 Automatic Cloudflare Workers builds deploy changes merged to the production branch.
 
-Set the Worker secrets through Wrangler's secure prompt. `MCP_AUTH_TOKEN`, `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` must be independent random values. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print any secret value.
+Set the Worker secrets through Wrangler's secure prompt because `cf` does not yet support updating one secret at a time. `MCP_AUTH_TOKEN`, `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` must be independent random values. `PRINT_CAPABILITY_SECRET` signs short-lived attendee print authorization. Use the same `PRINT_AGENT_TOKEN` in the local print-agent environment, but never commit or print any secret value.
 
 ```sh
 pnpm exec wrangler secret put PRINT_AGENT_TOKEN
 pnpm exec wrangler secret put PRINT_CAPABILITY_SECRET
 pnpm exec wrangler secret put REPLICATE_API_TOKEN
 pnpm exec wrangler secret put MCP_AUTH_TOKEN
-pnpm build
-pnpm exec wrangler deploy
-pnpm exec wrangler d1 migrations apply ai-caricature-booth-db --remote
+pnpm exec cf deploy
+pnpm db:migrate:remote
 ```
 
-Run `pnpm exec wrangler whoami` first if Wrangler is not authenticated. Deploy code that works with both schemas before applying destructive migrations such as `0020_remove_event_accent_color.sql`; apply additive migrations before deploying code that depends on them. Do not run `drizzle/seed.local.sql` against the remote database.
+Run `pnpm exec cf auth whoami` first if `cf` is not authenticated. `cf deploy` is the target deployment path, but the current beta detects multiple frameworks in this pnpm workspace; use the existing Workers Build deployment until that detection issue is resolved. Deploy code that works with both schemas before applying destructive migrations such as `0020_remove_event_accent_color.sql`; apply additive migrations before deploying code that depends on them. Local migrations and seed data both remain on Wrangler so they use the same local D1 state. Do not run `drizzle/seed.local.sql` against the remote database.
 
 ## Event MCP server
 

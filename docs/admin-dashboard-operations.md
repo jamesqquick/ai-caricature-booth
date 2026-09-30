@@ -4,7 +4,7 @@ The admin dashboard is available at `/admin`. Cloudflare Access must protect exa
 
 ## Environment configuration
 
-The Worker requires `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` secrets. Set them with `pnpm exec wrangler secret put <NAME>` so values do not enter shell history or source control. `PRINT_CAPABILITY_SECRET` signs 2-hour attendee print capabilities and must be an independent random value, not a copy of the print-agent token, Replicate token, or an Access secret. It belongs only in the Worker environment and must not be added to `print-agent/.env`. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned with the Access application in `wrangler.jsonc`.
+The Worker requires `MCP_AUTH_TOKEN`, `PRINT_AGENT_TOKEN`, `PRINT_CAPABILITY_SECRET`, and `REPLICATE_API_TOKEN` secrets. Set them with `pnpm exec wrangler secret put <NAME>` because `cf` does not yet support updating one secret at a time. This keeps values out of shell history and source control. `PRINT_CAPABILITY_SECRET` signs 2-hour attendee print capabilities and must be an independent random value, not a copy of the print-agent token, Replicate token, or an Access secret. It belongs only in the Worker environment and must not be added to `print-agent/.env`. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned in `cloudflare.config.ts`; `wrangler.jsonc` remains the fallback configuration for Wrangler-only operations.
 
 The print agent loads these settings from `print-agent/.env` or its service environment:
 

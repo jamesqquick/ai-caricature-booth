@@ -4,16 +4,17 @@
   "version": "0.0.1",
   "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "wrangler types && astro check && astro build",
+    "build": "cf workers types && astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "wrangler types && astro check",
-    "cf-typegen": "wrangler types",
+    "check": "cf workers types && astro check",
+    "cf-typegen": "cf workers types",
     "db:migrate:local": "wrangler d1 migrations apply ai-caricature-booth-db --local",
+    "db:migrate:remote": "cf d1 migrations apply 9524d781-e607-4d24-a432-a751005e2781 --dir drizzle/migrations",
     "db:seed:local": "wrangler d1 execute ai-caricature-booth-db --local --file drizzle/seed.local.sql",
     "test": "vitest run --exclude 'print-agent/**' && pnpm --filter @ai-caricature-booth/print-agent test",
     "print-agent:start": "pnpm --filter @ai-caricature-booth/print-agent start",
@@ -59,10 +60,11 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "cf": "1.0.0-beta.6",
     "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
     "vite": "8.2.1",
     "vitest": "^4.1.10",
-    "wrangler": "^4.122.0"
+    "wrangler": "^4.145.0"
   }
 }
