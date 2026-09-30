@@ -75,7 +75,7 @@ Mock mode writes generated PDFs to `print-agent/spool/print-<job-id>-<uuid>.pdf`
 
 `PRINT_CAPABILITY_SECRET` belongs only in the Worker environment. Do not add it to `print-agent/.env`; the print agent authenticates with `PRINT_AGENT_TOKEN`, which is a separate credential.
 
-If startup reports an unresolved `submitting` marker, stop the agent and follow [Submitting marker recovery](docs/admin-dashboard-operations.md#submitting-marker-recovery). The recovery command never polls or prints:
+If startup reports an unresolved `submitting` marker, stop the agent. The recovery command never polls or prints:
 
 ```sh
 pnpm print-agent:resolve -- --job-id <32-character-job-id> --outcome printed|not-submitted --confirm
@@ -90,8 +90,6 @@ The deployment owner must create and maintain a self-hosted application in **Zer
 Astro development builds inject `local-admin@localhost` only for loopback requests (`localhost`, `127.0.0.1`, or `[::1]`). Production builds never enable this fallback. Use `pnpm test -- admin-access.spec.ts` to exercise authenticated, unauthenticated, JWT, and local-development requests. For a protected deployment smoke test, confirm an allowlisted email reaches an admin route without the Worker's `403` response and confirm a non-allowlisted email is stopped by Access before it reaches the Worker.
 
 Workers Static Assets does not propagate `ExecutionContext.access` to the user Worker. The JWT fallback handles that deployment path without trusting unsigned identity headers. Keep `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN` aligned with the self-hosted Access application whenever that application is replaced. The `assets.run_worker_first` rules ensure admin paths cannot bypass the Worker through a matching static asset.
-
-See [Admin dashboard operations](docs/admin-dashboard-operations.md) for Access setup, event and print operations, status definitions, image privacy, local state, recovery, and troubleshooting.
 
 ## Verification
 
