@@ -1,4 +1,5 @@
 packages:
+  - .
   - print-agent
 
 allowBuilds:
@@ -9,6 +10,15 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - agents@0.23.0
   - react-dropzone@20.1.2
+  - '@cloudflare/workerd-darwin-64@1.20260930.2'
+  - '@cloudflare/workerd-darwin-arm64@1.20260930.2'
+  - '@cloudflare/workerd-linux-64@1.20260930.2'
+  - '@cloudflare/workerd-linux-arm64@1.20260930.2'
+  - '@cloudflare/workerd-windows-64@1.20260930.2'
+  - cf@1.0.0-beta.6
+  - miniflare@5.20260930.0-alpha
+  - workerd@1.20260930.2
+  - wrangler@4.145.0
 
 overrides:
   fast-uri: 3.1.6

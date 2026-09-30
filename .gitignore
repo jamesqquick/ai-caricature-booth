@@ -2,6 +2,7 @@
 dist/
 # generated types
 .astro/
+.cloudflare/
 worker-configuration.d.ts
 
 # Wrangler local state
