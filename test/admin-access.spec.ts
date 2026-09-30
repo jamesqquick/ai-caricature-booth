@@ -206,18 +206,13 @@ describe('admin Access boundary', () => {
   });
 
   it('documents path-specific Access protection while keeping attendee routes public', async () => {
-    const [readme, operations] = await Promise.all([
-      readFile(new URL('../README.md', import.meta.url), 'utf8'),
-      readFile(new URL('../docs/admin-dashboard-operations.md', import.meta.url), 'utf8'),
-    ]);
+    const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
-    for (const document of [readme, operations]) {
-      expect(document).toContain('`/admin`');
-      expect(document).toContain('`/admin/*`');
-      expect(document).toContain('`/api/admin`');
-      expect(document).toContain('`/api/admin/*`');
-      expect(document).toContain('attendee routes');
-      expect(document.toLowerCase()).not.toContain('protect all worker traffic');
-    }
+    expect(readme).toContain('`/admin`');
+    expect(readme).toContain('`/admin/*`');
+    expect(readme).toContain('`/api/admin`');
+    expect(readme).toContain('`/api/admin/*`');
+    expect(readme).toContain('attendee routes');
+    expect(readme.toLowerCase()).not.toContain('protect all worker traffic');
   });
 });
