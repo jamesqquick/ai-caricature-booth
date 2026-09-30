@@ -2,11 +2,6 @@ import { bindings, defineConfig, exports } from "cf/config";
 
 const DATABASE_ID = "9524d781-e607-4d24-a432-a751005e2781";
 
-/**
- * Secret-like files were detected but not read or migrated: .env, .env.example, .worktrees/cloudflare-architecture-parallax/.env, .worktrees/cloudflare-architecture-parallax/dist/server/.dev.vars, .worktrees/cloudflare-build-smoke/.env.example, .worktrees/cloudflare-build-smoke/dist/server/.dev.vars, .worktrees/cloudflare-build-smoke/print-agent/.env.example, .worktrees/print-job-lifecycle/.env, .worktrees/print-job-lifecycle/dist/server/.dev.vars, .worktrees/social-sharing/.env, .worktrees/social-sharing/dist/server/.dev.vars, .worktrees/worker-previews/.env, .worktrees/worker-previews/.env.example, .worktrees/worker-previews/dist/server/.dev.vars, .worktrees/worker-previews/print-agent/.env.example, dist/server/.dev.vars, print-agent/.env, print-agent/.env.example. Only `secrets.required` entries are migrated.
- * @see https://developers.cloudflare.com/workers/configuration/secrets/
- */
-
 export default defineConfig({
 	accountId: "e9bc21da719562a3e45d77de7dd042de",
 	worker: {
