@@ -88,7 +88,7 @@ Use the name immediately after `printer` in the output, not the printer's displa
 
 ### 3. Configure the booth
 
-Copy `print-agent/.env.example` to `print-agent/.env` if that file does not already exist, then open `print-agent/.env` in a text editor. Set these values:
+Copy `print-agent/.env.example` to `print-agent/.env` if that file does not already exist, then open `print-agent/.env` in a text editor. The start command loads this file, so put the printer settings here. Set these values:
 
 ```dotenv
 WORKER_URL=https://booth.example.com
@@ -115,7 +115,7 @@ The terminal should show `Caricature Booth Print Agent` and the expected website
 
 1. Open the event's booth page at `WORKER_URL/e/EVENT_SLUG` and create a postcard.
 2. On the completed postcard page in the same browser, click **Print**. An admin can also open a completed session's **Print history** and click **Queue first print** or **Reprint postcard**.
-3. Look for `[job ...] printed and acknowledged.` in the terminal and collect the physical postcard. This message means CUPS accepted the job, so check the actual print before calling the booth ready.
+3. Look for `[job ...] printed and acknowledged.` in the terminal and collect the physical postcard. This message means CUPS accepted the job. Check that the physical print is 4x6, landscape, and has no unwanted clipping before calling the booth ready.
 
 Keep the terminal open, the computer awake, and the printer connected throughout the event. Run one agent process for this installation. Stop it with `Ctrl-C` and let the active job finish before closing the terminal. Start it again with the same command and configuration next time.
 
@@ -128,9 +128,13 @@ Mock mode consumes real queued jobs and marks them printed, so use a test event.
 ### If printing stops
 
 - Check the terminal for errors. Confirm the website URL, event slug, token, internet connection, and printer queue name. Use `lpstat -p -d` to check the local printer.
+- If the agent exited after a connection or authentication error and the terminal returned to its command prompt, fix the problem and run `pnpm print-agent:start` again with the same settings.
+- If a session's **Print history** shows **Failed**, fix the reported problem, then click **Retry** on that entry. Restarting the agent alone does not retry failed postcards. Admin access requires an allowlisted login as described in [Admin Access](#admin-access).
 - If the agent reports an unresolved `submitting` marker or an uncertain printer outcome, stop it and inspect the CUPS queue and physical printer before retrying. Keep the recovery state intact.
 
-For an unresolved submission, replace `<job-id>` with the exact 32-character ID from the error or admin print history. Choose one command based on what you verified:
+For an unresolved submission, copy the exact 32-character job ID from the agent's terminal error and use it in place of `<job-id>`. This is not the session ID or the CUPS job number. In the computer's printer queue, look for the title `AI Caricature Booth <job-id>`. An empty queue alone does not prove the job was never submitted.
+
+Run recovery with the same computer login and website, event, printer, and state-directory settings as the original agent. Choose one command based on what you verified:
 
 ```sh
 # The job was accepted by CUPS or already printed; do not print another copy.
@@ -141,6 +145,8 @@ pnpm print-agent:resolve -- --job-id <job-id> --outcome not-submitted --confirm
 ```
 
 The recovery command does not print anything. If the outcome is still unknown, leave the agent stopped. After resolving it, run `pnpm print-agent:start` again.
+
+If recovery reports that the printed intent was retained for normal startup replay, restore the connection and start the agent. It will retry notifying the website without printing another copy. If releasing a `not-submitted` job fails, restore the connection and repeat that recovery command. For other recovery errors, keep the state files and ask the deployment owner for help.
 
 ## Admin Access
 
