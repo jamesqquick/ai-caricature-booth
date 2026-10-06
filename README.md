@@ -53,33 +53,94 @@ curl -i http://localhost:4321/mcp
 
 The response must be `401 Unauthorized` with a `WWW-Authenticate: Bearer` header. Run `pnpm exec vitest run test/event-mcp.spec.ts test/mcp-auth.spec.ts` for protocol initialization, discovery, tool-call, validation, and authentication coverage.
 
-## Print agent
+## Local printer setup for a booth
 
-Install dependencies from the repository root with `pnpm install`. Configure the print agent in `print-agent/.env` or its service environment without committing secret values:
+Run the print agent on the computer connected to the printer. It checks the booth website for queued postcards and sends them to the local printer. The website can stay hosted; you do not need to run `pnpm dev` for this setup.
+
+### 1. Have these ready
+
+- A Mac or Linux computer with internet access, Git, Node.js **22.18.0 or newer**, and pnpm. The repository uses pnpm **11.9.0**.
+- A connected DNP printer, such as the DS620, with its driver installed and 4x6 media loaded. Add it to the computer's printers and confirm it can print outside the booth app first. Physical printing uses CUPS and the `lp` command.
+- The deployed booth website URL, the event slug, and the website's `PRINT_AGENT_TOKEN`. Get these from the deployment owner. The website must already have `PRINT_AGENT_TOKEN` and `PRINT_CAPABILITY_SECRET` configured as described in [Deployment](#deployment).
+
+### 2. Install the app
+
+If the repository is not already on the printer computer:
+
+```sh
+git clone --branch main https://github.com/jamesqquick/ai-caricature-booth.git
+cd ai-caricature-booth
+```
+
+Run all remaining commands from the repository root:
+
+```sh
+pnpm install
+```
+
+Find the printer's CUPS queue name:
+
+```sh
+lpstat -p -d
+```
+
+Use the name immediately after `printer` in the output, not the printer's display name.
+
+### 3. Configure the booth
+
+Copy `print-agent/.env.example` to `print-agent/.env` if that file does not already exist, then open `print-agent/.env` in a text editor. Set these values:
 
 ```dotenv
 WORKER_URL=https://booth.example.com
-EVENT_SLUG=event-slug
-PRINT_AGENT_TOKEN=replace-through-your-secret-manager
-PRINTER_DRIVER=mock
-PRINT_AGENT_STATE_DIR=/absolute/stable/path/to/print-agent-state
+EVENT_SLUG=your-event-slug
+PRINT_AGENT_TOKEN=replace-with-the-token-from-the-deployment-owner
+PRINTER_DRIVER=dnp-ds620
+PRINTER_NAME=your-cups-printer-name
 ```
 
-Use `PRINTER_DRIVER=dnp` or `dnp-ds620` with `PRINTER_NAME` set to the exact CUPS queue name for physical printing. Optional `POLL_INTERVAL_MS` and `BATCH_SIZE` values default to `5000` and `5`. Start one agent process for an installation:
+- `WORKER_URL` is the website origin only, without `/e/...`.
+- `EVENT_SLUG` is the part after `/e/` in the booth URL. For `/e/nyc-tech-week-2026`, use `nyc-tech-week-2026`.
+- `PRINT_AGENT_TOKEN` must match the website's secret exactly. Keep `.env` private and uncommitted. `PRINT_CAPABILITY_SECRET` stays on the website and does not belong in this file.
+- `PRINTER_DRIVER=dnp` is also supported. The example file defaults to `mock`, so change it for physical printing.
+
+Leave the polling settings at their defaults. The agent checks every five seconds. It saves recovery state under `~/.ai-caricature-booth/print-agent/` by default. Keep that state between restarts. A service installation can set `PRINT_AGENT_STATE_DIR` to a stable absolute path owned only by its service account.
+
+### 4. Start and test before opening the booth
 
 ```sh
 pnpm print-agent:start
 ```
 
-Mock mode writes generated PDFs to `print-agent/spool/print-<job-id>-<uuid>.pdf`. Every processed job also creates `print-agent/output/print-<job-id>-<uuid>.pdf` before submission. The application job ID supports incident correlation while the UUID preserves a unique artifact for each attempt. Production services should use a stable checkout/install path and an absolute `PRINT_AGENT_STATE_DIR` owned only by the service account.
+The terminal should show `Caricature Booth Print Agent` and the expected website, event, and `printer=CUPS(...)` name.
 
-`PRINT_CAPABILITY_SECRET` belongs only in the Worker environment. Do not add it to `print-agent/.env`; the print agent authenticates with `PRINT_AGENT_TOKEN`, which is a separate credential.
+1. Open the event's booth page at `WORKER_URL/e/EVENT_SLUG` and create a postcard.
+2. On the completed postcard page in the same browser, click **Print**. An admin can also open a completed session's **Print history** and click **Queue first print** or **Reprint postcard**.
+3. Look for `[job ...] printed and acknowledged.` in the terminal and collect the physical postcard. This message means CUPS accepted the job, so check the actual print before calling the booth ready.
 
-If startup reports an unresolved `submitting` marker, stop the agent. The recovery command never polls or prints:
+Keep the terminal open, the computer awake, and the printer connected throughout the event. Run one agent process for this installation. Stop it with `Ctrl-C` and let the active job finish before closing the terminal. Start it again with the same command and configuration next time.
+
+### Testing without a printer
+
+Set `PRINTER_DRIVER=mock` in `print-agent/.env` and restart the agent. It writes PDFs to `print-agent/spool/print-<job-id>-<uuid>.pdf` instead of printing. Every processed job also saves a PDF in `print-agent/output/`.
+
+Mock mode consumes real queued jobs and marks them printed, so use a test event. Switch back to `dnp-ds620` and restart before accepting booth prints.
+
+### If printing stops
+
+- Check the terminal for errors. Confirm the website URL, event slug, token, internet connection, and printer queue name. Use `lpstat -p -d` to check the local printer.
+- If the agent reports an unresolved `submitting` marker or an uncertain printer outcome, stop it and inspect the CUPS queue and physical printer before retrying. Keep the recovery state intact.
+
+For an unresolved submission, replace `<job-id>` with the exact 32-character ID from the error or admin print history. Choose one command based on what you verified:
 
 ```sh
-pnpm print-agent:resolve -- --job-id <32-character-job-id> --outcome printed|not-submitted --confirm
+# The job was accepted by CUPS or already printed; do not print another copy.
+pnpm print-agent:resolve -- --job-id <job-id> --outcome printed --confirm
+
+# You confirmed the job was never submitted; allow it to return to the queue.
+pnpm print-agent:resolve -- --job-id <job-id> --outcome not-submitted --confirm
 ```
+
+The recovery command does not print anything. If the outcome is still unknown, leave the agent stopped. After resolving it, run `pnpm print-agent:start` again.
 
 ## Admin Access
 
