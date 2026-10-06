@@ -55,15 +55,37 @@ The response must be `401 Unauthorized` with a `WWW-Authenticate: Bearer` header
 
 ## Local printer setup for a booth
 
-Run the print agent on the computer connected to the printer. It checks the booth website for queued postcards and sends them to the local printer. The website can stay hosted; you do not need to run `pnpm dev` for this setup.
+Run the print agent on the computer connected to the printer. It checks the booth website for queued postcards and sends them to the local printer. The website can stay hosted; you do not need to run `pnpm dev` for this setup. The booth screen can be a separate tablet or laptop using the website over Wi-Fi.
 
 ### 1. Have these ready
 
 - A Mac or Linux computer with internet access, Git, Node.js **22.18.0 or newer**, and pnpm. The repository uses pnpm **11.9.0**.
-- A connected DNP printer, such as the DS620, with its driver installed and 4x6 media loaded. Add it to the computer's printers and confirm it can print outside the booth app first. Physical printing uses CUPS and the `lp` command.
+- A DNP printer, such as the DS620/DS620A, with 4x6 media, a power cable, and a USB cable. A USB-C-only computer may need a compatible cable or adapter. Physical printing uses CUPS and the `lp` command.
 - The deployed booth website URL, the event slug, and the website's `PRINT_AGENT_TOKEN`. Get these from the deployment owner. The website must already have `PRINT_AGENT_TOKEN` and `PRINT_CAPABILITY_SECRET` configured as described in [Deployment](#deployment).
 
-### 2. Install the app
+### 2. Connect and test the printer
+
+The [DNP DS620/DS620A](https://dnpphoto.com/products/printers/ds620a) connects by USB and does not have built-in Bluetooth printing. Connect it directly to the computer that will run the print agent.
+
+1. Install a compatible printer driver before the event. On a Mac, get the DS620/DS620A driver for your macOS version from [DNP's downloads page](https://dnpphoto.com/downloads) and follow its installation instructions. Do not rely on an automatic driver-install prompt when USB is connected. On Linux, install a compatible CUPS driver.
+2. Plug the printer into power, load the 4x6 media, turn it on, and connect its USB cable to the printer computer.
+3. Add the printer in the computer's printer settings. On a Mac, use **System Settings → Printers & Scanners → Add Printer**, and select the installed DNP driver if prompted.
+4. Print a test image from the computer before starting the booth app. Confirm a physical 4x6 print comes out correctly.
+5. Open a terminal on that same computer and find its CUPS queue name:
+
+```sh
+lpstat -p -d
+```
+
+Use the name immediately after `printer` in the output, not the printer's display name. For example:
+
+```text
+printer DNP_DS620 is idle.
+```
+
+In this example, the queue name is `DNP_DS620`. Save your actual queue name for step 4. If no printer appears, check that the driver is installed and the printer has been added in the computer's settings.
+
+### 3. Install the app
 
 If the repository is not already on the printer computer:
 
@@ -78,34 +100,31 @@ Run all remaining commands from the repository root:
 pnpm install
 ```
 
-Find the printer's CUPS queue name:
+### 4. Configure the booth
 
-```sh
-lpstat -p -d
-```
+Copy `print-agent/.env.example` to `print-agent/.env` if that file does not already exist, then open `print-agent/.env` in a text editor. The start command loads this file, so put the printer settings here.
 
-Use the name immediately after `printer` in the output, not the printer's display name.
-
-### 3. Configure the booth
-
-Copy `print-agent/.env.example` to `print-agent/.env` if that file does not already exist, then open `print-agent/.env` in a text editor. The start command loads this file, so put the printer settings here. Set these values:
+For Hack Alcatraz with a DNP DS620/DS620A, use this example. For another event, replace the website URL and event slug:
 
 ```dotenv
-WORKER_URL=https://booth.example.com
-EVENT_SLUG=your-event-slug
+WORKER_URL=https://ai-caricature-booth-v2.examples.workers.dev
+EVENT_SLUG=hack-alcatraz-2026
 PRINT_AGENT_TOKEN=replace-with-the-token-from-the-deployment-owner
 PRINTER_DRIVER=dnp-ds620
 PRINTER_NAME=your-cups-printer-name
+POLL_INTERVAL_MS=5000
+BATCH_SIZE=5
 ```
 
 - `WORKER_URL` is the website origin only, without `/e/...`.
-- `EVENT_SLUG` is the part after `/e/` in the booth URL. For `/e/nyc-tech-week-2026`, use `nyc-tech-week-2026`.
+- `EVENT_SLUG` is the part after `/e/` in the booth URL. For `/e/hack-alcatraz-2026`, use `hack-alcatraz-2026`.
 - `PRINT_AGENT_TOKEN` must match the website's secret exactly. Keep `.env` private and uncommitted. `PRINT_CAPABILITY_SECRET` stays on the website and does not belong in this file.
 - `PRINTER_DRIVER=dnp` is also supported. The example file defaults to `mock`, so change it for physical printing.
+- `PRINTER_NAME` is the exact queue name from step 2. If your output showed `printer DNP_DS620`, set `PRINTER_NAME=DNP_DS620`.
 
 Leave the polling settings at their defaults. The agent checks every five seconds. It saves recovery state under `~/.ai-caricature-booth/print-agent/` by default. Keep that state between restarts. A service installation can set `PRINT_AGENT_STATE_DIR` to a stable absolute path owned only by its service account.
 
-### 4. Start and test before opening the booth
+### 5. Start and test before opening the booth
 
 ```sh
 pnpm print-agent:start
@@ -113,7 +132,7 @@ pnpm print-agent:start
 
 The terminal should show `Caricature Booth Print Agent` and the expected website, event, and `printer=CUPS(...)` name.
 
-1. Open the event's booth page at `WORKER_URL/e/EVENT_SLUG` and create a postcard.
+1. Open the event's booth page at `WORKER_URL/e/EVENT_SLUG`, such as [Hack Alcatraz](https://ai-caricature-booth-v2.examples.workers.dev/e/hack-alcatraz-2026), and create a postcard.
 2. On the completed postcard page in the same browser, click **Print**. An admin can also open a completed session's **Print history** and click **Queue first print** or **Reprint postcard**.
 3. Look for `[job ...] printed and acknowledged.` in the terminal and collect the physical postcard. This message means CUPS accepted the job. Check that the physical print is 4x6, landscape, and has no unwanted clipping before calling the booth ready.
 
